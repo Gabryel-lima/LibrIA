@@ -1,0 +1,12 @@
+# Definir finais de linha para todos os arquivos de texto
+* text=auto
+# Definir finais de linha específicos para arquivos específicos
+*.cfg text eol=lf
+*.names text eol=lf
+# Recomendado rodar este comando para Você pode configurar o Git para converter automaticamente os finais de linha para LF no repositório e para CRLF na sua cópia de trabalho no Windows:
+# git config --global core.autocrlf true
+# Verifique e normalize finais de linha (opcional, se você deseja aplicar imediatamente a nova configuração):
+# git add --renormalize .
+# git commit -m "Normalize line endings"
+tests/yolov3.weights filter=lfs diff=lfs merge=lfs -text
+tests/coco.names filter=lfs diff=lfs merge=lfs -text
