@@ -1,1 +1,6 @@
-# Leia como usar o ultralitycs e o labelImg. E não esqueça do vídeo no yt no opera
+# Agora vou proceguir com o video com o labelme, de como configurar as máscaras. Usar o labelme e converter os dados para labelme2yolo.
+Para o v8 poder entender.
+
+Para usar o labelme é só digitar seu nome no terminal
+
+Já coletei as imagens de mão e de sinais, continuar pelo roboflow https://docs.ultralytics.com/pt/yolov5/tutorials/train_custom_data/#train-on-custom-data

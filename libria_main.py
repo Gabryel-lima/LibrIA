@@ -8,7 +8,7 @@ with open("", "r") as f:
     classes = [line.strip() for line in f.readlines()]
 
 # Configurações do YOLO
-net = cv.dnn.readNet()
+net = cv.dnn.readNet(model="", config="")
 layer_names = net.getLayerNames()
 output_layers = [layer_names[i- 1] for i in net.getUnconnectedOutLayers()]
 

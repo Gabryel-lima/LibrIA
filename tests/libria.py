@@ -4,11 +4,11 @@ import numpy as np
 # Conectar o DroidCam e o celular
 
 # Carregar os nomes das classes
-with open("coco.names", "r") as f:
+with open("./tests/coco.names", "r") as f:
     classes = [line.strip() for line in f.readlines()]
 
 # Configurações do YOLO
-net = cv.dnn.readNet("yolov3.weights", "yolov3.cfg")
+net = cv.dnn.readNet("./tests/yolov3.weights", "./tests/yolov3.cfg")
 layer_names = net.getLayerNames()
 output_layers = [layer_names[i- 1] for i in net.getUnconnectedOutLayers()]
 

@@ -1,0 +1,5 @@
+train: "./data/"
+val: "./data/"
+
+nc: 1  # número de classes (mãos)
+names: ['hand']
