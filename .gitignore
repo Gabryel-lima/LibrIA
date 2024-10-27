@@ -161,5 +161,6 @@ cython_debug/
 
 # Ignorar diretórios de ambiente Python
 venv
+.venv
 data
-yolov5
+#yolov5
