@@ -1,23 +1,26 @@
-from src.core.res_net import Res_Net
-from sklearn.model_selection import train_test_split
-from keras.src.utils.numerical_utils import to_categorical
-import pandas as pd
-import numpy as np
+from src.utils.imports import (
+    pd, # import pandas as pd
+    np, # import numpy as np
+    to_categorical, # from sklearn.model_selection import train_test_split
+    train_test_split, # from keras.src.utils.numerical_utils import to_categorical
+)
 
+from src.core.res_net import ResNet
 
 class Libria:
-    def __init__(self, input_shape):
+    def __init__(self, input_shape: tuple[int, ...] = (), num_blocks: list[int] = [2, 2, 2, 2]):
         self.input_shape = input_shape
+        self.num_blocks = num_blocks
         self.num_classes = None
-        self.res_net = None
+        self.ResNet = None
 
-    def load_data(self):
+    def load_data(self) -> list:
         # Carregar o conjunto de dados de treinamento e teste
         train_data = pd.read_csv("E:\\libria\\data\\Signals\\sign_mnist_train\\sign_mnist_train.csv")
         test_data = pd.read_csv("E:\\libria\\data\\Signals\\sign_mnist_test\\sign_mnist_test.csv")
 
         # Combinar ambos para realizar uma divisão consistente
-        data = pd.concat([train_data, test_data], ignore_index=True)
+        data = pd.concat(objs=[train_data, test_data], ignore_index=True)
 
         # Separando as labels e as features
         labels = data['label'].values
@@ -34,7 +37,6 @@ class Libria:
         X_train, X_test, y_train, y_test = train_test_split(images, labels, test_size=0.2, random_state=42)
 
         # Inicializar o modelo após definir o número de classes
-        self.res_net = Res_Net(self.input_shape, self.num_classes)
+        self.ResNet = ResNet(self.input_shape, self.num_classes, self.num_blocks)
 
         return X_train, X_test, y_train, y_test
-    
