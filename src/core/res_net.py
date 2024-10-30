@@ -1,17 +1,17 @@
 from src.utils.imports import (
-    layers, models, Model # keras 
+    layers, models, Model  # keras
 )
-
 from src.utils.imports import KerasTensor
 
 class ResNet:
-    def __init__(self, input_shape: int, num_classes_units: int, num_blocks: list[int] = [2, 2, 2, 2]):
-        self.model = self.ResNet(input_shape, num_classes_units, num_blocks, activation_dense="softmax")
+    def __init__(self, input_shape: tuple, num_classes_units: int, num_blocks: list[int] = [2, 2, 2, 2]):
+        # Inicializar o modelo com a arquitetura ResNet
+        self.model = self.build_resnet(input_shape, num_classes_units, num_blocks, activation_dense="softmax")
 
     # Função para criar um bloco residual
     def residual_block(self, x: KerasTensor, filters: int, kernel_size: int = 3, stride: int = 1) -> KerasTensor:
         shortcut = x  # Conexão de atalho
-        
+
         # Primeira camada convolucional do bloco
         x = layers.Conv2D(filters, kernel_size=kernel_size, strides=stride, padding='same', use_bias=False)(x)
         x = layers.BatchNormalization()(x)
@@ -31,8 +31,8 @@ class ResNet:
         x = layers.ReLU()(x)
         return x
 
-    # Função para criar uma ResNet personalizada com Keras
-    def ResNet(self, input_shape: int, num_classes_units: int, num_blocks: list[int], activation_dense: str = 'softmax') -> Model:
+    # Função para construir a arquitetura ResNet personalizada com Keras
+    def build_resnet(self, input_shape: tuple, num_classes_units: int, num_blocks: list[int], activation_dense: str = 'softmax') -> Model:
         inputs = layers.Input(shape=input_shape)
         x = layers.Conv2D(64, kernel_size=3, strides=1, padding='same', use_bias=False)(inputs)
         x = layers.BatchNormalization()(x)
