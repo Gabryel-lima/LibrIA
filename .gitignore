@@ -163,4 +163,5 @@ cython_debug/
 venv
 .venv
 data/Signals
+./model
 #yolov5
