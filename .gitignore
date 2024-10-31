@@ -160,8 +160,7 @@ cython_debug/
 #.idea/
 
 # Ignorar diretórios de ambiente Python
-venv
-.venv
-data/Signals
-./model
-#yolov5
+venv/
+.venv/
+data/
+model/.keras
