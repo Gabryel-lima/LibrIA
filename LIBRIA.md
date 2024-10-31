@@ -4,5 +4,5 @@ Venho por este projeto poder incentivar na educação de libras pelo nosso País
 
 ## Fluxograma
 
-![](./data/imgs_docs_git/Libria%20-%20Fluxograma%20para%20Educação%20e%20Acessibilidade%20em%20Libras%20com%20IA.jpg) 
+![](\\docs\\Libria_Fluxograma_para_Educação_e_Acessibilidade_em_Libras_com_IA.jpg) 
 

@@ -163,4 +163,4 @@ cython_debug/
 venv/
 .venv/
 data/
-model/.keras
+model/
