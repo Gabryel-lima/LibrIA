@@ -13,26 +13,41 @@ def error_log():
     print('An exception occurred. Check error_log.txt for details.')
 
 # Função de aumento de dados
-def augment(image, label) -> tuple:
-    """Função para realizar o aumento de dados com mais ruído e entropia"""
-    # Ajuste aleatório de brilho e contraste
-    image = tf.image.random_brightness(image, max_delta=0.4)
-    image = tf.image.random_contrast(image, lower=0.1, upper=1.4)
-    
-    # Rotação aleatória
-    image = tf.image.rot90(image, k=tf.random.uniform(shape=[], minval=0, maxval=4, dtype=tf.int32))
-    
-    # Converter para 3 canais para aplicar saturação e matiz
-    image_rgb = tf.image.grayscale_to_rgb(image)
-    image_rgb = tf.image.random_saturation(image_rgb, lower=0.6, upper=1.6)
-    image_rgb = tf.image.random_hue(image_rgb, max_delta=0.2)
-    image = tf.image.rgb_to_grayscale(image_rgb)
-    
-    # Adicionar ruído gaussiano
-    noise = tf.random.normal(shape=tf.shape(image), mean=0.0, stddev=0.05, dtype=tf.float32)
+def augment(image):
+    """Função para realizar o aumento de dados com menos ruído e variação"""
+    # Ajuste aleatório de brilho e contraste (intervalo reduzido)
+    image = tf.image.random_brightness(image, max_delta=0.2)
+    image = tf.image.random_contrast(image, lower=0.8, upper=1.2)
+
+    # Rotação aleatória (menos agressiva)
+    image = tf.image.rot90(image, k=tf.random.uniform(shape=[], minval=0, maxval=2, dtype=tf.int32))
+
+    # Zoom aleatório (intervalo reduzido)
+    scales = tf.constant(np.arange(0.9, 1.1, 0.05), dtype=tf.float32)
+    scale = tf.random.shuffle(scales)[0]
+    new_height = tf.cast(tf.cast(tf.shape(image)[0], tf.float32) * scale, tf.int32)
+    new_width = tf.cast(tf.cast(tf.shape(image)[1], tf.float32) * scale, tf.int32)
+    image = tf.image.resize(image, [new_height, new_width])
+    image = tf.image.resize_with_crop_or_pad(image, 28, 28)
+
+    # Adicionar ruído gaussiano (menos intenso)
+    noise = tf.random.normal(shape=tf.shape(image), mean=0.0, stddev=0.02, dtype=tf.float32)
     image = tf.add(image, noise)
-    
-    return image, label
+
+    # Random flip (horizontal)
+    image = tf.image.random_flip_left_right(image)
+
+    # Garantir que a imagem tenha tamanho consistente ao final (28, 28, 1)
+    image = tf.image.resize(image, [28, 28])
+    image = tf.expand_dims(image, axis=-1)
+
+    return image
+
+def apply_augment(features, label):
+    """Função para aplicar augment apenas na imagem, mantendo landmarks e labels intactos"""
+    image, landmarks = features  # Desempacotar a imagem e landmarks
+    augmented_image = augment(image)
+    return (augmented_image, landmarks), label
 
 # Função de treinamento do modelo
 def train_model():
@@ -46,25 +61,35 @@ def train_model():
         libria.build_model()
         libria.model.summary()
 
-        # Compilação do modelo
-        libria.model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+        # Compilação do modelo com hiperparâmetros do otimizador ajustados
+        optimizer = keras.optimizers.AdamW(learning_rate=0.0025)
+        libria.model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['accuracy'])
 
         # Preparar o conjunto de dados de treinamento e validação com duas entradas
-        train_dataset = tf.data.Dataset.from_tensor_slices(((X_train_img, X_train_landmarks), y_train))
-        train_dataset = train_dataset.shuffle(1000).batch(64).prefetch(tf.data.AUTOTUNE)
+        batch_size = 64
+        shuffle_buffer_size = 5000
 
-        val_dataset = tf.data.Dataset.from_tensor_slices(((X_test_img, X_test_landmarks), y_test)).batch(64)
+        train_dataset = tf.data.Dataset.from_tensor_slices(((X_train_img, X_train_landmarks), y_train))
+        train_dataset = (train_dataset
+                        .map(apply_augment, num_parallel_calls=tf.data.AUTOTUNE)
+                        .shuffle(shuffle_buffer_size)
+                        .batch(batch_size)
+                        .prefetch(tf.data.AUTOTUNE))
+
+        val_dataset = tf.data.Dataset.from_tensor_slices(((X_test_img, X_test_landmarks), y_test)).batch(batch_size)
 
         # Configuração de callbacks
-        early_stopping = keras.callbacks.EarlyStopping(monitor='val_loss', patience=1, restore_best_weights=True)
-        reduce_lr = keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=1, min_lr=1e-6)
+        early_stopping = keras.callbacks.EarlyStopping(monitor='val_loss', patience=3, restore_best_weights=True)
+        reduce_lr = keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=2, min_lr=1e-6)
+        checkpoint_cb = keras.callbacks.ModelCheckpoint('./model/best_model.keras', save_best_only=True)
+        tensorboard_cb = keras.callbacks.TensorBoard(log_dir='./logs', histogram_freq=1)
 
-        # Treinamento do modelo
+        # Treinamento do modelo com os callbacks ajustados
         history = libria.model.fit(
             train_dataset,
             validation_data=val_dataset,
-            epochs=20,
-            callbacks=[early_stopping, reduce_lr]
+            epochs=50,
+            callbacks=[early_stopping, reduce_lr, checkpoint_cb, tensorboard_cb]
         )
 
         # Plot do histórico de treinamento
@@ -139,7 +164,9 @@ def display_gradcam(frame, heatmap, alpha=0.4):
     return superimposed_image
 
 def webcam_predictor():
-    """Função para capturar sinais de mão e exibir Grad-CAM usando a webcam."""
+    """
+    Função para capturar sinais de mão, detectar landmarks, e visualizar a detecção em tempo real.
+    """
     input_shape = (28, 28, 1)
     num_classes = 25
     libria = Libria(image_shape=input_shape, landmark_dim=42, num_blocks=[2, 2, 2, 2], num_classes=num_classes)
@@ -152,23 +179,88 @@ def webcam_predictor():
 
     cap = cv.VideoCapture(0)
     if not cap.isOpened():
-        print('Erro: Webcam não disponível. Saindo...')
+        print('Erro: Câmera não disponível. Saindo...')
         return
 
-    class_labels = {i: f'Sinal {chr(65 + i)}' for i in range(num_classes)}
-    
+    class_labels: dict[int, str] = {i: f'Sinal {chr(65 + i)}' for i in range(num_classes)}
+
     while True:
         ret, frame = cap.read()
         if not ret:
             print('Erro ao capturar frame. Saindo...')
             break
-        
-        processed_image = preprocess_input(frame)
-        #processed_image = np.expand_dims(processed_image, axis=0)  # Expandir para incluir dimensão de batch
 
-        # Supõe que landmarks são zeros neste exemplo; substituir por entrada real, se disponível
-        dummy_landmarks = np.zeros((1, 42))  
+        # Converter para HSV para fazer a segmentação da cor da pele
+        hsv_frame = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
 
+        # Definir o intervalo da cor da pele
+        lower_skin = np.array([0, 20, 70], dtype=np.uint8)
+        upper_skin = np.array([20, 255, 255], dtype=np.uint8)
+
+        # Aplicar a máscara para obter apenas a cor da pele
+        skin_mask = cv.inRange(hsv_frame, lower_skin, upper_skin)
+
+        # Aplicar algumas operações morfológicas para melhorar a máscara
+        kernel = np.ones((5, 5), np.uint8)
+        skin_mask = cv.morphologyEx(skin_mask, cv.MORPH_CLOSE, kernel)
+        skin_mask = cv.morphologyEx(skin_mask, cv.MORPH_OPEN, kernel)
+
+        # Encontrar contornos na máscara
+        contours, _ = cv.findContours(skin_mask, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+
+        if contours:
+            # Selecionar o maior contorno (supõe-se ser a mão)
+            max_contour = max(contours, key=cv.contourArea)
+
+            # Calcular o convex hull
+            hull = cv.convexHull(max_contour, returnPoints=False)
+            defects = cv.convexityDefects(max_contour, hull)
+
+            landmarks = []
+
+            if defects is not None:
+                for i in range(defects.shape[0]):
+                    s, e, f, d = defects[i, 0]
+                    start = tuple(max_contour[s][0])
+                    end = tuple(max_contour[e][0])
+                    far = tuple(max_contour[f][0])
+
+                    # Adicionar os pontos de início e fim como landmarks
+                    landmarks.append(start)
+                    landmarks.append(end)
+                    landmarks.append(far)
+
+                # Garantir que os landmarks tenham exatamente 21 pontos
+                while len(landmarks) < 21:
+                    landmarks.append((0, 0))
+
+                # Normalizar e converter para o formato necessário
+                normalized_landmarks = []
+                for (x, y) in landmarks[:21]:
+                    normalized_landmarks.append(x / frame.shape[1])  # Normalizar em relação ao tamanho da imagem
+                    normalized_landmarks.append(y / frame.shape[0])  # Normalizar em relação ao tamanho da imagem
+
+                dummy_landmarks = np.array(normalized_landmarks).reshape(1, -1)
+
+                # Desenhar os landmarks na imagem
+                for (x, y) in landmarks[:21]:
+                    cv.circle(frame, (x, y), 5, (0, 0, 255), -1)
+
+                # Conectar os landmarks para formar uma estrutura de mão
+                for i in range(1, len(landmarks[:21])):
+                    cv.line(frame, landmarks[i - 1], landmarks[i], (255, 0, 0), 2)
+            else:
+                dummy_landmarks = np.zeros((1, 42))
+        else:
+            dummy_landmarks = np.zeros((1, 42))
+
+        # Aplicar a máscara na imagem original para manter apenas a mão visível
+        hand_only = cv.bitwise_and(frame, frame, mask=skin_mask)
+
+        # Pré-processar a imagem de entrada (somente a mão segmentada)
+        processed_image = preprocess_input(hand_only, target_size=(28, 28))
+
+        # Fazer a predição
         prediction = libria.model.predict([processed_image, dummy_landmarks])
         pred_label = np.argmax(prediction)
         label_text = class_labels.get(pred_label, 'Desconhecido')
@@ -176,13 +268,15 @@ def webcam_predictor():
         # Gera o Grad-CAM usando apenas o submodelo convolucional
         heatmap = generate_gradcam(resnet_model, processed_image, pred_label)
         superimposed_image = display_gradcam(frame, heatmap)
-        
+
+        # Adicionar a classe prevista na imagem
         cv.putText(superimposed_image, f'Classe: {label_text}', (10, 30), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
         cv.imshow('Libria - Grad-CAM', superimposed_image)
-        
+
+        # Fechar ao pressionar 'q'
         if cv.waitKey(1) & 0xFF == ord('q'):
             break
-    
+
     cap.release()
     cv.destroyAllWindows()
 

@@ -41,4 +41,4 @@ def image_to_csv(image_folder, output_csv):
 
 # Exemplo de uso:
 if __name__ == '__main__':
-    image_to_csv(image_folder="E:\\libria\\data\\archive\\train\\0", output_csv="E:\\libria\\data\\landmarks_hands_test.csv")
+    image_to_csv(image_folder="E:\\libria\\data\\hand_keypoint_dataset_26k\\hand_keypoint_dataset_26k\\images\\val", output_csv="E:\\libria\\data\\landmarks_hands_test.csv")
