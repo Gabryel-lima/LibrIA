@@ -39,7 +39,7 @@ def plot_training_history(history) -> None:
 def sample_correct_class():
     import numpy as np
     import matplotlib.pyplot as plt
-    from src.core.libria import Libria  # Certifique-se de que Libria está configurado corretamente
+    from src.core.MultiModalGestureNet import Libria  # Certifique-se de que Libria está configurado corretamente
 
     # Carregar o modelo treinado
     libria = Libria(input_shape=(28, 28, 1), num_blocks=[2, 2, 2, 2])
