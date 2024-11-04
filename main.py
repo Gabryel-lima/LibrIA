@@ -90,7 +90,7 @@ def train_model():
         libria.build_model()
         libria.model.summary()
 
-        optimizer = keras.optimizers.AdamW(learning_rate=0.0005)
+        optimizer = keras.optimizers.Adam(learning_rate=0.0005, clipvalue=1.0)
         libria.model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['accuracy'])
 
         # Configuração de callbacks
@@ -103,7 +103,7 @@ def train_model():
 
         reduce_lr = keras.callbacks.ReduceLROnPlateau(
             monitor='val_loss',
-            patience=15,  # Reduzir a taxa de aprendizado mais cedo para otimizar o aprendizado
+            patience=5,  # Reduzir a taxa de aprendizado mais cedo para otimizar o aprendizado
             verbose=1,
             factor=0.5,  # Fator de redução da taxa de aprendizado
             min_lr=1e-6,
@@ -117,7 +117,7 @@ def train_model():
         history = libria.model.fit(
             train_dataset,
             validation_data=val_dataset,
-            epochs=200,
+            epochs=120,
             callbacks=[early_stopping, reduce_lr, checkpoint_cb, tensorboard_cb]
         )
 
@@ -247,7 +247,10 @@ def webcam_predictor():
 
         # Obter a classificação do sinal
         pred_label = np.argmax(prediction[0, -1, :])  # Obter a classe do último frame
-        label_text = class_labels.get(pred_label, 'Desconhecido')
+        if pred_label >= num_classes:
+            label_text = 'Desconhecido'
+        else:
+            label_text = class_labels.get(pred_label, 'Desconhecido')
 
         # Gera o Grad-CAM usando apenas o submodelo convolucional
         heatmap = generate_gradcam(resnet_model, processed_image, pred_label)

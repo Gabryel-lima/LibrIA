@@ -9,6 +9,7 @@ from keras._tf_keras.keras.utils import to_categorical
 from sklearn.model_selection import train_test_split
 from sklearn.utils import resample
 import tensorflow as tf
+from src.utils.preprocessing import find_outliers_iqr_with_combined_histogram, verificar_normalizacao
 
 class MultiModalGestureNet:
     def __init__(self, image_shape=(28, 28, 1), gesture_features_dim=42, num_blocks=[2, 2, 2, 2], num_classes=None):
@@ -60,10 +61,17 @@ class MultiModalGestureNet:
         gesture_features = landmarks.drop('label', axis=1).iloc[:, :self.gesture_features_dim].values.astype('float32')
         pixels = hands.drop('label', axis=1).values.astype('float32')
 
+        #find_outliers_iqr_with_combined_histogram(signals, landmarks, hands, sample_size=20000)
+
         # Normalização dos dados
-        images = images / 255.0
-        pixels = pixels / 255.0
-        gesture_features = (gesture_features - gesture_features.mean(axis=0)) / gesture_features.std(axis=0)
+        images = (images - images.mean(axis=0)) / (images.std(axis=0) + 1e-8)
+        pixels = (pixels - pixels.mean(axis=0)) / (pixels.std(axis=0) + 1e-8)
+        gesture_features = (gesture_features - gesture_features.mean(axis=0)) / (gesture_features.std(axis=0) + 1e-8)
+
+        # Estatísticas antes e depois da padronização
+        # images = verificar_normalizacao(images, "images")
+        # pixels = verificar_normalizacao(pixels, "pixels")
+        # gesture_features = verificar_normalizacao(gesture_features, "gesture_features")
 
         # Converter rótulos para valores numéricos adequados
         labels = pd.factorize(labels)[0]
@@ -121,12 +129,14 @@ class MultiModalGestureNet:
             gesture_input = layers.Input(shape=(self.gesture_features_dim,))
             gesture_features = layers.BatchNormalization()(gesture_input)
             gesture_features = layers.Dense(64, activation='relu', kernel_regularizer=keras.regularizers.l2(0.01))(gesture_features)
+            gesture_features = layers.Dropout(0.3)(gesture_features)
             gesture_features = layers.BatchNormalization()(gesture_features)
             gesture_features = layers.Dense(32, activation='relu', kernel_regularizer=keras.regularizers.l2(0.01))(gesture_features)
 
             # Entrada de pixels para processamento separado
             pixels_input = layers.Input(shape=self.image_shape)
             pixels_features = layers.Conv2D(32, (3, 3), activation='relu', padding='same')(pixels_input)
+            pixels_features = layers.Dropout(0.3)(pixels_features)
             pixels_features = layers.MaxPooling2D((2, 2))(pixels_features)
             pixels_features = layers.GlobalAveragePooling2D()(pixels_features)
             pixels_features = layers.BatchNormalization()(pixels_features)  # Normalização após pooling
@@ -134,14 +144,18 @@ class MultiModalGestureNet:
             # Combinação das características de imagem, gestos e pixels
             combined = layers.Concatenate()([image_features, gesture_features, pixels_features])
             x = layers.Dense(128, activation='relu', kernel_regularizer=keras.regularizers.l2(0.01))(combined)
+            x = layers.Dropout(0.4)(x)  # Dropout adicional para regularizar
 
         # Resto da rede
-        x = layers.Dense(64, activation='relu', kernel_regularizer=keras.regularizers.l2(0.01))(x)
+        x = layers.Dense(64, activation='relu', kernel_regularizer=keras.regularizers.l2(0.005))(x)
         x = layers.RepeatVector(10)(x)
-        x = layers.Bidirectional(layers.LSTM(32, return_sequences=True))(x)
+        x = layers.BatchNormalization()(x)  # Normalização após RepeatVector
+        x = layers.Bidirectional(layers.LSTM(32, return_sequences=True, dropout=0.3, recurrent_dropout=0.3))(x)
         attention = layers.Attention()([x, x])
+        attention = layers.Dropout(0.3)(attention)  # Dropout após atenção para regularização
         x = layers.TimeDistributed(layers.Dense(32, activation='relu'))(attention)
-        decoder = layers.GRU(128, return_sequences=True)(x)
+        decoder = layers.GRU(128, return_sequences=True, dropout=0.3, recurrent_dropout=0.3)(x)
+        decoder = layers.Dropout(0.3)(decoder)  # Dropout após GRU
         output = layers.TimeDistributed(layers.Dense(self.num_classes, activation='softmax'))(decoder)
 
         if use_only_images:
