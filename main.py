@@ -3,8 +3,8 @@ from src.utils.imports import (np, tf, plt, traceback, json)
 from src.utils.plots import plot_training_history
 import keras
 from src.core.MultiModalGestureNet import MultiModalGestureNet
-from keras._tf_keras.keras.preprocessing.image import ImageDataGenerator
 import cv2 as cv
+from sklearn.utils import shuffle
 
 def error_log():
     """Função para registrar o erro em um arquivo log."""
@@ -46,15 +46,12 @@ def augment(image):
 
 def apply_augment(features, label):
     """Função para aplicar augment apenas na imagem, mantendo landmarks e labels intactos."""
-    # Verificar se features é uma tupla com três entradas (imagem, landmarks, pixels)
-    if isinstance(features, tuple) and len(features) == 3:
-        image, landmarks, pixels = features
-    else:
-        raise ValueError("Esperava uma tupla com três entradas (imagem, landmarks, pixels), mas recebeu: {}".format(features))
-    
+    # Extrair as características: imagem, landmarks, pixels
+    image, landmarks, pixels = features
+
     # Aplicar a função de aumento de dados apenas à imagem
     augmented_image = augment(image)
-    
+
     # Retornar a tupla (imagem aumentada, landmarks, pixels) junto com o label
     return (augmented_image, landmarks, pixels), label
 
@@ -71,27 +68,56 @@ def train_model():
         X_train_img, X_train_gesture_features, X_train_pixels = X_train
         X_test_img, X_test_gesture_features, X_test_pixels = X_test
 
-        # Construção do modelo
+        # Embaralhar os dados de treino
+        X_train_img, X_train_gesture_features, X_train_pixels, y_train_seq = shuffle(
+            X_train_img, X_train_gesture_features, X_train_pixels, y_train_seq, random_state=42
+        )
+
+        # Criar o dataset do TensorFlow
+        batch_size = 64
+
+        # Dataset de treino com aumento de dados
+        train_dataset = tf.data.Dataset.from_tensor_slices(((X_train_img, X_train_gesture_features, X_train_pixels), y_train_seq))
+        train_dataset = train_dataset.shuffle(buffer_size=len(X_train_img))
+        train_dataset = train_dataset.map(lambda features, label: apply_augment(features, label), num_parallel_calls=tf.data.AUTOTUNE)
+        train_dataset = train_dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)
+
+        # Dataset de validação
+        val_dataset = tf.data.Dataset.from_tensor_slices(((X_test_img, X_test_gesture_features, X_test_pixels), y_test_seq))
+        val_dataset = val_dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)
+
+        # Compilação do modelo com hiperparâmetros do otimizador ajustados
         libria.build_model()
         libria.model.summary()
 
-        # Compilação do modelo com hiperparâmetros do otimizador ajustados
-        optimizer = keras.optimizers.AdamW(learning_rate=0.0025)
+        optimizer = keras.optimizers.AdamW(learning_rate=0.0005)
         libria.model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['accuracy'])
 
         # Configuração de callbacks
-        early_stopping = keras.callbacks.EarlyStopping(monitor='val_accuracy', patience=3, restore_best_weights=True)
-        reduce_lr = keras.callbacks.ReduceLROnPlateau(monitor='val_accuracy', patience=2, verbose=1, factor=0.5, min_lr=1e-6)
+        early_stopping = keras.callbacks.EarlyStopping(
+            monitor='val_accuracy',  # Monitorar a precisão de validação
+            mode='max',  # Parar quando alcançar o valor máximo
+            patience=20,  # Número de épocas para esperar antes de parar, sem melhoria
+            restore_best_weights=True  # Restaurar os melhores pesos alcançados
+        )
+
+        reduce_lr = keras.callbacks.ReduceLROnPlateau(
+            monitor='val_loss',
+            patience=15,  # Reduzir a taxa de aprendizado mais cedo para otimizar o aprendizado
+            verbose=1,
+            factor=0.5,  # Fator de redução da taxa de aprendizado
+            min_lr=1e-6,
+            cooldown=3
+        )
+
         checkpoint_cb = keras.callbacks.ModelCheckpoint('./model/best_model.keras', save_best_only=True)
         tensorboard_cb = keras.callbacks.TensorBoard(log_dir='./logs', histogram_freq=1)
 
-        # Treinamento do modelo com os callbacks ajustados, usando os dados diretamente
+        # Treinamento do modelo com os callbacks ajustados
         history = libria.model.fit(
-            [X_train_img, X_train_gesture_features, X_train_pixels],
-            y_train_seq,
-            validation_data=([X_test_img, X_test_gesture_features, X_test_pixels], y_test_seq),
-            epochs=50,
-            batch_size=64,
+            train_dataset,
+            validation_data=val_dataset,
+            epochs=200,
             callbacks=[early_stopping, reduce_lr, checkpoint_cb, tensorboard_cb]
         )
 
@@ -99,10 +125,7 @@ def train_model():
         plot_training_history(history)
 
         # Avaliação do modelo
-        test_loss, test_accuracy = libria.model.evaluate(
-            [X_test_img, X_test_gesture_features, X_test_pixels],
-            y_test_seq
-        )
+        test_loss, test_accuracy = libria.model.evaluate(val_dataset)
         print(f'Test Loss: {test_loss}, Test Accuracy: {test_accuracy}')
 
         # Salvar o modelo e os resultados
@@ -169,15 +192,29 @@ def display_gradcam(frame, heatmap, alpha=0.4):
     superimposed_image = cv.addWeighted(heatmap, alpha, frame, 1 - alpha, 0)
     return superimposed_image
 
+def preprocess_input(frame, target_size=(28, 28)):
+    """Pré-processa o frame para a entrada da rede neural."""
+    # Redimensionar a imagem para o tamanho desejado (28x28)
+    input_frame = cv.resize(frame, target_size)
+    # Converter a imagem para escala de cinza
+    input_frame = cv.cvtColor(input_frame, cv.COLOR_BGR2GRAY)
+    # Normalizar os valores dos pixels para o intervalo [0, 1]
+    input_frame = input_frame.astype("float32") / 255.0
+    # Expandir a dimensão para (28, 28, 1)
+    input_frame = np.expand_dims(input_frame, axis=-1)
+    # Expandir a dimensão para incluir o batch size (1, 28, 28, 1)
+    input_frame = np.expand_dims(input_frame, axis=0)
+    return input_frame
+
 def webcam_predictor():
     """
     Função para capturar sinais de mão, detectar landmarks, e visualizar a detecção em tempo real.
     """
     input_shape = (28, 28, 1)
     landmark_dim = 42
-    num_classes = 25
+    num_classes = 29
 
-    libria = MultiModalGestureNet(image_shape=input_shape, landmark_dim=landmark_dim, num_blocks=[2, 2, 2, 2], num_classes=num_classes)
+    libria = MultiModalGestureNet(image_shape=input_shape, gesture_features_dim=landmark_dim, num_blocks=[2, 2, 2, 2], num_classes=num_classes)
     libria.build_model()
     libria.model.load_weights('./model/LibriaCombinedModel.keras')
     libria.model.summary()
@@ -190,7 +227,7 @@ def webcam_predictor():
         print('Erro: Câmera não disponível. Saindo...')
         return
 
-    class_labels: dict[int, str] = {i: f'Sinal {chr(65 + i)}' for i in range(num_classes)}
+    class_labels = {i: f'Sinal {chr(65 + i)}' for i in range(num_classes)}
 
     while True:
         ret, frame = cap.read()
@@ -199,30 +236,17 @@ def webcam_predictor():
             break
 
         # Pré-processar a imagem de entrada para a rede neural
-        processed_image = preprocess_input(frame, target_size=(28, 28))
+        processed_image = preprocess_input(frame, target_size=(28, 28))  # Agora `processed_image` tem forma (1, 28, 28, 1)
 
-        # Fazer a predição dos landmarks
-        predicted_landmarks = libria.model.predict(processed_image)[0, :landmark_dim]  # Obter a previsão dos landmarks
+        # Criar um placeholder para os landmarks de entrada
+        dummy_landmarks = np.zeros((1, 42), dtype=np.float32)  # Tamanho de 42, conforme o modelo espera
+        dummy_pixels = np.zeros((1, 28, 28, 1), dtype=np.float32)  # Placeholder para os pixels adicionais, conforme necessário
 
-        # Redimensionar os landmarks para o tamanho do frame original
-        height, width, _ = frame.shape
-        landmarks = predicted_landmarks.reshape(-1, 2)
-        landmarks[:, 0] *= width  # Redimensionar coordenada x
-        landmarks[:, 1] *= height  # Redimensionar coordenada y
+        # Realizar a predição com todas as entradas necessárias
+        prediction = libria.model.predict([processed_image, dummy_landmarks, dummy_pixels])
 
-        # Desenhar os landmarks previstos na imagem
-        for (x, y) in landmarks:
-            cv.circle(frame, (int(x), int(y)), 5, (0, 255, 0), -1)
-
-        # Fazer a predição de classificação do sinal usando os landmarks
-        # Normalizar os landmarks para escala [0, 1] novamente para passar para o modelo
-        normalized_landmarks = landmarks.flatten()
-        normalized_landmarks[::2] /= width  # Coordenada x
-        normalized_landmarks[1::2] /= height  # Coordenada y
-        dummy_landmarks = np.expand_dims(normalized_landmarks, axis=0)
-
-        prediction = libria.model.predict([processed_image, dummy_landmarks])
-        pred_label = np.argmax(prediction[:, landmark_dim:])  # A parte após os landmarks é para a classificação
+        # Obter a classificação do sinal
+        pred_label = np.argmax(prediction[0, -1, :])  # Obter a classe do último frame
         label_text = class_labels.get(pred_label, 'Desconhecido')
 
         # Gera o Grad-CAM usando apenas o submodelo convolucional
@@ -239,14 +263,6 @@ def webcam_predictor():
 
     cap.release()
     cv.destroyAllWindows()
-
-def preprocess_input(frame, target_size=(28, 28)):
-    """Pré-processa o frame para a entrada da rede neural."""
-    input_frame = cv.resize(frame, target_size)
-    input_frame = cv.cvtColor(input_frame, cv.COLOR_BGR2GRAY)
-    input_frame = input_frame.astype("float32") / 255.0
-    input_frame = np.expand_dims(input_frame, axis=[0, -1])
-    return input_frame
 
 # Função de entrada para iniciar o treinamento ou visualização da câmera
 def eval_input():

@@ -2,9 +2,15 @@ import cv2
 import pandas as pd
 import os
 from sklearn.model_selection import train_test_split
-from functools import lru_cache
+import traceback
 
-@lru_cache(maxsize=None)
+def error_log():
+    """Função para registrar o erro em um arquivo log."""
+    with open('error_log_extract.txt', 'w') as f:
+        f.write('An exception occurred:\n')
+        f.write(traceback.format_exc())
+    print('An exception occurred. Check error_log.txt for details.')
+
 def process_image(image_path, size=(28, 28)):
     """
     Process an image by resizing and converting it to grayscale.
@@ -54,7 +60,7 @@ def images_to_csv(image_folder, output_csv, size=(28, 28)):
     else:
         print(f"No valid images were found in the specified folder {image_folder}. CSV not created.")
 
-def balance_and_split_dataset(csv_path, train_csv_path, test_csv_path, max_samples=5000, test_size=0.2, random_state=42):
+def balance_and_split_dataset(csv_path, train_csv_path, test_csv_path, max_samples=20000, test_size=0.2, random_state=42):
     """
     Balance and split a CSV dataset into training and test sets.
     Args:
@@ -68,12 +74,24 @@ def balance_and_split_dataset(csv_path, train_csv_path, test_csv_path, max_sampl
     df = pd.read_csv(csv_path)
 
     # Check if there are enough samples in each class
-    if df['label'].value_counts().min() < 2:
+    class_counts = df['label'].value_counts()
+    if class_counts.min() < 2:
         print("Error: No class has at least two samples. The DataFrame is empty.")
         return
 
+    # Determine the minimum number of samples to ensure all classes are represented
+    min_samples_per_class = min(max_samples // len(df['label'].unique()), class_counts.max())
+
     # Balance the dataset by ensuring each class has roughly equal representation
-    balanced_df = df.groupby('label').apply(lambda x: x.head(max(max_samples // len(df['label'].unique()), 2))).reset_index(drop=True)
+    balanced_data = []
+    for _, group in df.groupby('label'):
+        if len(group) >= min_samples_per_class:
+            sampled_group = group.sample(n=min_samples_per_class, random_state=random_state)
+        else:
+            sampled_group = group.sample(n=min_samples_per_class, replace=True, random_state=random_state)
+        balanced_data.append(sampled_group)
+
+    balanced_df = pd.concat(balanced_data).reset_index(drop=True)
 
     # Split into training and test sets
     try:
@@ -83,6 +101,7 @@ def balance_and_split_dataset(csv_path, train_csv_path, test_csv_path, max_sampl
         print(f"Training set saved at: {train_csv_path}")
         print(f"Test set saved at: {test_csv_path}")
     except ValueError as e:
+        error_log()
         print(f"Error while splitting the dataset: {e}")
 
 # Example Usage
@@ -102,7 +121,7 @@ if __name__ == '__main__':
                               train_csv_path="E:\\libria\\data\\hands_train.csv",
                               test_csv_path="E:\\libria\\data\\hands_test.csv")
 
-    images_to_csv(image_folder="E:\\libria\\data\\landmarks\\characters",
+    images_to_csv(image_folder="E:\\libria\\data\\landmarks\\train",
                   output_csv="E:\\libria\\data\\landmarks.csv")
 
     balance_and_split_dataset(csv_path="E:\\libria\\data\\landmarks.csv",

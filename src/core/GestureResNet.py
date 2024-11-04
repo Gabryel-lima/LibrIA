@@ -103,7 +103,7 @@ class GestureResNet:
         x = layers.ReLU()(x)
 
         # Empilhar blocos residuais
-        filters = 64
+        filters = 32
         for i, num_block in enumerate(num_blocks):
             for j in range(num_block):
                 stride = 1 if j != 0 else (2 if i != 0 else 1)
