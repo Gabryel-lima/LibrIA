@@ -1,6 +1,6 @@
 {
     "E:\\libria\\data\\signals_train.csv": {
-        "num_samples": 15984,
+        "num_samples": 39996,
         "num_columns": 785,
         "column_names": [
             "label",
@@ -791,7 +791,7 @@
         ]
     },
     "E:\\libria\\data\\signals_test.csv": {
-        "num_samples": 3997,
+        "num_samples": 10000,
         "num_columns": 785,
         "column_names": [
             "label",
@@ -1582,7 +1582,7 @@
         ]
     },
     "E:\\libria\\data\\landmarks_train.csv": {
-        "num_samples": 15993,
+        "num_samples": 39984,
         "num_columns": 785,
         "column_names": [
             "label",
@@ -2373,7 +2373,7 @@
         ]
     },
     "E:\\libria\\data\\landmarks_test.csv": {
-        "num_samples": 3999,
+        "num_samples": 9996,
         "num_columns": 785,
         "column_names": [
             "label",

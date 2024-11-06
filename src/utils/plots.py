@@ -4,19 +4,21 @@ from src.utils.imports import (
 
 def plot_training_history(history) -> None:
     """
-    Um histograma simples de linha
+    Plot the training history including loss and accuracy metrics for training and validation.
     
     Parameters
     ----------
-    dtype : history = numpy.ndarray
+    history : keras.callbacks.History
+        Training history containing loss, accuracy, and other metrics.
 
-    :return: None
-
+    Returns
+    -------
+    None
     """
-    plt.figure(figsize=(12, 5))
+    plt.figure(figsize=(8, 6))
 
-    # Perda
-    plt.subplot(1, 2, 1)
+    # Perda Total
+    plt.subplot(2, 2, 1)
     plt.plot(history.history['loss'], label='Training Loss')
     plt.plot(history.history['val_loss'], label='Validation Loss')
     plt.xlabel('Epochs')
@@ -24,8 +26,8 @@ def plot_training_history(history) -> None:
     plt.legend()
     plt.title('Training and Validation Loss')
 
-    # Acurácia
-    plt.subplot(1, 2, 2)
+    # Acurácia de Classificação
+    plt.subplot(2, 2, 2)
     plt.plot(history.history['accuracy'], label='Training Accuracy')
     plt.plot(history.history['val_accuracy'], label='Validation Accuracy')
     plt.xlabel('Epochs')
@@ -33,8 +35,30 @@ def plot_training_history(history) -> None:
     plt.legend()
     plt.title('Training and Validation Accuracy')
 
+    # Perda de Classificação
+    if 'class_output_loss' in history.history:
+        plt.subplot(2, 2, 3)
+        plt.plot(history.history['class_output_loss'], label='Training Classification Loss')
+        plt.plot(history.history['val_class_output_loss'], label='Validation Classification Loss')
+        plt.xlabel('Epochs')
+        plt.ylabel('Classification Loss')
+        plt.legend()
+        plt.title('Training and Validation Classification Loss')
+
+    # Perda de Regressão para Landmarks
+    if 'landmark_output_loss' in history.history:
+        plt.subplot(2, 2, 4)
+        plt.plot(history.history['landmark_output_loss'], label='Training Landmark Loss')
+        plt.plot(history.history['val_landmark_output_loss'], label='Validation Landmark Loss')
+        plt.xlabel('Epochs')
+        plt.ylabel('Landmark Loss')
+        plt.legend()
+        plt.title('Training and Validation Landmark Loss')
+
+    # Ajuste final e salvar a figura
     plt.tight_layout()
     plt.savefig("training_history.png")
+    plt.show()
 
 def sample_correct_class():
     import numpy as np

@@ -60,7 +60,7 @@ def images_to_csv(image_folder, output_csv, size=(28, 28)):
     else:
         print(f"No valid images were found in the specified folder {image_folder}. CSV not created.")
 
-def balance_and_split_dataset(csv_path, train_csv_path, test_csv_path, max_samples=20000, test_size=0.2, random_state=42):
+def balance_and_split_dataset(csv_path, train_csv_path, test_csv_path, max_samples=50000, test_size=0.2, random_state=42):
     """
     Balance and split a CSV dataset into training and test sets.
     Args:
