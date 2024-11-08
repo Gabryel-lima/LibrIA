@@ -15,15 +15,13 @@ from src.utils.imports import KerasTensor
 import keras
 
 class GestureResNet:
-    def __init__(self, image_input_shape: tuple, gesture_features_dim: int = 42, num_classes_units: int = None, num_blocks: list[int] = [2, 2, 2, 2], include_top: bool = True):
+    def __init__(self, image_input_shape: tuple, gesture_features_dim: int = 42, num_classes_units: int = None, num_blocks: list[int] = [2, 2, 2, 2]):
         """
         Inicializa a arquitetura GestureResNet.
         """
-        self.include_top = include_top
         self.num_classes_units = num_classes_units
         self.gesture_features_dim = gesture_features_dim
         self.model = self.build_model(image_input_shape, num_blocks)
-        self.model.summary()
 
     def residual_block(self, x, filters: int = 75, kernel_size: tuple[int, int] | int = 3, stride: int = 1):
         """
@@ -56,7 +54,7 @@ class GestureResNet:
         x = layers.BatchNormalization()(x)
         x = layers.ReLU()(x)
 
-        filters: int = 16
+        filters: int = 8
         for i, num_block in enumerate(num_blocks):
             for j in range(num_block):
                 stride = 1 if j != 0 else (2 if i != 0 else 1)
@@ -64,9 +62,6 @@ class GestureResNet:
             filters *= 2
 
         x = layers.GlobalAveragePooling2D()(x)
-
-        if self.include_top and self.num_classes_units is not None:
-            x = layers.Dense(units=self.num_classes_units, activation='softmax', bias_regularizer=keras.regularizers.l2(0.001))(x)
 
         model = models.Model(inputs, x)
         return model
@@ -147,7 +142,7 @@ class MultiModalGestureNet:
         self.num_classes = len(np.unique(labels))
         labels = to_categorical(labels, num_classes=self.num_classes)
 
-        # Ajuste para sequência temporal (32 passos)
+        # Ajuste para sequência temporal (10 passos)
         labels_seq = np.repeat(labels[:, np.newaxis, :], 32, axis=1)
 
         # Dividir dados em conjuntos de treino e teste
@@ -164,12 +159,12 @@ class MultiModalGestureNet:
     def build_model(self):
         # Entrada de imagem para extração de características com ResNet
         image_input = layers.Input(shape=self.image_shape)
-        self.resnet = GestureResNet(self.image_shape, num_classes_units=self.num_classes, num_blocks=self.num_blocks, include_top=False)
+        self.resnet = GestureResNet(self.image_shape, num_classes_units=self.num_classes, num_blocks=self.num_blocks)
         image_features = self.resnet.model(image_input)
-        image_features = layers.BatchNormalization()(image_features)  # Adicionando normalização logo após extração
+        image_features = layers.BatchNormalization()(image_features)
 
         # Entrada das características dos gestos para processamento separado
-        gesture_input = layers.Input(shape=(self.gesture_features_dim,))
+        gesture_input = layers.Input(shape=(self.gesture_features_dim, ))
         gesture_features = layers.BatchNormalization()(gesture_input)
         gesture_features = layers.Dense(64, activation='relu', kernel_regularizer=keras.regularizers.l2(0.01))(gesture_features)
         gesture_features = layers.Dropout(0.3)(gesture_features)
@@ -182,27 +177,33 @@ class MultiModalGestureNet:
         pixels_features = layers.Dropout(0.3)(pixels_features)
         pixels_features = layers.MaxPooling2D((2, 2))(pixels_features)
         pixels_features = layers.GlobalAveragePooling2D()(pixels_features)
-        pixels_features = layers.BatchNormalization()(pixels_features)  # Normalização após pooling
+        pixels_features = layers.BatchNormalization()(pixels_features)
 
         # Combinação das características de imagem, gestos e pixels
         combined = layers.Concatenate()([image_features, gesture_features, pixels_features])
         x = layers.Dense(128, activation='relu', kernel_regularizer=keras.regularizers.l2(0.01))(combined)
-        x = layers.Dropout(0.4)(x)  # Dropout adicional para regularizar
+        x = layers.Dropout(0.4)(x)
 
         # Resto da rede
         x = layers.Dense(64, activation='relu', kernel_regularizer=keras.regularizers.l2(0.005))(x)
         x = layers.RepeatVector(32)(x)
-        x = layers.BatchNormalization()(x)  # Normalização após RepeatVector
+        x = layers.BatchNormalization()(x)
         x = layers.Bidirectional(layers.LSTM(32, return_sequences=True, dropout=0.3, recurrent_dropout=0.3))(x)
         attention = layers.Attention()([x, x])
-        attention = layers.Dropout(0.3)(attention)  # Dropout após atenção para regularização
+        attention = layers.Dropout(0.3)(attention)
         x = layers.TimeDistributed(layers.Dense(32, activation='relu'))(attention)
         decoder = layers.GRU(128, return_sequences=True, dropout=0.3, recurrent_dropout=0.3)(x)
-        decoder = layers.Dropout(0.3)(decoder)  # Dropout após GRU
         output = layers.TimeDistributed(layers.Dense(self.num_classes, activation='softmax'))(decoder)
 
         # Definindo o modelo com todas as entradas
         self.model = Model(inputs=[image_input, gesture_input, pixels_input], outputs=output)
 
         # Compilando o modelo
-        self.model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+        self.model.compile(
+            optimizer=keras.optimizers.Adam(learning_rate=1e-3),
+            loss='categorical_crossentropy',
+            metrics=[
+                'accuracy'
+            ],
+        )
+

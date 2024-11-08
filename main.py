@@ -21,10 +21,10 @@ def augment(image):
     """Função para realizar o aumento de dados com menos ruído e variação"""
     # Ajuste aleatório de brilho e contraste (intervalo reduzido)
     image = tf.image.random_brightness(image, max_delta=0.2)
-    image = tf.image.random_contrast(image, lower=0.8, upper=1.2)
+    image = tf.image.random_contrast(image, lower=0.4, upper=1.6)
 
     # Rotação aleatória (menos agressiva)
-    image = tf.image.rot90(image, k=tf.random.uniform(shape=[], minval=0, maxval=2, dtype=tf.int32))
+    image = tf.image.rot90(image, k=tf.random.uniform(shape=[], minval=0, maxval=4, dtype=tf.int32))
 
     # Zoom aleatório (intervalo reduzido)
     scales = tf.constant(np.arange(0.9, 1.1, 0.05), dtype=tf.float32)
@@ -77,7 +77,7 @@ def train_model():
         )
 
         # Criar o dataset do TensorFlow
-        batch_size = 64
+        batch_size = 128
 
         # Dataset de treino com aumento de dados
         train_dataset = tf.data.Dataset.from_tensor_slices(((X_train_img, X_train_gesture_features, X_train_pixels), y_train_seq))
@@ -87,42 +87,41 @@ def train_model():
 
         # Dataset de validação
         val_dataset = tf.data.Dataset.from_tensor_slices(((X_test_img, X_test_gesture_features, X_test_pixels), y_test_seq))
-        val_dataset = val_dataset.batch(len(y_test_seq)).prefetch(tf.data.AUTOTUNE)
+        val_dataset = val_dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)
 
         # Compilação do modelo com hiperparâmetros do otimizador ajustados
         libria.build_model()
 
         # Sumário da rede mãe e plot do modelo
         libria.model.summary()
-        plot_model(libria.model, to_file='model_structure.png', dpi=200,
-                   show_shapes=True, show_layer_names=True, show_trainable=True, 
-                   show_dtype=True, show_layer_activations=True)
+
+        # Sumário do submodelo
+        libria.resnet.model.summary()
+
+        plot_model(libria.model, to_file='model_structure.png', dpi=200, rankdir='TB',
+                   show_shapes=True, show_layer_names=True, show_trainable=True, show_layer_activations=True)
 
         # Configuração de callbacks melhorada
         early_stopping = keras.callbacks.EarlyStopping(
             monitor='val_loss',  # Focar na perda de validação
             mode='min',  # Parar quando não houver mais diminuição
-            patience=15,  # Número de épocas para esperar antes de parar, sem melhoria
-            restore_best_weights=True,  # Restaurar os melhores pesos alcançados
-            min_delta=0.001  # Mudança mínima para considerar uma melhoria
+            patience=10,  # Número de épocas para esperar antes de parar, sem melhoria
+            restore_best_weights=True,
+            min_delta=0.001
         )
 
         reduce_lr = keras.callbacks.ReduceLROnPlateau(
             monitor='val_loss',  # Monitorar a perda de validação para reduzir a LR
-            patience=5,  # Reduzir a taxa de aprendizado mais cedo para otimizar o aprendizado
+            patience=3,  # Reduzir a taxa de aprendizado mais cedo para otimizar o aprendizado
             verbose=1,
-            factor=0.3,  # Fator de redução da taxa de aprendizado
+            factor=0.2,  # Fator de redução da taxa de aprendizado
             min_lr=1e-6,
             cooldown=2
         )
 
-        def scheduler(epoch, lr):
-            if epoch < 10:
-                return lr
-            else:
-                return lr * tf.math.exp(-0.1)
-
-        lr_scheduler = keras.callbacks.LearningRateScheduler(scheduler)
+        lr_scheduler = keras.callbacks.LearningRateScheduler(
+            lambda epoch, lr: float(lr) if epoch < 10 else float(lr * tf.math.exp(-0.1).numpy())
+        )
 
         checkpoint = keras.callbacks.ModelCheckpoint(
             filepath='./model/best_model.keras',
@@ -131,8 +130,8 @@ def train_model():
             verbose=1
         )
 
-        csv_logger = keras.callbacks.CSVLogger('./logs/training_log.csv')
-        tensorboard_callback = keras.callbacks.TensorBoard(log_dir='./logs', histogram_freq=1)
+        csv_logger = keras.callbacks.CSVLogger('training_log.csv')
+        tensorboard_callback = keras.callbacks.TensorBoard(log_dir='./logs', histogram_freq=1, write_images=True, write_steps_per_second=True)
         terminate_nan = keras.callbacks.TerminateOnNaN()
 
         # Adicionando os callbacks à lista
@@ -150,7 +149,7 @@ def train_model():
         history = libria.model.fit(
             train_dataset,
             validation_data=val_dataset,
-            epochs=200,
+            epochs=100,
             callbacks=callbacks,
             batch_size=batch_size,
             verbose=1
@@ -183,72 +182,6 @@ def train_model():
         error_log()
         print(f'Error: {e}')
 
-def find_last_conv_layer(model):
-    """Encontra a última camada convolucional no modelo."""
-    for layer in reversed(model.layers):
-        if 'conv2d_21' in layer.name:
-            return layer.name
-    raise ValueError("Nenhuma camada convolucional foi encontrada no modelo.")
-
-def generate_gradcam(submodel, inputs, class_index):
-    """
-    Gera o Grad-CAM de uma imagem processada para uma classe específica usando apenas o submodelo de imagem.
-    
-    Args:
-        submodel: O submodelo Keras a ser usado.
-        inputs: As entradas do modelo (imagens, características de gestos, etc).
-        class_index: Índice da classe alvo para o Grad-CAM.
-
-    Returns:
-        heatmap: O mapa de calor gerado pelo Grad-CAM.
-    """
-    # Encontrar a última camada convolucional
-    last_conv_layer_name = find_last_conv_layer(submodel)
-    
-    # Criar um modelo que retorna tanto a saída da última camada convolucional quanto a saída final
-    grad_model = keras.models.Model(inputs=submodel.inputs, outputs=[submodel.get_layer(last_conv_layer_name).output, submodel.output])
-    
-    # Garantir que todos os inputs estejam no formato adequado de tensor
-    inputs = [tf.convert_to_tensor(input_data) for input_data in inputs]
-    
-    with tf.GradientTape() as tape:
-        # Passar inputs através do grad_model para obter as saídas
-        conv_outputs, predictions = grad_model(inputs, training=False)
-        
-        # Obter a perda para a classe alvo
-        loss = predictions[:, class_index]
-
-    # Calcular o gradiente da perda em relação à saída da última camada convolucional
-    grads = tape.gradient(loss, conv_outputs)[0]
-    
-    # Reduzir os gradientes para calcular a importância média em cada canal
-    pooled_grads = tf.reduce_mean(grads, axis=(0, 1))
-
-    # Obter a saída da última camada convolucional
-    conv_outputs = conv_outputs[0]
-
-    # Inicializar o heatmap com zeros
-    heatmap = np.zeros(conv_outputs.shape[:2], dtype=np.float32)
-
-    # Construir o heatmap ponderando a saída dos canais pela importância média
-    for i in range(pooled_grads.shape[-1]):
-        heatmap += pooled_grads[i] * conv_outputs[:, :, i]
-
-    # Aplicar ReLU e normalizar o heatmap
-    heatmap = np.maximum(heatmap, 0)
-    if np.max(heatmap) != 0:
-        heatmap /= np.max(heatmap)
-
-    return heatmap
-
-def display_gradcam(frame, heatmap, alpha=0.4):
-    """Sobrepõe o mapa de calor na imagem original."""
-    heatmap = cv.resize(heatmap, (frame.shape[1], frame.shape[0]))
-    heatmap = np.uint8(255 * heatmap)
-    heatmap = cv.applyColorMap(heatmap, cv.COLORMAP_JET)
-    superimposed_image = cv.addWeighted(heatmap, alpha, frame, 1 - alpha, 0)
-    return superimposed_image
-
 def display_gradcam(frame, heatmap, alpha=0.4):
     """Sobrepõe o mapa de calor na imagem original."""
     heatmap = cv.resize(heatmap, (frame.shape[1], frame.shape[0]))
@@ -271,6 +204,56 @@ def preprocess_input(frame, target_size=(28, 28)):
     input_frame = np.expand_dims(input_frame, axis=0)
     return input_frame
 
+def find_last_conv_layer(model: keras.Model):
+    """Encontra a última camada convolucional no modelo dinamicamente."""
+    for layer in reversed(model.layers):
+        if isinstance(layer, keras.layers.Conv2D):
+            return layer
+    raise ValueError("Nenhuma camada convolucional foi encontrada no modelo.")
+
+def generate_gradcam(submodel, image_input, class_index):
+    """
+    Gera o Grad-CAM de uma imagem processada para uma classe específica usando o submodelo convolucional.
+    Args:
+        submodel: O submodelo Keras que vai até a última camada convolucional.
+        image_input: A entrada de imagem do modelo.
+        class_index: Índice da classe alvo para o Grad-CAM.
+    Returns:
+        heatmap: O mapa de calor gerado pelo Grad-CAM.
+    """
+    # Encontrar a última camada convolucional
+    last_conv_layer = find_last_conv_layer(submodel)
+
+    # Criar um modelo que retorna tanto a saída da última camada convolucional quanto a saída final
+    grad_model = keras.models.Model(inputs=submodel.input, outputs=[last_conv_layer.output, submodel.output])
+
+    with tf.GradientTape() as tape:
+        # Passar inputs através do grad_model para obter as saídas
+        conv_outputs, predictions = grad_model(image_input, training=False)
+
+        # Obter a perda para a classe alvo
+        loss = predictions[:, class_index]
+
+    # Calcular o gradiente da perda em relação à saída da última camada convolucional
+    grads = tape.gradient(loss, conv_outputs)
+
+    # Reduzir os gradientes para calcular a importância média em cada canal
+    pooled_grads = tf.reduce_mean(grads, axis=(0, 1, 2))
+
+    # Obter a saída da última camada convolucional
+    conv_outputs = conv_outputs[0]
+
+    # Construir o heatmap ponderando a saída dos canais pela importância média
+    heatmap = tf.reduce_sum(tf.multiply(pooled_grads, conv_outputs), axis=-1)
+
+    # Aplicar ReLU e normalizar o heatmap
+    heatmap = np.maximum(heatmap, 0)
+    if np.max(heatmap) != 0:
+        heatmap /= np.max(heatmap)
+
+    # Retornar o heatmap diretamente, já que é um numpy.ndarray
+    return heatmap
+
 def webcam_predictor():
     """
     Função para capturar sinais de mão, detectar landmarks, e visualizar a detecção em tempo real.
@@ -284,6 +267,7 @@ def webcam_predictor():
     libria.build_model()
     libria.model.load_weights('./model/LibriaCombinedModel.keras')
     libria.model.summary()
+    libria.resnet.model.summary()
 
     cap = cv.VideoCapture(0)
     if not cap.isOpened():
@@ -301,13 +285,6 @@ def webcam_predictor():
         # Pré-processar a imagem de entrada para a rede neural
         processed_image = preprocess_input(frame, target_size=(28, 28))
 
-        # Garantir que o formato da imagem seja (28, 28, 1) antes de expandir
-        if processed_image.shape != (28, 28, 1):
-            processed_image = processed_image.reshape((28, 28, 1))
-
-        # Expandir a dimensão do batch para (1, 28, 28, 1)
-        processed_image = np.expand_dims(processed_image, axis=0)
-
         # Placeholder para características dos gestos (landmarks) com shape (1, 42)
         gesture_features = np.zeros((1, landmark_dim), dtype=np.float32)
 
@@ -315,8 +292,8 @@ def webcam_predictor():
         additional_pixels = processed_image.copy()
 
         # Realizar a predição com todas as entradas necessárias
-        inputs = [processed_image, gesture_features, additional_pixels]
-        pred_class, predicted_landmarks = libria.model.predict(inputs)
+        inputs: list = [processed_image, gesture_features, additional_pixels]
+        pred_class = libria.model.predict(inputs)
 
         # Obter a classificação do sinal
         pred_label = np.argmax(pred_class[0, -1, :])  # Classe do último frame
@@ -325,15 +302,8 @@ def webcam_predictor():
         else:
             label_text = class_labels.get(pred_label, 'Desconhecido')
 
-        # Converter os landmarks para coordenadas do frame original
-        landmarks = predicted_landmarks.flatten()
-        for i in range(0, len(landmarks), 2):
-            x = int(landmarks[i] * frame.shape[1] / 28)
-            y = int(landmarks[i + 1] * frame.shape[0] / 28)
-            cv.circle(frame, (x, y), 5, (0, 255, 0), -1)  # Desenhar um círculo verde para cada ponto
-
-        # Gera o Grad-CAM usando todas as entradas do modelo
-        heatmap = generate_gradcam(libria.model, inputs, pred_label)
+        # Gera o Grad-CAM usando apenas a entrada da imagem
+        heatmap = generate_gradcam(libria.resnet.model, processed_image, pred_label)
         superimposed_image = display_gradcam(frame, heatmap)
 
         # Adicionar a classe prevista na imagem
@@ -348,7 +318,7 @@ def webcam_predictor():
 
     cap.release()
     cv.destroyAllWindows()
-    
+
 # Função de entrada para iniciar o treinamento ou visualização da câmera
 def eval_input():
     """Garante o input corretamente"""

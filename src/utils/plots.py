@@ -15,7 +15,7 @@ def plot_training_history(history) -> None:
     -------
     None
     """
-    plt.figure(figsize=(8, 6))
+    plt.figure(figsize=(9, 7))
 
     # Perda Total
     plt.subplot(2, 2, 1)
@@ -58,7 +58,6 @@ def plot_training_history(history) -> None:
     # Ajuste final e salvar a figura
     plt.tight_layout()
     plt.savefig("training_history.png")
-    plt.show()
 
 def sample_correct_class():
     import numpy as np
