@@ -1,7 +1,9 @@
 import cv2
 import pandas as pd
+import numpy as np
 import os
 from sklearn.model_selection import train_test_split
+from imblearn.over_sampling import SMOTE  # Importando SMOTE para balanceamento
 import traceback
 
 def error_log():
@@ -79,19 +81,17 @@ def balance_and_split_dataset(csv_path, train_csv_path, test_csv_path, max_sampl
         print("Error: No class has at least two samples. The DataFrame is empty.")
         return
 
-    # Determine the minimum number of samples to ensure all classes are represented
-    min_samples_per_class = min(max_samples // len(df['label'].unique()), class_counts.max())
+    # Separate features and labels
+    X = df.drop('label', axis=1).values
+    y = df['label'].values
 
-    # Balance the dataset by ensuring each class has roughly equal representation
-    balanced_data = []
-    for _, group in df.groupby('label'):
-        if len(group) >= min_samples_per_class:
-            sampled_group = group.sample(n=min_samples_per_class, random_state=random_state)
-        else:
-            sampled_group = group.sample(n=min_samples_per_class, replace=True, random_state=random_state)
-        balanced_data.append(sampled_group)
+    # Apply SMOTE to balance the dataset
+    smote = SMOTE(random_state=random_state)
+    X_resampled, y_resampled = smote.fit_resample(X, y)
 
-    balanced_df = pd.concat(balanced_data).reset_index(drop=True)
+    # Create a balanced DataFrame
+    columns = ['label'] + [f'pixel_{i}' for i in range(X_resampled.shape[1])]
+    balanced_df = pd.DataFrame(data=np.column_stack((y_resampled, X_resampled)), columns=columns)
 
     # Split into training and test sets
     try:
@@ -114,16 +114,16 @@ if __name__ == '__main__':
                               train_csv_path="E:\\libria\\data\\signals_train.csv",
                               test_csv_path="E:\\libria\\data\\signals_test.csv")
 
-    images_to_csv(image_folder="E:\\libria\\data\\hand_keypoint_dataset_26k\\images\\train",
-                  output_csv="E:\\libria\\data\\hands.csv")
+    # images_to_csv(image_folder="E:\\libria\\data\\hand_keypoint_dataset_26k\\images\\train",
+    #               output_csv="E:\\libria\\data\\hands.csv")
 
-    balance_and_split_dataset(csv_path="E:\\libria\\data\\hands.csv",
-                              train_csv_path="E:\\libria\\data\\hands_train.csv",
-                              test_csv_path="E:\\libria\\data\\hands_test.csv")
+    # balance_and_split_dataset(csv_path="E:\\libria\\data\\hands.csv",
+    #                           train_csv_path="E:\\libria\\data\\hands_train.csv",
+    #                           test_csv_path="E:\\libria\\data\\hands_test.csv")
 
-    images_to_csv(image_folder="E:\\libria\\data\\landmarks\\train",
-                  output_csv="E:\\libria\\data\\landmarks.csv")
+    # images_to_csv(image_folder="E:\\libria\\data\\landmarks\\train",
+    #               output_csv="E:\\libria\\data\\landmarks.csv")
 
-    balance_and_split_dataset(csv_path="E:\\libria\\data\\landmarks.csv",
-                              train_csv_path="E:\\libria\\data\\landmarks_train.csv",
-                              test_csv_path="E:\\libria\\data\\landmarks_test.csv")
+    # balance_and_split_dataset(csv_path="E:\\libria\\data\\landmarks.csv",
+    #                           train_csv_path="E:\\libria\\data\\landmarks_train.csv",
+    #                           test_csv_path="E:\\libria\\data\\landmarks_test.csv")
