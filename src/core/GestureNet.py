@@ -204,14 +204,13 @@ class DataLoader:
         labels_encoded = label_encoder.fit_transform(self.labels)
         num_classes = len(label_encoder.classes_)
 
+        # Codificar os rótulos como one-hot
         labels_encoded = keras.utils.to_categorical(labels_encoded, num_classes=num_classes)
 
+        # Dividir os dados em conjuntos de treino e validação
         X_train_images, X_val_images, X_train_landmarks, X_val_landmarks, y_train, y_val = train_test_split(
             self.images, self.landmark_features, labels_encoded, test_size=0.2, random_state=42
         )
-
-        y_train = np.repeat(y_train[:, np.newaxis, :], 8, axis=1)
-        y_val = np.repeat(y_val[:, np.newaxis, :], 8, axis=1)
 
         # Convertendo os dados para tensores do TensorFlow
         X_train_images = tf.convert_to_tensor(X_train_images, dtype=tf.float32)
@@ -232,6 +231,15 @@ class DataLoader:
         # Concatenando as imagens e os landmarks para formar um único tensor de entrada
         X_train = tf.concat([X_train_images, X_train_landmarks], axis=-1)
         X_val = tf.concat([X_val_images, X_val_landmarks], axis=-1)
+
+        # Ajustar a forma do `y_train` para garantir a compatibilidade com `X_train`
+        # Aqui, vamos garantir que o comprimento da sequência de `y_train` seja compatível com `X_train`.
+        y_train = tf.reshape(y_train, [tf.shape(y_train)[0], -1])  # Ajustar para a forma (batch_size, seq_len)
+        y_val = tf.reshape(y_val, [tf.shape(y_val)[0], -1])
+
+        # Verificar compatibilidade entre `X_train` e `y_train`
+        if y_train.shape[0] != X_train.shape[0]:
+            raise ValueError("O número de amostras em `y_train` não corresponde ao de `X_train`.")
 
         # Criando os datasets do TensorFlow sem usar dicionário para inputs
         train_ds = tf.data.Dataset.from_tensor_slices(
@@ -326,24 +334,36 @@ class Transformer(keras.Model):
     def train_step(self, batch):
         source, target = batch
 
-        # Certifique-se de que target seja do tipo inteiro e tenha duas dimensões (batch_size, 1)
+        # Certifique-se de que o target seja do tipo inteiro
         target = tf.cast(target, tf.int32)
-        if len(target.shape) == 1:
-            target = tf.expand_dims(target, axis=-1)
 
-        # Ajustar o comprimento do target para corresponder ao comprimento do source
-        batch_size, seq_len, _ = source.shape
-        if target.shape[1] != seq_len:
-            target = tf.tile(target, [1, seq_len])
+        # Expandir o comprimento do target para coincidir com o comprimento do source
+        batch_size = tf.shape(source)[0]
+        seq_len = tf.shape(source)[1]  # seq_len do source, deve ser 847 neste caso
+        target_seq_len = tf.shape(target)[1]  # Atualmente é 29
+
+        # Ajuste para garantir que target tenha o mesmo comprimento que source
+        if target_seq_len != seq_len:
+            if target_seq_len < seq_len:
+                # Caso o comprimento do target seja menor que o do source, replicamos o target
+                repeat_factor = seq_len // target_seq_len
+                target = tf.tile(target, [1, repeat_factor])
+                # Truncar caso a replicação ultrapasse o comprimento do source
+                target = target[:, :seq_len]
+            elif target_seq_len > seq_len:
+                # Caso o comprimento do target seja maior que o do source, truncamos
+                target = target[:, :seq_len]
 
         # Criação do target_one_hot com a forma correta para coincidir com preds
         target_one_hot = tf.one_hot(target, depth=self.num_classes)  # Deve resultar em (batch_size, seq_len, num_classes)
 
+        # Certifique-se de que a forma de preds seja compatível com target_one_hot
         with tf.GradientTape() as tape:
-            preds = self(source, training=True)  # Forma de (batch_size, seq_len, num_classes)
+            preds = self(source, training=True)  # Deve ter a forma (batch_size, seq_len, num_classes)
 
-            # Depuração das formas dos tensores
-            print(f"Forma de target_one_hot: {target_one_hot.shape}, Forma de preds: {preds.shape}")
+            # Truncar `preds` para garantir que coincida com `target_one_hot`
+            if tf.shape(preds)[1] > tf.shape(target_one_hot)[1]:
+                preds = preds[:, :tf.shape(target_one_hot)[1], :]
 
             # Calcular a perda
             loss = self.compiled_loss(target_one_hot, preds)
@@ -351,70 +371,118 @@ class Transformer(keras.Model):
         # Calcular gradientes e aplicar as atualizações
         gradients = tape.gradient(loss, self.trainable_variables)
         self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
-        
+
         return {"loss": loss}
 
     def test_step(self, batch):
         source, target = batch
 
-        # Certifique-se de que target seja do tipo inteiro e tenha duas dimensões (batch_size, 1)
+        # Certifique-se de que o target seja do tipo inteiro
         target = tf.cast(target, tf.int32)
-        if len(target.shape) == 1:
-            target = tf.expand_dims(target, axis=-1)
 
-        # Ajustar o comprimento do target para corresponder ao comprimento do source
-        batch_size, seq_len, _ = source.shape
-        if target.shape[1] != seq_len:
-            target = tf.tile(target, [1, seq_len])
+        # Expandir o comprimento do target para coincidir com o comprimento do source
+        batch_size = tf.shape(source)[0]
+        seq_len = tf.shape(source)[1]  # seq_len do source, deve ser 847 neste caso
+        target_seq_len = tf.shape(target)[1]  # Atualmente é 29
+
+        # Ajuste para garantir que target tenha o mesmo comprimento que source
+        if target_seq_len != seq_len:
+            if target_seq_len < seq_len:
+                # Caso o comprimento do target seja menor que o do source, replicamos o target
+                repeat_factor = seq_len // target_seq_len
+                target = tf.tile(target, [1, repeat_factor])
+                # Truncar caso a replicação ultrapasse o comprimento do source
+                target = target[:, :seq_len]
+            elif target_seq_len > seq_len:
+                # Caso o comprimento do target seja maior que o do source, truncamos
+                target = target[:, :seq_len]
 
         # Criação do target_one_hot com a forma correta para coincidir com preds
         target_one_hot = tf.one_hot(target, depth=self.num_classes)  # Deve resultar em (batch_size, seq_len, num_classes)
 
-        preds = self(source, training=False)  # Forma de (batch_size, seq_len, num_classes)
+        # Certifique-se de que a forma de preds seja compatível com target_one_hot
+        preds = self(source, training=False)  # Deve ter a forma (batch_size, seq_len, num_classes)
 
-        # Depuração das formas dos tensores
-        print(f"Forma de target_one_hot: {target_one_hot.shape}, Forma de preds: {preds.shape}")
+        # Truncar `preds` para garantir que coincida com `target_one_hot`
+        if tf.shape(preds)[1] > tf.shape(target_one_hot)[1]:
+            preds = preds[:, :tf.shape(target_one_hot)[1], :]
 
         # Calcular a perda
         loss = self.compiled_loss(target_one_hot, preds)
 
         return {"loss": loss}
-    
+
     def generate(self, source, target_start_token_idx):
         """Performs inference over one batch of inputs using greedy decoding."""
         bs = tf.shape(source)[0]
-        enc = self.encoder(source, training=False)
+        # Encodar a entrada
+        enc = source
+        for layer in self.encoder_layers:
+            enc = layer(enc, training=False)
+
         dec_input = tf.ones((bs, 1), dtype=tf.int32) * target_start_token_idx
         dec_logits = []
+
         for _ in range(self.target_maxlen - 1):
-            dec_out = self.decode(enc, dec_input, training=False)
+            # Passar pela pilha do decoder
+            dec_out = dec_input
+            for layer in self.decoder_layers:
+                dec_out = layer(enc, dec_out, training=False)
+            
             logits = self.classifier(dec_out)
             logits = tf.argmax(logits, axis=-1, output_type=tf.int32)
             last_logit = logits[:, -1][..., tf.newaxis]
             dec_logits.append(last_logit)
             dec_input = tf.concat([dec_input, last_logit], axis=-1)
+
         return tf.concat(dec_logits, axis=1)
 
-# Example usage for debugging
 if __name__ == "__main__":
-    # Dummy data for testing
-    batch_size = 4
-    seq_len = 10
-    num_hid = 64
-    num_classes = 10
+    # Carregar os dados usando o DataProcessor
+    signals_filename = "signals.csv"
+    landmarks_filename = "landmarks.csv"
+    processor = DataProcessor(signals_filename, landmarks_filename)
+    labels, signals, landmark_features = processor.load_or_process_data()
 
-    # Create dummy input data
-    x_dummy = tf.random.uniform((batch_size, seq_len, num_hid))
-    y_dummy = tf.random.uniform((batch_size,), maxval=num_classes, dtype=tf.int32)
+    # Preparar o DataLoader e os datasets de treino e validação
+    dataloader = DataLoader(labels, signals, landmark_features)
+    train_ds, val_ds, num_classes = dataloader.prepare_data()
 
-    # Instantiate and compile the model
-    model = Transformer(num_hid=num_hid, num_classes=num_classes)
-    model.compile(optimizer=model.optimizer, loss=model.compiled_loss)
+    # Definir e compilar o modelo Transformer
+    transformer_model = Transformer(
+        num_hid=64,
+        num_head=2,
+        num_feed_forward=128,
+        source_maxlen=100,
+        target_maxlen=8,  # Ajustado para o comprimento desejado dos sinais target
+        num_layers_enc=4,
+        num_layers_dec=1,
+        num_classes=num_classes,
+        learning_rate=1e-3,
+    )
 
-    # Debug a training step
-    print("Debugging a single training step...")
-    model.train_step((x_dummy, y_dummy))
+    # Realizar o treinamento
+    epochs = 10  # Ajuste de acordo com suas necessidades
+    for epoch in range(epochs):
+        print(f"Epoch {epoch + 1}/{epochs}")
+        
+        # Treinamento
+        for step, batch in enumerate(train_ds):
+            loss = transformer_model.train_step(batch)
+            if step % 50 == 0:
+                print(f"Step {step}: Loss = {loss['loss'].numpy()}")
 
-    # Debug a testing step
-    print("Debugging a single testing step...")
-    model.test_step((x_dummy, y_dummy))
+        # Validação
+        val_loss = []
+        for val_step, val_batch in enumerate(val_ds):
+            val_result = transformer_model.test_step(val_batch)
+            val_loss.append(val_result['loss'].numpy())
+
+        mean_val_loss = np.mean(val_loss)
+        print(f"Validation Loss: {mean_val_loss}")
+
+    # Gerar predições para um exemplo (por exemplo, usar um batch de val_ds)
+    for batch in val_ds.take(1):
+        source, _ = batch
+        pred = transformer_model.generate(source, target_start_token_idx=0)
+        print("Predição:", pred.numpy())

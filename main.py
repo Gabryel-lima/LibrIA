@@ -130,36 +130,67 @@ def train_model():
             lr_scheduler
         ]
 
-        # Chamando o fit com os callbacks
-        history = libria.fit(
-            train_dataset,
-            validation_data=val_dataset,
-            epochs=100,
-            callbacks=callbacks,
-            verbose=1
-        )
+        # Inicializando variáveis de histórico
+        training_history = {"loss": [], "val_loss": [], "accuracy": [], "val_accuracy": []}
 
-        # Salvando o modelo
+        # Loop manual de treinamento
+        epochs = 100
+        for epoch in range(epochs):
+            print(f"Epoch {epoch + 1}/{epochs}")
+
+            # Treinamento
+            for step, batch in enumerate(train_dataset):
+                result = libria.train_step(batch)
+                loss = result['loss']
+                training_history['loss'].append(float(loss))
+
+                # Mostrar progresso do treinamento
+                if step % 50 == 0:
+                    print(f"Step {step}, Loss: {loss:.4f}")
+
+            # Validação
+            val_losses = []
+            val_accuracies = []
+            for step, batch in enumerate(val_dataset):
+                result = libria.test_step(batch)
+                val_loss = result['loss']
+                val_losses.append(float(val_loss))
+                val_accuracies.append(float(result.get('accuracy', 0.0)))
+
+            # Média dos resultados de validação
+            avg_val_loss = sum(val_losses) / len(val_losses)
+            avg_val_accuracy = sum(val_accuracies) / len(val_accuracies)
+            training_history['val_loss'].append(avg_val_loss)
+            training_history['val_accuracy'].append(avg_val_accuracy)
+
+            print(f"Validation Loss: {avg_val_loss:.4f}, Validation Accuracy: {avg_val_accuracy:.4f}")
+
+            # Checagem dos callbacks
+            for callback in callbacks:
+                if hasattr(callback, 'on_epoch_end'):
+                    callback.on_epoch_end(epoch, logs={'loss': loss, 'val_loss': avg_val_loss})
+
+            # Condição de early stopping
+            if early_stopping.stopped_epoch > 0:
+                print(f"Early stopping at epoch {epoch + 1}")
+                break
+
+        # Salvando o modelo final
         libria.save('./model/LibriaCombinedModel.keras')
 
-        # Avaliação do modelo
+        # Avaliação final do modelo
         evaluation_results = libria.evaluate(val_dataset)
         print(f'Avaliação do modelo retornou: {evaluation_results}')
 
-        # Armazenando as métricas de avaliação em 'results'
-        results = {
-            'test_loss': evaluation_results[0],
-            'accuracy': evaluation_results[1]
-        }
-
-        print(f'Resultados: {results}')
-
         # Salvando o histórico do treinamento
-        history_results = {key: value for key, value in history.history.items()}
+        history_results = training_history
 
         # Salvando os resultados do treinamento e da avaliação em um arquivo JSON
         final_results = {
-            "evaluation": results,
+            "evaluation": {
+                'test_loss': evaluation_results[0],
+                'accuracy': evaluation_results[1]
+            },
             "training_history": history_results
         }
 
