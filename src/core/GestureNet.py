@@ -213,6 +213,7 @@ class DataLoader:
         y_train = np.repeat(y_train[:, np.newaxis, :], 8, axis=1)
         y_val = np.repeat(y_val[:, np.newaxis, :], 8, axis=1)
 
+        # Convertendo os dados para tensores do TensorFlow
         X_train_images = tf.convert_to_tensor(X_train_images, dtype=tf.float32)
         X_train_landmarks = tf.convert_to_tensor(X_train_landmarks, dtype=tf.float32)
         y_train = tf.convert_to_tensor(y_train, dtype=tf.float32)
@@ -221,18 +222,24 @@ class DataLoader:
         X_val_landmarks = tf.convert_to_tensor(X_val_landmarks, dtype=tf.float32)
         y_val = tf.convert_to_tensor(y_val, dtype=tf.float32)
 
+        # Normalizando as características das imagens e dos landmarks
         X_train_landmarks = (X_train_landmarks - tf.reduce_mean(X_train_landmarks)) / tf.math.reduce_std(X_train_landmarks)
         X_val_landmarks = (X_val_landmarks - tf.reduce_mean(X_val_landmarks)) / tf.math.reduce_std(X_val_landmarks)
 
         X_train_images = (X_train_images - tf.reduce_mean(X_train_images)) / tf.math.reduce_std(X_train_images)
         X_val_images = (X_val_images - tf.reduce_mean(X_val_images)) / tf.math.reduce_std(X_val_images)
 
+        # Concatenando as imagens e os landmarks para formar um único tensor de entrada
+        X_train = tf.concat([X_train_images, X_train_landmarks], axis=-1)
+        X_val = tf.concat([X_val_images, X_val_landmarks], axis=-1)
+
+        # Criando os datasets do TensorFlow sem usar dicionário para inputs
         train_ds = tf.data.Dataset.from_tensor_slices(
-            ({"image_input": X_train_images, "landmark_input": X_train_landmarks}, y_train)
+            (X_train, y_train)
         ).shuffle(1000).batch(64).prefetch(buffer_size=tf.data.AUTOTUNE)
 
         val_ds = tf.data.Dataset.from_tensor_slices(
-            ({"image_input": X_val_images, "landmark_input": X_val_landmarks}, y_val)
+            (X_val, y_val)
         ).batch(64).prefetch(buffer_size=tf.data.AUTOTUNE)
 
         return train_ds, val_ds, num_classes
