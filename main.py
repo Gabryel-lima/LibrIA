@@ -2,7 +2,7 @@
 from src.utils.imports import (np, tf, plt, traceback, json, pd)
 from src.utils.plots import plot_training_history
 import keras
-from src.core.MultiModalGestureNet import MultiModalGestureNet
+from src.core.GestureNet import Transformer, DataProcessor, DataLoader
 import cv2 as cv
 from sklearn.utils import shuffle
 import os
@@ -62,20 +62,40 @@ def apply_augment(features, label):
 def train_model():
     """Função principal para o treinamento do modelo."""
     try:
-        # Inicialização da classe MultiModalGestureNet e carregamento de dados
-        libria = MultiModalGestureNet(image_shape=(28, 28, 1), gesture_features_dim=63, num_blocks=[2, 2, 2, 2])
+        # Inicialização do modelo Transformer
+        num_classes = 29
+        landmark_dim = 63
+        libria = Transformer(
+            num_hid=64,
+            num_head=1,
+            num_feed_forward=128,
+            source_maxlen=100,
+            target_maxlen=100,
+            num_layers_enc=4,
+            num_layers_dec=1,
+            num_classes=num_classes,
+        )
 
-        # Carregar os dados de treino e validação usando a nova abordagem compacta
-        train_dataset, val_dataset = libria.load_data()
+        # Construir o modelo especificando a forma da entrada
+        libria.build(input_shape=[(None, 100, landmark_dim), (None, 100)])
 
-        # Compilação do modelo com hiperparâmetros do otimizador ajustados
-        libria.build_model()
+        # Carregar os dados de treino e validação dos dois arquivos CSVs (signals.csv e landmarks.csv)
+        data_processor = DataProcessor('signals.csv', 'landmarks.csv')
+        labels, signals, landmark_features = data_processor.load_or_process_data()
+        data_loader = DataLoader(labels, signals, landmark_features)
+        train_dataset, val_dataset, num_classes = data_loader.prepare_data()
 
-        # Sumário da rede mãe e plot do modelo
-        libria.model.summary()
-        libria.resnet.model.summary()
+        # Compilar o modelo com hiperparâmetros do otimizador ajustados
+        libria.compile(
+            optimizer=keras.optimizers.Adam(learning_rate=0.001),
+            loss=keras.losses.CategoricalCrossentropy(from_logits=True),
+            metrics=['accuracy']
+        )
 
-        plot_model(libria.model, to_file='model_structure.png', dpi=200, rankdir='TB',
+        # Sumário do modelo e plot do modelo
+        libria.summary()
+
+        plot_model(libria, to_file='model_structure.png', dpi=200, rankdir='TB',
                    show_shapes=True, show_layer_names=True, show_trainable=True, show_layer_activations=True)
 
         # Configuração de callbacks
@@ -111,7 +131,7 @@ def train_model():
         ]
 
         # Chamando o fit com os callbacks
-        history = libria.model.fit(
+        history = libria.fit(
             train_dataset,
             validation_data=val_dataset,
             epochs=100,
@@ -120,17 +140,16 @@ def train_model():
         )
 
         # Salvando o modelo
-        libria.model.save('./model/LibriaCombinedModel.keras')
+        libria.save('./model/LibriaCombinedModel.keras')
 
         # Avaliação do modelo
-        evaluation_results = libria.model.evaluate(val_dataset)
+        evaluation_results = libria.evaluate(val_dataset)
         print(f'Avaliação do modelo retornou: {evaluation_results}')
 
         # Armazenando as métricas de avaliação em 'results'
         results = {
-            'test_loss': evaluation_results[0],  # A perda total
-            'landmark_output_loss': evaluation_results[1],  # Loss para 'landmark_output'
-            'class_output_loss': evaluation_results[2]  # Loss para 'class_output'
+            'test_loss': evaluation_results[0],
+            'accuracy': evaluation_results[1]
         }
 
         print(f'Resultados: {results}')
@@ -223,18 +242,29 @@ def generate_gradcam(submodel, image_input, class_index):
     # Retornar o heatmap diretamente, já que é um numpy.ndarray
     return heatmap
 
+import mediapipe as mp
+
 def webcam_predictor():
     """
-    Função para capturar sinais de mão, detectar landmarks, e visualizar a detecção em tempo real.
+    Função para capturar sinais de mão, detectar landmarks, prever sinais de mão e visualizar a detecção em tempo real.
     """
     input_shape = (28, 28, 1)
     landmark_dim = 63
     num_classes = 29
 
-    # Inicializar e construir o modelo MultiModalGestureNet
-    libria = MultiModalGestureNet(image_shape=input_shape, gesture_features_dim=landmark_dim, num_blocks=[2, 2, 2, 2], num_classes=num_classes)
-    libria.build_model()
-    libria.model = keras.models.load_model('./model/LibriaCombinedModel.keras')
+    # Inicializar e carregar o modelo Transformer
+    model = Transformer(
+        num_hid=64,
+        num_head=2,
+        num_feed_forward=128,
+        source_maxlen=100,
+        target_maxlen=100,
+        num_layers_enc=4,
+        num_layers_dec=1,
+        num_classes=num_classes,
+    )
+    model.build(input_shape=[(None, 100, landmark_dim), (None, 100)])  # Ajuste necessário para o modelo ser utilizado corretamente
+    model.load_weights('./model/LibriaCombinedModel.keras')
 
     # Inicializar MediaPipe para captura de landmarks
     mp_hands = mp.solutions.hands
@@ -280,39 +310,16 @@ def webcam_predictor():
                     mp_drawing.draw_landmarks(frame, hand_landmarks, mp_hands.HAND_CONNECTIONS)
 
             # Realizar a predição com todas as entradas necessárias
-            inputs = [processed_image, gesture_features]
-            predictions = libria.model.predict(inputs)
-
-            # Assumindo que a saída é uma tupla: (landmark_predictions, class_predictions)
-            landmark_predictions, class_predictions = predictions
+            inputs = [gesture_features, np.ones((1, 100))]  # Usando apenas landmarks como entrada e sequência fictícia
+            predictions = model(inputs, training=False)
 
             # Obter a classificação do sinal
-            pred_label = np.argmax(class_predictions[0])  # Classe prevista
+            pred_label = np.argmax(predictions[0])  # Classe prevista
             label_text = class_labels.get(pred_label, 'Desconhecido')
 
-            # Desenhar os pontos dos landmarks previstos pelo modelo na imagem original
-            predicted_landmarks = landmark_predictions[0, 0, :28].reshape((14, 2))
-
-            for x, y in predicted_landmarks:
-                # Converter coordenadas normalizadas (x, y) para coordenadas da imagem
-                h, w = frame.shape[:2]
-                cx, cy = int(x * w), int(y * h)
-                cv.circle(frame, (cx, cy), 5, (0, 255, 0), -1)
-
-            try:
-                # Gera o Grad-CAM usando apenas a entrada da imagem
-                heatmap = generate_gradcam(libria.resnet.model, processed_image, pred_label)
-                superimposed_image = display_gradcam(frame, heatmap)
-            except Exception as e:
-                # Tratamento caso ocorra erro na geração do Grad-CAM
-                print(f"Erro ao gerar Grad-CAM: {e}")
-                superimposed_image = frame
-
-            # Adicionar a classe prevista na imagem
-            cv.putText(superimposed_image, f'Classe: {label_text}', (10, 30), cv.FONT_HERSHEY_COMPLEX, 1.0, (255, 255, 255), 2)
-
-            # Mostrar a imagem com a superposição do Grad-CAM, os landmarks previstos pelo modelo e a classe detectada
-            cv.imshow('Libria - Grad-CAM com Landmarks', superimposed_image)
+            # Exibir resultados
+            cv.putText(frame, f'Classe: {label_text}', (10, 30), cv.FONT_HERSHEY_COMPLEX, 1.0, (255, 255, 255), 2)
+            cv.imshow('Libria - Detecção de Gestos', frame)
 
             # Fechar ao pressionar 'q'
             if cv.waitKey(1) & 0xFF == ord('q'):
