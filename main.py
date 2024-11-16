@@ -10,6 +10,9 @@ from keras.src.utils import plot_model
 from src.utils.gradients import value_gradient
 import mediapipe as mp
 
+# Habilitar execução ansiosa globalmente
+#tf.config.run_functions_eagerly(True)
+
 def error_log():
     """Função para registrar o erro em um arquivo log."""
     with open('error_log.txt', 'w') as f:
@@ -62,10 +65,15 @@ def apply_augment(features, label):
 def train_model():
     """Função principal para o treinamento do modelo."""
     try:
+        # Carregar os dados de treino e validação dos dois arquivos CSVs (signals.csv e landmarks.csv)
+        data_processor = DataProcessor('signals.csv', 'landmarks.csv')
+        labels, signals, landmark_features = data_processor.load_or_process_data()
+        data_loader = DataLoader(labels, signals, landmark_features)
+        train_dataset, val_dataset, num_classes = data_loader.prepare_data()
+
         # Inicialização do modelo Transformer
-        num_classes = 29
         landmark_dim = 63
-        libria = Transformer(
+        gesture_net = Transformer(
             num_hid=64,
             num_head=1,
             num_feed_forward=128,
@@ -77,26 +85,24 @@ def train_model():
         )
 
         # Construir o modelo especificando a forma da entrada
-        libria.build(input_shape=[(None, 100, landmark_dim), (None, 100)])
-
-        # Carregar os dados de treino e validação dos dois arquivos CSVs (signals.csv e landmarks.csv)
-        data_processor = DataProcessor('signals.csv', 'landmarks.csv')
-        labels, signals, landmark_features = data_processor.load_or_process_data()
-        data_loader = DataLoader(labels, signals, landmark_features)
-        train_dataset, val_dataset, num_classes = data_loader.prepare_data()
+        gesture_net.build(input_shape=[(None, 100, landmark_dim), (None, 100)])
 
         # Compilar o modelo com hiperparâmetros do otimizador ajustados
-        libria.compile(
-            optimizer=keras.optimizers.Adam(learning_rate=0.001),
+        gesture_net.compile(
+            optimizer=keras.optimizers.Adam(learning_rate=1e-5, clipnorm=1.0),  # clipnorm limita o valor dos gradientes
             loss=keras.losses.CategoricalCrossentropy(from_logits=True),
-            metrics=['accuracy']
+            metrics=[
+                keras.metrics.CategoricalAccuracy(),
+                keras.metrics.Precision(),
+                keras.metrics.Recall()
+            ]
         )
 
         # Sumário do modelo e plot do modelo
-        libria.summary()
+        gesture_net.summary()
 
-        plot_model(libria, to_file='model_structure.png', dpi=200, rankdir='TB',
-                   show_shapes=True, show_layer_names=True, show_trainable=True, show_layer_activations=True)
+        # plot_model(gesture_net, to_file='model_structure.png', dpi=200, rankdir='TB',
+        #            show_shapes=True, show_layer_names=True, show_trainable=True, show_layer_activations=True)
 
         # Configuração de callbacks
         early_stopping = keras.callbacks.EarlyStopping(
@@ -130,60 +136,24 @@ def train_model():
             lr_scheduler
         ]
 
-        # Inicializando variáveis de histórico
-        training_history = {"loss": [], "val_loss": [], "accuracy": [], "val_accuracy": []}
-
-        # Loop manual de treinamento
-        epochs = 100
-        for epoch in range(epochs):
-            print(f"Epoch {epoch + 1}/{epochs}")
-
-            # Treinamento
-            for step, batch in enumerate(train_dataset):
-                result = libria.train_step(batch)
-                loss = result['loss']
-                training_history['loss'].append(float(loss))
-
-                # Mostrar progresso do treinamento
-                if step % 50 == 0:
-                    print(f"Step {step}, Loss: {loss:.4f}")
-
-            # Validação
-            val_losses = []
-            val_accuracies = []
-            for step, batch in enumerate(val_dataset):
-                result = libria.test_step(batch)
-                val_loss = result['loss']
-                val_losses.append(float(val_loss))
-                val_accuracies.append(float(result.get('accuracy', 0.0)))
-
-            # Média dos resultados de validação
-            avg_val_loss = sum(val_losses) / len(val_losses)
-            avg_val_accuracy = sum(val_accuracies) / len(val_accuracies)
-            training_history['val_loss'].append(avg_val_loss)
-            training_history['val_accuracy'].append(avg_val_accuracy)
-
-            print(f"Validation Loss: {avg_val_loss:.4f}, Validation Accuracy: {avg_val_accuracy:.4f}")
-
-            # Checagem dos callbacks
-            for callback in callbacks:
-                if hasattr(callback, 'on_epoch_end'):
-                    callback.on_epoch_end(epoch, logs={'loss': loss, 'val_loss': avg_val_loss})
-
-            # Condição de early stopping
-            if early_stopping.stopped_epoch > 0:
-                print(f"Early stopping at epoch {epoch + 1}")
-                break
+        # Chamando o fit com os callbacks
+        history = gesture_net.fit(
+            train_dataset,
+            validation_data=val_dataset,
+            epochs=100,
+            callbacks=callbacks,
+            verbose=1
+        )
 
         # Salvando o modelo final
-        libria.save('./model/LibriaCombinedModel.keras')
+        gesture_net.save('./model/GestureNet.keras')
 
         # Avaliação final do modelo
-        evaluation_results = libria.evaluate(val_dataset)
+        evaluation_results = gesture_net.evaluate(val_dataset)
         print(f'Avaliação do modelo retornou: {evaluation_results}')
 
         # Salvando o histórico do treinamento
-        history_results = training_history
+        history_results = {key: value for key, value in history.history.items()}
 
         # Salvando os resultados do treinamento e da avaliação em um arquivo JSON
         final_results = {
@@ -295,7 +265,7 @@ def webcam_predictor():
         num_classes=num_classes,
     )
     model.build(input_shape=[(None, 100, landmark_dim), (None, 100)])  # Ajuste necessário para o modelo ser utilizado corretamente
-    model.load_weights('./model/LibriaCombinedModel.keras')
+    model.load_weights('./model/GestureNet.keras')
 
     # Inicializar MediaPipe para captura de landmarks
     mp_hands = mp.solutions.hands
@@ -350,7 +320,7 @@ def webcam_predictor():
 
             # Exibir resultados
             cv.putText(frame, f'Classe: {label_text}', (10, 30), cv.FONT_HERSHEY_COMPLEX, 1.0, (255, 255, 255), 2)
-            cv.imshow('Libria - Detecção de Gestos', frame)
+            cv.imshow('libria_net - Gesture Detector', frame)
 
             # Fechar ao pressionar 'q'
             if cv.waitKey(1) & 0xFF == ord('q'):

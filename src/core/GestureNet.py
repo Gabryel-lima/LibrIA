@@ -37,24 +37,13 @@ class LandmarkEmbedding(layers.Layer):
         self.pos_emb = layers.Embedding(input_dim=maxlen, output_dim=num_hid)
 
     def call(self, x):
-        # Garantir que a entrada esteja no formato correto.
-        print("Shape inicial de x:", tf.shape(x))  # Debug do formato inicial de x
-
         if len(x.shape) == 2:
             x = tf.expand_dims(x, axis=-1)  # Expandir para 3D se for 2D (batch_size, seq_len) -> (batch_size, seq_len, 1)
         
         # Aplicar convolução
         x = self.conv1(x)
-        print("Shape após conv1:", tf.shape(x))  # Debug após conv1
-        tf.debugging.assert_shapes([(x, ('batch_size', 'seq_len', 'num_hid'))], message="Erro após conv1: shape inesperado")
-
         x = self.conv2(x)
-        print("Shape após conv2:", tf.shape(x))  # Debug após conv2
-        tf.debugging.assert_shapes([(x, ('batch_size', 'seq_len', 'num_hid'))], message="Erro após conv2: shape inesperado")
-
         x = self.conv3(x)
-        print("Shape após conv3:", tf.shape(x))  # Debug após conv3
-        tf.debugging.assert_shapes([(x, ('batch_size', 'seq_len', 'num_hid'))], message="Erro após conv3: shape inesperado")
 
         return x
 
@@ -104,19 +93,13 @@ class TransformerDecoder(layers.Layer):
 
         # Ajustar o `target` para que seja compatível com a atenção
         target = tf.reshape(target, [batch_size, seq_len, input_shape[-1]])  # Flatten as dimensões de seq_len
-        print("Shape ajustado de target para atenção:", target.get_shape().as_list())
 
         # Também capture a dimensão de enc_out
         if None in enc_shape:
             enc_shape = tf.shape(enc_out)
 
-        # Depuração dos shapes para entendimento
-        print("Shape de target (após ajuste):", target.get_shape().as_list())
-        print("Shape de enc_out:", enc_out.get_shape().as_list())
-
         # Corrigir a geração da máscara causal
         causal_mask = self.causal_attention_mask(batch_size, seq_len, self.self_att.num_heads, dtype=tf.float32)
-        print("Shape da máscara causal:", tf.shape(causal_mask))
 
         # Aplicar self-attention ao target com a máscara causal
         target_att = self.self_att(
@@ -126,7 +109,6 @@ class TransformerDecoder(layers.Layer):
             attention_mask=causal_mask,
             training=training
         )
-        print("Shape após self-attention (target_att):", tf.shape(target_att))
 
         target_norm = self.layernorm1(target + self.self_dropout(target_att, training=training))
 
@@ -137,6 +119,7 @@ class TransformerDecoder(layers.Layer):
             key=enc_out,
             training=training
         )
+
         enc_out_norm = self.layernorm2(target_norm + self.enc_dropout(enc_out_att, training=training))
 
         # Aplicar Feedforward
@@ -190,8 +173,8 @@ class DataProcessor:
     def save_landmarks(self, labels, landmark_features):
         landmarks_df = pd.DataFrame(landmark_features, columns=[f'landmark_{i}' for i in range(63)])
         landmarks_df.insert(0, 'label', labels)
-        landmarks_df.to_csv(self.csv_output_path, index=False)
-        print(f"Landmarks salvos em {self.csv_output_path}")
+        landmarks_df.to_csv('E:\\data\\', index=False)
+        print(f"Landmarks salvos em {'E:\\data\\'}")
 
 class DataLoader:
     def __init__(self, labels, images, landmark_features):
@@ -317,7 +300,6 @@ class Transformer(keras.Model):
 
         # Classificador final
         self.classifier = layers.Dense(num_classes)
-        self.classifier = layers.Dense(num_classes)
 
         # Optimizer
         self.optimizer = keras.optimizers.Adam(learning_rate=learning_rate)
@@ -331,6 +313,7 @@ class Transformer(keras.Model):
             x = layer(x, training=training)
         return self.classifier(x)
 
+    @tf.function
     def train_step(self, batch):
         source, target = batch
 
@@ -339,20 +322,24 @@ class Transformer(keras.Model):
 
         # Expandir o comprimento do target para coincidir com o comprimento do source
         batch_size = tf.shape(source)[0]
-        seq_len = tf.shape(source)[1]  # seq_len do source, deve ser 847 neste caso
+        seq_len = tf.shape(source)[1]  # seq_len do source
         target_seq_len = tf.shape(target)[1]  # Atualmente é 29
 
         # Ajuste para garantir que target tenha o mesmo comprimento que source
-        if target_seq_len != seq_len:
-            if target_seq_len < seq_len:
-                # Caso o comprimento do target seja menor que o do source, replicamos o target
-                repeat_factor = seq_len // target_seq_len
-                target = tf.tile(target, [1, repeat_factor])
-                # Truncar caso a replicação ultrapasse o comprimento do source
-                target = target[:, :seq_len]
-            elif target_seq_len > seq_len:
-                # Caso o comprimento do target seja maior que o do source, truncamos
-                target = target[:, :seq_len]
+        def replicate_target():
+            repeat_factor = seq_len // target_seq_len
+            target_replicated = tf.tile(target, [1, repeat_factor])
+            return target_replicated[:, :seq_len]  # Truncar se ultrapassar o comprimento do source
+
+        def truncate_target():
+            return target[:, :seq_len]
+
+        # Usar `tf.cond()` para verificar e ajustar o comprimento de `target`
+        target = tf.cond(
+            target_seq_len < seq_len,
+            true_fn=replicate_target,
+            false_fn=truncate_target
+        )
 
         # Criação do target_one_hot com a forma correta para coincidir com preds
         target_one_hot = tf.one_hot(target, depth=self.num_classes)  # Deve resultar em (batch_size, seq_len, num_classes)
@@ -361,9 +348,16 @@ class Transformer(keras.Model):
         with tf.GradientTape() as tape:
             preds = self(source, training=True)  # Deve ter a forma (batch_size, seq_len, num_classes)
 
-            # Truncar `preds` para garantir que coincida com `target_one_hot`
-            if tf.shape(preds)[1] > tf.shape(target_one_hot)[1]:
-                preds = preds[:, :tf.shape(target_one_hot)[1], :]
+            # Função para truncar `preds` se necessário
+            def truncate_preds():
+                return preds[:, :tf.shape(target_one_hot)[1], :]
+
+            # `tf.cond()` para verificar e ajustar o comprimento de `preds`
+            preds = tf.cond(
+                tf.shape(preds)[1] > tf.shape(target_one_hot)[1],
+                true_fn=truncate_preds,
+                false_fn=lambda: preds
+            )
 
             # Calcular a perda
             loss = self.compiled_loss(target_one_hot, preds)
@@ -374,6 +368,7 @@ class Transformer(keras.Model):
 
         return {"loss": loss}
 
+    @tf.function
     def test_step(self, batch):
         source, target = batch
 
@@ -382,20 +377,24 @@ class Transformer(keras.Model):
 
         # Expandir o comprimento do target para coincidir com o comprimento do source
         batch_size = tf.shape(source)[0]
-        seq_len = tf.shape(source)[1]  # seq_len do source, deve ser 847 neste caso
+        seq_len = tf.shape(source)[1]  # seq_len do source
         target_seq_len = tf.shape(target)[1]  # Atualmente é 29
 
         # Ajuste para garantir que target tenha o mesmo comprimento que source
-        if target_seq_len != seq_len:
-            if target_seq_len < seq_len:
-                # Caso o comprimento do target seja menor que o do source, replicamos o target
-                repeat_factor = seq_len // target_seq_len
-                target = tf.tile(target, [1, repeat_factor])
-                # Truncar caso a replicação ultrapasse o comprimento do source
-                target = target[:, :seq_len]
-            elif target_seq_len > seq_len:
-                # Caso o comprimento do target seja maior que o do source, truncamos
-                target = target[:, :seq_len]
+        def replicate_target():
+            repeat_factor = seq_len // target_seq_len
+            target_replicated = tf.tile(target, [1, repeat_factor])
+            return target_replicated[:, :seq_len]  # Truncar se ultrapassar o comprimento do source
+
+        def truncate_target():
+            return target[:, :seq_len]
+
+        # Usar `tf.cond()` para verificar e ajustar o comprimento de `target`
+        target = tf.cond(
+            target_seq_len < seq_len,
+            true_fn=replicate_target,
+            false_fn=truncate_target
+        )
 
         # Criação do target_one_hot com a forma correta para coincidir com preds
         target_one_hot = tf.one_hot(target, depth=self.num_classes)  # Deve resultar em (batch_size, seq_len, num_classes)
@@ -403,9 +402,16 @@ class Transformer(keras.Model):
         # Certifique-se de que a forma de preds seja compatível com target_one_hot
         preds = self(source, training=False)  # Deve ter a forma (batch_size, seq_len, num_classes)
 
-        # Truncar `preds` para garantir que coincida com `target_one_hot`
-        if tf.shape(preds)[1] > tf.shape(target_one_hot)[1]:
-            preds = preds[:, :tf.shape(target_one_hot)[1], :]
+        # Função para truncar `preds` se necessário
+        def truncate_preds():
+            return preds[:, :tf.shape(target_one_hot)[1], :]
+
+        # `tf.cond()` para verificar e ajustar o comprimento de `preds`
+        preds = tf.cond(
+            tf.shape(preds)[1] > tf.shape(target_one_hot)[1],
+            true_fn=truncate_preds,
+            false_fn=lambda: preds
+        )
 
         # Calcular a perda
         loss = self.compiled_loss(target_one_hot, preds)
@@ -451,7 +457,7 @@ if __name__ == "__main__":
     # Definir e compilar o modelo Transformer
     transformer_model = Transformer(
         num_hid=64,
-        num_head=2,
+        num_head=1,
         num_feed_forward=128,
         source_maxlen=100,
         target_maxlen=8,  # Ajustado para o comprimento desejado dos sinais target
