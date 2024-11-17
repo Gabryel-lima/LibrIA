@@ -10,8 +10,9 @@ from keras.src.utils import plot_model
 from src.utils.gradients import value_gradient
 import mediapipe as mp
 
-# Habilitar execução ansiosa globalmente
-#tf.config.run_functions_eagerly(True)
+# Configurando o TensorFlow para usar todos os threads disponíveis
+tf.config.threading.set_intra_op_parallelism_threads(0)
+tf.config.threading.set_inter_op_parallelism_threads(0)
 
 def error_log():
     """Função para registrar o erro em um arquivo log."""
@@ -73,13 +74,13 @@ def train_model():
 
         # Inicialização do modelo Transformer
         landmark_dim = 63
-        gesture_net = Transformer(
-            num_hid=64,
+        gesture_net = Transformer( # Diminui alguns parâmetros pela demora das epochs
+            num_hid=32,
             num_head=1,
-            num_feed_forward=128,
+            num_feed_forward=32,
             source_maxlen=100,
             target_maxlen=100,
-            num_layers_enc=4,
+            num_layers_enc=2,
             num_layers_dec=1,
             num_classes=num_classes,
         )
@@ -91,10 +92,8 @@ def train_model():
         gesture_net.compile(
             optimizer=keras.optimizers.Adam(learning_rate=1e-5, clipnorm=1.0),  # clipnorm limita o valor dos gradientes
             loss=keras.losses.CategoricalCrossentropy(from_logits=True),
-            metrics=[
-                keras.metrics.CategoricalAccuracy(),
-                keras.metrics.Precision(),
-                keras.metrics.Recall()
+            metrics=[ 'accuracy'
+                #keras.metrics.Accuracy()
             ]
         )
 
@@ -103,6 +102,11 @@ def train_model():
 
         # plot_model(gesture_net, to_file='model_structure.png', dpi=200, rankdir='TB',
         #            show_shapes=True, show_layer_names=True, show_trainable=True, show_layer_activations=True)
+
+        # Salvar o `build_config` do modelo para análise
+        build_config = gesture_net.get_config()
+        with open('model_build_config.json', 'w') as config_file:
+            json.dump(build_config, config_file, indent=4)
 
         # Configuração de callbacks
         early_stopping = keras.callbacks.EarlyStopping(

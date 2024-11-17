@@ -307,13 +307,25 @@ class Transformer(keras.Model):
         # Losses
         self.compiled_loss = keras.losses.CategoricalCrossentropy(from_logits=True)
 
+    def build(self, input_shape):
+        # Define as formas esperadas para as entradas do modelo
+        # Espera-se que input_shape seja uma lista com duas formas de entrada: [encoder_input_shape, decoder_input_shape]
+        encoder_input_shape, decoder_input_shape = input_shape
+
+        # Chamando o método build do super para registrar a camada como construída
+        super().build(input_shape)
+
+        # Informar quais serão as formas de entrada esperadas pelo modelo
+        print(f"Encoder input shape: {encoder_input_shape}")
+        print(f"Decoder input shape: {decoder_input_shape}")
+
     def call(self, inputs, training=False):
         x = inputs
         for layer in self.encoder_layers:
             x = layer(x, training=training)
         return self.classifier(x)
 
-    @tf.function
+    #@tf.function
     def train_step(self, batch):
         source, target = batch
 
@@ -368,7 +380,7 @@ class Transformer(keras.Model):
 
         return {"loss": loss}
 
-    @tf.function
+    #@tf.function
     def test_step(self, batch):
         source, target = batch
 
