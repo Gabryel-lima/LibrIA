@@ -11,8 +11,8 @@ from src.utils.gradients import value_gradient
 import mediapipe as mp
 
 # Configurando o TensorFlow para usar todos os threads disponíveis
-tf.config.threading.set_intra_op_parallelism_threads(0)
-tf.config.threading.set_inter_op_parallelism_threads(0)
+# tf.config.threading.set_intra_op_parallelism_threads(0)
+# tf.config.threading.set_inter_op_parallelism_threads(0)
 
 def error_log():
     """Função para registrar o erro em um arquivo log."""
@@ -64,17 +64,15 @@ def apply_augment(features, label):
     return augmented_image, label
 
 def train_model():
-    """Função principal para o treinamento do modelo."""
     try:
-        # Carregar os dados de treino e validação dos dois arquivos CSVs (signals.csv e landmarks.csv)
+        # Preparação dos dados
         data_processor = DataProcessor('signals.csv', 'landmarks.csv')
         labels, signals, landmark_features = data_processor.load_or_process_data()
         data_loader = DataLoader(labels, signals, landmark_features)
         train_dataset, val_dataset, num_classes = data_loader.prepare_data()
 
-        # Inicialização do modelo Transformer
-        landmark_dim = 63
-        gesture_net = Transformer( # Diminui alguns parâmetros pela demora das epochs
+        # Modelo Transformer
+        gesture_net = Transformer(
             num_hid=32,
             num_head=1,
             num_feed_forward=32,
@@ -84,96 +82,58 @@ def train_model():
             num_layers_dec=1,
             num_classes=num_classes,
         )
-
-        # Construir o modelo especificando a forma da entrada
-        gesture_net.build(input_shape=[(None, 100, landmark_dim), (None, 100)])
-
-        # Compilar o modelo com hiperparâmetros do otimizador ajustados
+        gesture_net.build(input_shape=[(None, 847, 63), (None, 847)])
         gesture_net.compile(
-            optimizer=keras.optimizers.Adam(learning_rate=1e-5, clipnorm=1.0),  # clipnorm limita o valor dos gradientes
+            optimizer=keras.optimizers.Adam(learning_rate=1e-4, clipnorm=1.0),
             loss=keras.losses.CategoricalCrossentropy(from_logits=True),
-            metrics=[ 'accuracy'
-                #keras.metrics.Accuracy()
+            metrics=[
+                keras.metrics.CategoricalAccuracy(name='accuracy'),
+                keras.metrics.Precision(name='precision'),
+                keras.metrics.Recall(name='recall')
             ]
         )
 
-        # Sumário do modelo e plot do modelo
+        for X, y in train_dataset.take(1):
+            tf.print("Train X shape:", tf.shape(X))
+            tf.print("Train y shape:", tf.shape(y))
+
+
         gesture_net.summary()
 
-        # plot_model(gesture_net, to_file='model_structure.png', dpi=200, rankdir='TB',
-        #            show_shapes=True, show_layer_names=True, show_trainable=True, show_layer_activations=True)
-
-        # Salvar o `build_config` do modelo para análise
-        build_config = gesture_net.get_config()
-        with open('model_build_config.json', 'w') as config_file:
-            json.dump(build_config, config_file, indent=4)
-
-        # Configuração de callbacks
-        early_stopping = keras.callbacks.EarlyStopping(
-            monitor='val_loss', mode='min', patience=10, restore_best_weights=True, min_delta=0.001
-        )
-
-        reduce_lr = keras.callbacks.ReduceLROnPlateau(
-            monitor='val_loss', patience=3, verbose=1, factor=0.2, min_lr=1e-6, cooldown=2
-        )
-
-        lr_scheduler = keras.callbacks.LearningRateScheduler(
-            lambda epoch, lr: float(lr) if epoch < 10 else float(lr * tf.math.exp(-0.1).numpy())
-        )
-
-        checkpoint = keras.callbacks.ModelCheckpoint(
-            filepath='./model/best_model.keras', monitor='val_loss', save_best_only=True, verbose=1
-        )
-
+        # Callbacks
+        early_stopping = keras.callbacks.EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
+        reduce_lr = keras.callbacks.ReduceLROnPlateau(monitor='val_loss', patience=3, factor=0.2, min_lr=1e-6)
+        checkpoint = keras.callbacks.ModelCheckpoint(filepath='./model/best_model.keras', monitor='val_loss', save_best_only=True)
         csv_logger = keras.callbacks.CSVLogger('training_log.csv')
-        tensorboard_callback = keras.callbacks.TensorBoard(log_dir='./logs', histogram_freq=1, write_images=True, write_steps_per_second=True)
-        terminate_nan = keras.callbacks.TerminateOnNaN()
-
-        # Adicionando os callbacks à lista
-        callbacks = [
-            early_stopping,
-            reduce_lr,
-            checkpoint,
-            csv_logger,
-            tensorboard_callback,
-            terminate_nan,
-            lr_scheduler
-        ]
-
-        # Chamando o fit com os callbacks
-        history = gesture_net.fit(
-            train_dataset,
-            validation_data=val_dataset,
-            epochs=100,
-            callbacks=callbacks,
-            verbose=1
+        tensorboard_callback = keras.callbacks.TensorBoard(log_dir='./logs', histogram_freq=1)
+        lr_callback = keras.callbacks.LambdaCallback(on_epoch_end=lambda epoch, logs: 
+            tf.print(f"Epoch {epoch+1}: Learning rate: {gesture_net.optimizer.lr.numpy()}")
         )
 
-        # Salvando o modelo final
+        callbacks = [early_stopping, reduce_lr, checkpoint, csv_logger, tensorboard_callback, lr_callback]
+
+        # Treinamento
+        history = gesture_net.fit(
+            train_dataset.prefetch(tf.data.AUTOTUNE),
+            validation_data=val_dataset.prefetch(tf.data.AUTOTUNE),
+            epochs=100,
+            callbacks=callbacks
+        )
+
         gesture_net.save('./model/GestureNet.keras')
-
-        # Avaliação final do modelo
         evaluation_results = gesture_net.evaluate(val_dataset)
-        print(f'Avaliação do modelo retornou: {evaluation_results}')
+        print(f"Avaliação final: {evaluation_results}")
 
-        # Salvando o histórico do treinamento
-        history_results = {key: value for key, value in history.history.items()}
-
-        # Salvando os resultados do treinamento e da avaliação em um arquivo JSON
-        final_results = {
-            "evaluation": {
-                'test_loss': evaluation_results[0],
-                'accuracy': evaluation_results[1]
-            },
-            "training_history": history_results
-        }
-
+        # Salvar histórico e resultados
         with open('results.json', 'w') as f:
-            json.dump(final_results, f, indent=4)
+            json.dump({
+                "evaluation": {"test_loss": evaluation_results[0], "accuracy": evaluation_results[1]},
+                "training_history": history.history
+            }, f, indent=4)
 
     except Exception as e:
         error_log()
-        print(f'Error: {e}')
+        print(f"Erro capturado: {e}")
 
 def display_gradcam(frame, heatmap, alpha=0.4):
     """Sobrepõe o mapa de calor na imagem original."""

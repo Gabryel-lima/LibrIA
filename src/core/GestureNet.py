@@ -195,36 +195,43 @@ class DataLoader:
             self.images, self.landmark_features, labels_encoded, test_size=0.2, random_state=42
         )
 
+        # Verificar os dados brutos
+        self.debug_data(X_train_images, name="X_train_images (raw)")
+        self.debug_data(X_train_landmarks, name="X_train_landmarks (raw)")
+
+        # Normalizar imagens
+        X_train_images = self.normalize_images(X_train_images)
+        X_val_images = self.normalize_images(X_val_images)
+
+        # Normalizar landmarks
+        X_train_landmarks = self.normalize_landmarks(X_train_landmarks)
+        X_val_landmarks = self.normalize_landmarks(X_val_landmarks)
+
+        # Verificar os dados normalizados
+        self.debug_data(X_train_images, name="X_train_images (normalized)")
+        self.debug_data(X_train_landmarks, name="X_train_landmarks (normalized)")
+
         # Convertendo os dados para tensores do TensorFlow
         X_train_images = tf.convert_to_tensor(X_train_images, dtype=tf.float32)
-        X_train_landmarks = tf.convert_to_tensor(X_train_landmarks, dtype=tf.float32)
-        y_train = tf.convert_to_tensor(y_train, dtype=tf.float32)
-
         X_val_images = tf.convert_to_tensor(X_val_images, dtype=tf.float32)
+        X_train_landmarks = tf.convert_to_tensor(X_train_landmarks, dtype=tf.float32)
         X_val_landmarks = tf.convert_to_tensor(X_val_landmarks, dtype=tf.float32)
+
+        y_train = tf.convert_to_tensor(y_train, dtype=tf.float32)
         y_val = tf.convert_to_tensor(y_val, dtype=tf.float32)
 
-        # Normalizando as características das imagens e dos landmarks
-        X_train_landmarks = (X_train_landmarks - tf.reduce_mean(X_train_landmarks)) / tf.math.reduce_std(X_train_landmarks)
-        X_val_landmarks = (X_val_landmarks - tf.reduce_mean(X_val_landmarks)) / tf.math.reduce_std(X_val_landmarks)
-
-        X_train_images = (X_train_images - tf.reduce_mean(X_train_images)) / tf.math.reduce_std(X_train_images)
-        X_val_images = (X_val_images - tf.reduce_mean(X_val_images)) / tf.math.reduce_std(X_val_images)
-
-        # Concatenando as imagens e os landmarks para formar um único tensor de entrada
+        # Concatenar imagens e landmarks
         X_train = tf.concat([X_train_images, X_train_landmarks], axis=-1)
         X_val = tf.concat([X_val_images, X_val_landmarks], axis=-1)
 
-        # Ajustar a forma do `y_train` para garantir a compatibilidade com `X_train`
-        # Aqui, vamos garantir que o comprimento da sequência de `y_train` seja compatível com `X_train`.
-        y_train = tf.reshape(y_train, [tf.shape(y_train)[0], -1])  # Ajustar para a forma (batch_size, seq_len)
-        y_val = tf.reshape(y_val, [tf.shape(y_val)[0], -1])
-
-        # Verificar compatibilidade entre `X_train` e `y_train`
+        # Verificar compatibilidade entre X e y
         if y_train.shape[0] != X_train.shape[0]:
             raise ValueError("O número de amostras em `y_train` não corresponde ao de `X_train`.")
+        
+        if np.isnan(X_train).any() or np.isnan(y_train).any():
+            raise ValueError("As amostras ainda contêm NaN após a normalização.")
 
-        # Criando os datasets do TensorFlow sem usar dicionário para inputs
+        # Criar os datasets do TensorFlow
         train_ds = tf.data.Dataset.from_tensor_slices(
             (X_train, y_train)
         ).shuffle(1000).batch(64).prefetch(buffer_size=tf.data.AUTOTUNE)
@@ -234,6 +241,39 @@ class DataLoader:
         ).batch(64).prefetch(buffer_size=tf.data.AUTOTUNE)
 
         return train_ds, val_ds, num_classes
+
+    @staticmethod
+    def normalize_images(images):
+        """Normaliza imagens usando z-score normalization."""
+        return (images - np.mean(images)) / np.std(images)
+
+    @staticmethod
+    def normalize_landmarks(landmarks):
+        """Normaliza landmarks usando z-score normalization, evitando divisão por zero."""
+        mean = np.mean(landmarks, axis=-1, keepdims=True)
+        std = np.std(landmarks, axis=-1, keepdims=True)
+        std = np.where(std == 0, 1e-8, std)  # Substituir std = 0 por um pequeno valor epsilon
+        return (landmarks - mean) / std
+
+    @staticmethod
+    def debug_data(data, name="Data"):
+        """Função para verificar e depurar dados."""
+        mean = np.mean(data)
+        std = np.std(data)
+        is_nan = np.isnan(data).any()
+        is_inf = np.isinf(data).any()
+        min_val = np.min(data)
+        max_val = np.max(data)
+
+        print(f"--- {name} Debug Info ---")
+        print(f"Shape: {data.shape}")
+        print(f"Mean: {mean}")
+        print(f"Std: {std}")
+        print(f"Min: {min_val}")
+        print(f"Max: {max_val}")
+        print(f"Contains NaN: {is_nan}")
+        print(f"Contains Inf: {is_inf}")
+        print("-------------------------")
     
 class TransformerEncoder(layers.Layer):
     def __init__(self, embed_dim, num_heads, feed_forward_dim, rate=0.1):
@@ -325,104 +365,42 @@ class Transformer(keras.Model):
             x = layer(x, training=training)
         return self.classifier(x)
 
-    #@tf.function
     def train_step(self, batch):
         source, target = batch
-
-        # Certifique-se de que o target seja do tipo inteiro
+        
         target = tf.cast(target, tf.int32)
-
-        # Expandir o comprimento do target para coincidir com o comprimento do source
-        batch_size = tf.shape(source)[0]
-        seq_len = tf.shape(source)[1]  # seq_len do source
-        target_seq_len = tf.shape(target)[1]  # Atualmente é 29
-
-        # Ajuste para garantir que target tenha o mesmo comprimento que source
-        def replicate_target():
-            repeat_factor = seq_len // target_seq_len
-            target_replicated = tf.tile(target, [1, repeat_factor])
-            return target_replicated[:, :seq_len]  # Truncar se ultrapassar o comprimento do source
-
-        def truncate_target():
-            return target[:, :seq_len]
-
-        # Usar `tf.cond()` para verificar e ajustar o comprimento de `target`
-        target = tf.cond(
-            target_seq_len < seq_len,
-            true_fn=replicate_target,
-            false_fn=truncate_target
-        )
-
-        # Criação do target_one_hot com a forma correta para coincidir com preds
-        target_one_hot = tf.one_hot(target, depth=self.num_classes)  # Deve resultar em (batch_size, seq_len, num_classes)
-
-        # Certifique-se de que a forma de preds seja compatível com target_one_hot
+        target_one_hot = tf.one_hot(target, depth=self.num_classes)
+        
         with tf.GradientTape() as tape:
-            preds = self(source, training=True)  # Deve ter a forma (batch_size, seq_len, num_classes)
-
-            # Função para truncar `preds` se necessário
-            def truncate_preds():
-                return preds[:, :tf.shape(target_one_hot)[1], :]
-
-            # `tf.cond()` para verificar e ajustar o comprimento de `preds`
+            preds = self(source, training=True)
+            
             preds = tf.cond(
                 tf.shape(preds)[1] > tf.shape(target_one_hot)[1],
-                true_fn=truncate_preds,
+                true_fn=lambda: preds[:, :tf.shape(target_one_hot)[1], :],
                 false_fn=lambda: preds
             )
-
-            # Calcular a perda
+            
             loss = self.compiled_loss(target_one_hot, preds)
-
-        # Calcular gradientes e aplicar as atualizações
+        
         gradients = tape.gradient(loss, self.trainable_variables)
         self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
 
         return {"loss": loss}
 
-    #@tf.function
     def test_step(self, batch):
         source, target = batch
 
-        # Certifique-se de que o target seja do tipo inteiro
+        # Garantir que target esteja no tipo correto
         target = tf.cast(target, tf.int32)
+        target_one_hot = tf.one_hot(target, depth=self.num_classes)
 
-        # Expandir o comprimento do target para coincidir com o comprimento do source
-        batch_size = tf.shape(source)[0]
-        seq_len = tf.shape(source)[1]  # seq_len do source
-        target_seq_len = tf.shape(target)[1]  # Atualmente é 29
+        preds = self(source, training=False)
 
-        # Ajuste para garantir que target tenha o mesmo comprimento que source
-        def replicate_target():
-            repeat_factor = seq_len // target_seq_len
-            target_replicated = tf.tile(target, [1, repeat_factor])
-            return target_replicated[:, :seq_len]  # Truncar se ultrapassar o comprimento do source
-
-        def truncate_target():
-            return target[:, :seq_len]
-
-        # Usar `tf.cond()` para verificar e ajustar o comprimento de `target`
-        target = tf.cond(
-            target_seq_len < seq_len,
-            true_fn=replicate_target,
-            false_fn=truncate_target
-        )
-
-        # Criação do target_one_hot com a forma correta para coincidir com preds
-        target_one_hot = tf.one_hot(target, depth=self.num_classes)  # Deve resultar em (batch_size, seq_len, num_classes)
-
-        # Certifique-se de que a forma de preds seja compatível com target_one_hot
-        preds = self(source, training=False)  # Deve ter a forma (batch_size, seq_len, num_classes)
-
-        # Função para truncar `preds` se necessário
-        def truncate_preds():
-            return preds[:, :tf.shape(target_one_hot)[1], :]
-
-        # `tf.cond()` para verificar e ajustar o comprimento de `preds`
+        # Ajustar preds usando tf.cond()
         preds = tf.cond(
             tf.shape(preds)[1] > tf.shape(target_one_hot)[1],
-            true_fn=truncate_preds,
-            false_fn=lambda: preds
+            true_fn=lambda: preds[:, :tf.shape(target_one_hot)[1], :],  # Truncar preds
+            false_fn=lambda: preds  # Deixar como está
         )
 
         # Calcular a perda
@@ -454,53 +432,3 @@ class Transformer(keras.Model):
             dec_input = tf.concat([dec_input, last_logit], axis=-1)
 
         return tf.concat(dec_logits, axis=1)
-
-if __name__ == "__main__":
-    # Carregar os dados usando o DataProcessor
-    signals_filename = "signals.csv"
-    landmarks_filename = "landmarks.csv"
-    processor = DataProcessor(signals_filename, landmarks_filename)
-    labels, signals, landmark_features = processor.load_or_process_data()
-
-    # Preparar o DataLoader e os datasets de treino e validação
-    dataloader = DataLoader(labels, signals, landmark_features)
-    train_ds, val_ds, num_classes = dataloader.prepare_data()
-
-    # Definir e compilar o modelo Transformer
-    transformer_model = Transformer(
-        num_hid=64,
-        num_head=1,
-        num_feed_forward=128,
-        source_maxlen=100,
-        target_maxlen=8,  # Ajustado para o comprimento desejado dos sinais target
-        num_layers_enc=4,
-        num_layers_dec=1,
-        num_classes=num_classes,
-        learning_rate=1e-3,
-    )
-
-    # Realizar o treinamento
-    epochs = 10  # Ajuste de acordo com suas necessidades
-    for epoch in range(epochs):
-        print(f"Epoch {epoch + 1}/{epochs}")
-        
-        # Treinamento
-        for step, batch in enumerate(train_ds):
-            loss = transformer_model.train_step(batch)
-            if step % 50 == 0:
-                print(f"Step {step}: Loss = {loss['loss'].numpy()}")
-
-        # Validação
-        val_loss = []
-        for val_step, val_batch in enumerate(val_ds):
-            val_result = transformer_model.test_step(val_batch)
-            val_loss.append(val_result['loss'].numpy())
-
-        mean_val_loss = np.mean(val_loss)
-        print(f"Validation Loss: {mean_val_loss}")
-
-    # Gerar predições para um exemplo (por exemplo, usar um batch de val_ds)
-    for batch in val_ds.take(1):
-        source, _ = batch
-        pred = transformer_model.generate(source, target_start_token_idx=0)
-        print("Predição:", pred.numpy())
