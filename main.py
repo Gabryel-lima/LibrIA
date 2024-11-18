@@ -81,24 +81,14 @@ def train_model():
             num_layers_enc=2,
             num_layers_dec=1,
             num_classes=num_classes,
-        )
-        gesture_net.build(input_shape=[(None, 847, 63), (None, 847)])
-        gesture_net.compile(
-            optimizer=keras.optimizers.Adam(learning_rate=1e-4, clipnorm=1.0),
-            loss=keras.losses.CategoricalCrossentropy(from_logits=True),
-            metrics=[
-                keras.metrics.CategoricalAccuracy(name='accuracy'),
-                keras.metrics.Precision(name='precision'),
-                keras.metrics.Recall(name='recall')
-            ]
+            learning_rate=1e-4
         )
 
-        for X, y in train_dataset.take(1):
-            tf.print("Train X shape:", tf.shape(X))
-            tf.print("Train y shape:", tf.shape(y))
-
-
+        # Sumário
         gesture_net.summary()
+
+        # Compilação do modelo (sem build explícito)
+        gesture_net.compile()
 
         # Callbacks
         early_stopping = keras.callbacks.EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
@@ -106,11 +96,8 @@ def train_model():
         checkpoint = keras.callbacks.ModelCheckpoint(filepath='./model/best_model.keras', monitor='val_loss', save_best_only=True)
         csv_logger = keras.callbacks.CSVLogger('training_log.csv')
         tensorboard_callback = keras.callbacks.TensorBoard(log_dir='./logs', histogram_freq=1)
-        lr_callback = keras.callbacks.LambdaCallback(on_epoch_end=lambda epoch, logs: 
-            tf.print(f"Epoch {epoch+1}: Learning rate: {gesture_net.optimizer.lr.numpy()}")
-        )
 
-        callbacks = [early_stopping, reduce_lr, checkpoint, csv_logger, tensorboard_callback, lr_callback]
+        callbacks = [early_stopping, reduce_lr, checkpoint, csv_logger, tensorboard_callback]
 
         # Treinamento
         history = gesture_net.fit(

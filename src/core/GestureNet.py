@@ -182,7 +182,7 @@ class DataLoader:
         self.images = images
         self.landmark_features = landmark_features
 
-    def prepare_data(self):
+    def prepare_data(self, max_samples=None):
         label_encoder = LabelEncoder()
         labels_encoded = label_encoder.fit_transform(self.labels)
         num_classes = len(label_encoder.classes_)
@@ -194,6 +194,12 @@ class DataLoader:
         X_train_images, X_val_images, X_train_landmarks, X_val_landmarks, y_train, y_val = train_test_split(
             self.images, self.landmark_features, labels_encoded, test_size=0.2, random_state=42
         )
+
+        # Limitar o número de amostras se necessário
+        if max_samples is not None:
+            X_train_images = X_train_images[:max_samples]
+            X_train_landmarks = X_train_landmarks[:max_samples]
+            y_train = y_train[:max_samples]
 
         # Verificar os dados brutos
         self.debug_data(X_train_images, name="X_train_images (raw)")
@@ -226,7 +232,7 @@ class DataLoader:
 
         # Verificar compatibilidade entre X e y
         if y_train.shape[0] != X_train.shape[0]:
-            raise ValueError("O número de amostras em `y_train` não corresponde ao de `X_train`.")
+            raise ValueError("O número de amostras em y_train não corresponde ao de X_train.")
         
         if np.isnan(X_train).any() or np.isnan(y_train).any():
             raise ValueError("As amostras ainda contêm NaN após a normalização.")
@@ -310,11 +316,14 @@ class Transformer(keras.Model):
         num_layers_enc=4,
         num_layers_dec=1,
         num_classes=60,
-        learning_rate=1e-3
+        learning_rate=1e-4
     ):
         super().__init__()
         self.loss_metric = keras.metrics.Mean(name="loss")
-        self.acc_metric = keras.metrics.Mean(name="edit_dist")
+        self.acc_metric = keras.metrics.Mean(name="dist")
+        self.categorical_accuracy = keras.metrics.CategoricalAccuracy(name="accuracy")
+        self.precision_metric = keras.metrics.Precision(name="precision")
+        self.recall_metric = keras.metrics.Recall(name="recall")
         self.num_layers_enc = num_layers_enc
         self.num_layers_dec = num_layers_dec
         self.target_maxlen = target_maxlen
@@ -347,17 +356,15 @@ class Transformer(keras.Model):
         # Losses
         self.compiled_loss = keras.losses.CategoricalCrossentropy(from_logits=True)
 
-    def build(self, input_shape):
-        # Define as formas esperadas para as entradas do modelo
-        # Espera-se que input_shape seja uma lista com duas formas de entrada: [encoder_input_shape, decoder_input_shape]
-        encoder_input_shape, decoder_input_shape = input_shape
-
-        # Chamando o método build do super para registrar a camada como construída
-        super().build(input_shape)
-
-        # Informar quais serão as formas de entrada esperadas pelo modelo
-        print(f"Encoder input shape: {encoder_input_shape}")
-        print(f"Decoder input shape: {decoder_input_shape}")
+    @property
+    def metrics(self):
+        return [
+            self.loss_metric, 
+            self.acc_metric,
+            self.categorical_accuracy,
+            self.precision_metric,
+            self.recall_metric
+        ]
 
     def call(self, inputs, training=False):
         x = inputs
@@ -365,48 +372,92 @@ class Transformer(keras.Model):
             x = layer(x, training=training)
         return self.classifier(x)
 
+    def build(self, input_shape):
+        # Define as formas esperadas para as entradas do modelo
+        encoder_input_shape, decoder_input_shape = input_shape
+
+        # Chamando o método build do super para registrar a camada como construída
+        super().build(input_shape)
+
     def train_step(self, batch):
         source, target = batch
-        
+
         target = tf.cast(target, tf.int32)
         target_one_hot = tf.one_hot(target, depth=self.num_classes)
-        
+
         with tf.GradientTape() as tape:
             preds = self(source, training=True)
-            
+
+            # Ajuste preds, se necessário
             preds = tf.cond(
                 tf.shape(preds)[1] > tf.shape(target_one_hot)[1],
                 true_fn=lambda: preds[:, :tf.shape(target_one_hot)[1], :],
                 false_fn=lambda: preds
             )
-            
+
             loss = self.compiled_loss(target_one_hot, preds)
-        
+
+        # Compute gradients and apply them
         gradients = tape.gradient(loss, self.trainable_variables)
         self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
 
-        return {"loss": loss}
+        # Update metrics
+        self.loss_metric.update_state(loss)
+        self.categorical_accuracy.update_state(target_one_hot, preds)
+        self.precision_metric.update_state(target_one_hot, preds)
+        self.recall_metric.update_state(target_one_hot, preds)
+        edit_dist = tf.edit_distance(
+            tf.sparse.from_dense(target),
+            tf.sparse.from_dense(tf.cast(tf.argmax(preds, axis=-1), tf.int32))
+        )
+        non_pad_count = tf.math.count_nonzero(target, dtype=tf.float32)
+        edit_dist = tf.reduce_sum(edit_dist) / (non_pad_count + keras.backend.epsilon())
+        self.acc_metric.update_state(edit_dist)
+
+        return {
+            "loss": self.loss_metric.result(),
+            "dist": self.acc_metric.result(),
+            "accuracy": self.categorical_accuracy.result(),
+            "precision": self.precision_metric.result(),
+            "recall": self.recall_metric.result()
+        }
 
     def test_step(self, batch):
         source, target = batch
 
-        # Garantir que target esteja no tipo correto
         target = tf.cast(target, tf.int32)
         target_one_hot = tf.one_hot(target, depth=self.num_classes)
 
         preds = self(source, training=False)
 
-        # Ajustar preds usando tf.cond()
         preds = tf.cond(
             tf.shape(preds)[1] > tf.shape(target_one_hot)[1],
-            true_fn=lambda: preds[:, :tf.shape(target_one_hot)[1], :],  # Truncar preds
-            false_fn=lambda: preds  # Deixar como está
+            true_fn=lambda: preds[:, :tf.shape(target_one_hot)[1], :],
+            false_fn=lambda: preds
         )
 
-        # Calcular a perda
         loss = self.compiled_loss(target_one_hot, preds)
 
-        return {"loss": loss}
+        # Update metrics
+        self.loss_metric.update_state(loss)
+        self.categorical_accuracy.update_state(target_one_hot, preds)
+        self.precision_metric.update_state(target_one_hot, preds)
+        self.recall_metric.update_state(target_one_hot, preds)
+        edit_dist = tf.edit_distance(
+            tf.sparse.from_dense(target),
+            tf.sparse.from_dense(tf.cast(tf.argmax(preds, axis=-1), tf.int32))
+        )
+        non_pad_count = tf.math.count_nonzero(target, dtype=tf.float32)
+        edit_dist = tf.reduce_sum(edit_dist) / (non_pad_count + keras.backend.epsilon())
+        self.acc_metric.update_state(edit_dist)
+
+        return {
+            "loss": self.loss_metric.result(),
+            "dist": self.acc_metric.result(),
+            "accuracy": self.categorical_accuracy.result(),
+            "precision": self.precision_metric.result(),
+            "recall": self.recall_metric.result()
+        }
 
     def generate(self, source, target_start_token_idx):
         """Performs inference over one batch of inputs using greedy decoding."""
