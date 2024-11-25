@@ -1,6 +1,7 @@
 # Importações de bibliotecas necessárias
 from src.utils.imports import (np, tf, plt, traceback, json, pd)
 from src.utils.plots import plot_training_history
+from src.utils.error_log import error_log
 import keras
 from src.core.GestureNet import Transformer, DataProcessor, DataLoader
 import cv2 as cv
@@ -11,15 +12,8 @@ from src.utils.gradients import value_gradient
 import mediapipe as mp
 
 # Configurando o TensorFlow para usar todos os threads disponíveis
-# tf.config.threading.set_intra_op_parallelism_threads(0)
-# tf.config.threading.set_inter_op_parallelism_threads(0)
-
-def error_log():
-    """Função para registrar o erro em um arquivo log."""
-    with open('error_log.txt', 'w') as f:
-        f.write('An exception occurred:\n')
-        f.write(traceback.format_exc())
-    print('An exception occurred. Check error_log.txt for details.')
+# tf.config.threading.set_intra_op_parallelism_threads(12)
+# tf.config.threading.set_inter_op_parallelism_threads(12)
 
 # Função de aumento de dados
 def augment(image):
@@ -74,14 +68,14 @@ def train_model():
         # Modelo Transformer
         gesture_net = Transformer(
             num_hid=32,
-            num_head=1,
-            num_feed_forward=32,
-            source_maxlen=100,
-            target_maxlen=100,
-            num_layers_enc=2,
-            num_layers_dec=1,
+            # num_head=1,
+            # num_feed_forward=32,
+            # source_maxlen=100,
+            # target_maxlen=100,
+            # num_layers_enc=2,
+            # num_layers_dec=1,
             num_classes=num_classes,
-            learning_rate=1e-4
+            #learning_rate=1e-4
         )
 
         # Sumário
@@ -97,13 +91,13 @@ def train_model():
         csv_logger = keras.callbacks.CSVLogger('training_log.csv')
         tensorboard_callback = keras.callbacks.TensorBoard(log_dir='./logs', histogram_freq=1)
 
-        callbacks = [early_stopping, reduce_lr, checkpoint, csv_logger, tensorboard_callback]
+        callbacks = [early_stopping, reduce_lr]
 
         # Treinamento
         history = gesture_net.fit(
             train_dataset.prefetch(tf.data.AUTOTUNE),
             validation_data=val_dataset.prefetch(tf.data.AUTOTUNE),
-            epochs=100,
+            epochs=10,
             callbacks=callbacks
         )
 
@@ -119,7 +113,7 @@ def train_model():
             }, f, indent=4)
 
     except Exception as e:
-        error_log()
+        error_log(file="error_train")
         print(f"Erro capturado: {e}")
 
 def display_gradcam(frame, heatmap, alpha=0.4):
@@ -215,7 +209,7 @@ def webcam_predictor():
         num_layers_dec=1,
         num_classes=num_classes,
     )
-    model.build(input_shape=[(None, 100, landmark_dim), (None, 100)])  # Ajuste necessário para o modelo ser utilizado corretamente
+    #model.build(input_shape=[(None, 100, landmark_dim), (None, 100)])  # Ajuste necessário para o modelo ser utilizado corretamente
     model.load_weights('./model/GestureNet.keras')
 
     # Inicializar MediaPipe para captura de landmarks
@@ -298,7 +292,7 @@ def eval_input():
             return
 
     except Exception as e:
-        error_log()
+        error_log(file="error_eval")
         print(f"Ocorreu um erro: {e}")
 
 def main():
