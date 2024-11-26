@@ -107,41 +107,34 @@ class DataLoader:
         y_train = tf.convert_to_tensor(y_train, dtype=tf.float32)
         y_val = tf.convert_to_tensor(y_val, dtype=tf.float32)
 
-        # Concatenar imagens e landmarks
-        X_train = tf.concat([X_train_images, X_train_landmarks], axis=-1)
-        X_val = tf.concat([X_val_images, X_val_landmarks], axis=-1)
-
-        # Verificar compatibilidade entre X e y
-        if y_train.shape[0] != X_train.shape[0]:
-            raise ValueError("O número de amostras em y_train não corresponde ao de X_train.")
-        
-        if np.isnan(X_train).any() or np.isnan(y_train).any():
-            raise ValueError("As amostras ainda contêm NaN após a normalização.")
-
-        # Criar os datasets do TensorFlow
+        # Criar os datasets do TensorFlow com entradas como tuplas
         train_ds = tf.data.Dataset.from_tensor_slices(
-            (X_train, y_train)
+            ((X_train_images, X_train_landmarks), y_train)  # Passando entradas como tuplas
         ).shuffle(1000).batch(64).prefetch(buffer_size=tf.data.AUTOTUNE)
 
         val_ds = tf.data.Dataset.from_tensor_slices(
-            (X_val, y_val)
+            ((X_val_images, X_val_landmarks), y_val)  # Passando entradas como tuplas
         ).batch(64).prefetch(buffer_size=tf.data.AUTOTUNE)
 
-        print(f"Shape final de X_train: {X_train.shape}")
-        print(f"Shape final de X_val: {X_val.shape}")
+        print(f"Shape final de X_train_images: {X_train_images.shape}")
+        print(f"Shape final de X_train_landmarks: {X_train_landmarks.shape}")
+        print(f"Shape final de y_train: {y_train.shape}")
 
         return train_ds, val_ds, num_classes
 
     @staticmethod
     def normalize_images(images):
-        """Normaliza imagens usando z-score normalization."""
-        return (images - np.mean(images)) / np.std(images)
+        """Normaliza imagens e adiciona o canal."""
+        images = images.astype('float32') / 255.0  # Normalização entre 0 e 1
+        images = images.reshape(-1, 28, 28, 1)  # Adicionar canal
+        return images
 
     @staticmethod
     def normalize_landmarks(landmarks):
         """Normaliza landmarks usando z-score normalization, evitando divisão por zero."""
-        mean = np.mean(landmarks, axis=-1, keepdims=True)
-        std = np.std(landmarks, axis=-1, keepdims=True)
+        landmarks = landmarks.astype('float32')
+        mean = np.mean(landmarks, axis=1, keepdims=True)
+        std = np.std(landmarks, axis=1, keepdims=True)
         std = np.where(std == 0, 1e-8, std)  # Substituir std = 0 por um pequeno valor epsilon
         return (landmarks - mean) / std
 
@@ -172,6 +165,8 @@ class TokenEmbedding(layers.Layer):
         self.pos_emb = layers.Embedding(input_dim=maxlen, output_dim=num_hid)
 
     def build(self, input_shape):
+        self.emb.build(input_shape)
+        self.pos_emb.build((input_shape[1], self.emb.output_dim))
         super().build(input_shape)
 
     def call(self, x):
@@ -184,25 +179,18 @@ class TokenEmbedding(layers.Layer):
 class LandmarkEmbedding(layers.Layer):
     def __init__(self, num_hid=64, maxlen=100):
         super().__init__()
-        self.conv1 = keras.layers.Conv1D(
-            num_hid, 11, strides=2, padding="same", activation="relu"
-        )
-        self.conv2 = keras.layers.Conv1D(
-            num_hid, 11, strides=2, padding="same", activation="relu"
-        )
-        self.conv3 = keras.layers.Conv1D(
-            num_hid, 11, strides=2, padding="same", activation="relu"
-        )
+        self.conv1 = layers.Conv1D(num_hid, 11, strides=2, padding="same", activation="relu")
+        self.conv2 = layers.Conv1D(num_hid, 11, strides=2, padding="same", activation="relu")
+        self.conv3 = layers.Conv1D(num_hid, 11, strides=2, padding="same", activation="relu")
         self.pos_emb = layers.Embedding(input_dim=maxlen, output_dim=num_hid)
 
     def build(self, input_shape):
         super().build(input_shape)
 
     def call(self, x):
+        # Garantir que x tenha três dimensões
         if len(x.shape) == 2:
-            x = tf.expand_dims(x, axis=-1)  # Expandir para 3D se for 2D
-
-        # Aplicar convolução
+            x = tf.expand_dims(x, axis=-1)  # (batch_size, seq_len, 1)
         x = self.conv1(x)
         x = self.conv2(x)
         x = self.conv3(x)
@@ -214,7 +202,7 @@ class LandmarkEmbedding(layers.Layer):
         x += positions
 
         return x
-    
+
 class TransformerEncoder(layers.Layer):
     def __init__(self, embed_dim, num_heads, feed_forward_dim, rate=0.1):
         super().__init__()
@@ -231,27 +219,18 @@ class TransformerEncoder(layers.Layer):
     def build(self, input_shape):
         super().build(input_shape)
 
-    def call(self, inputs, training):
-        # Verificar se os inputs já estão no formato esperado
-        if len(inputs.shape) == 2:
-            # Expandir para (batch_size, seq_len, embed_dim=1)
-            inputs = tf.expand_dims(inputs, axis=-1)
-        elif len(inputs.shape) != 3:
-            raise ValueError(f"Expected inputs of shape (batch_size, seq_len, embed_dim), but got {inputs.shape}")
-        
-        # Atenção multi-head
-        attn_output = self.att(query=inputs, value=inputs, key=inputs)
+    def call(self, inputs, training=False, mask=None):
+        # Multi-head attention
+        attn_output = self.att(query=inputs, value=inputs, key=inputs, attention_mask=mask)
         attn_output = self.dropout1(attn_output, training=training)
-
-        # Adição residual e normalização
         out1 = self.layernorm1(inputs + attn_output)
 
         # Feed-forward
         ffn_output = self.ffn(out1)
         ffn_output = self.dropout2(ffn_output, training=training)
+        final_output = self.layernorm2(out1 + ffn_output)
 
-        # Adição residual final e normalização
-        return self.layernorm2(out1 + ffn_output)
+        return final_output
 
 class TransformerDecoder(layers.Layer):
     def __init__(self, embed_dim, num_heads, feed_forward_dim, dropout_rate=0.1):
@@ -273,6 +252,9 @@ class TransformerDecoder(layers.Layer):
             ]
         )
 
+    def build(self, input_shape):
+        super().build(input_shape)
+
     def causal_attention_mask(self, batch_size, seq_len, num_heads, dtype):
         """Gera uma máscara causal para a atenção."""
         # Criação da máscara triangular inferior
@@ -282,264 +264,195 @@ class TransformerDecoder(layers.Layer):
         # Replicar a máscara para todos os heads e batches
         mask = tf.tile(mask, [batch_size, num_heads, 1, 1])  # (batch_size, num_heads, seq_len, seq_len)
         return mask
-    
-    def build(self, input_shape):
-        super().build(input_shape)
 
-    def call(self, enc_out, target, training=False):
-        # Validar formas do target e enc_out
-        if len(target.shape) != 3:
-            raise ValueError(f"Expected target shape (batch_size, seq_len, embed_dim), but got {target.shape}")
+    def call(self, enc_out, target, training=False, mask=None):
+        # Máscara causal para auto-atenção
+        causal_mask = self.causal_attention_mask(
+            tf.shape(target)[0], tf.shape(target)[1], self.self_att.num_heads, dtype=tf.float32
+        )
 
-        # Gerar máscara causal
-        batch_size = tf.shape(target)[0]
-        seq_len = tf.shape(target)[1]
-        causal_mask = self.causal_attention_mask(batch_size, seq_len, self.self_att.num_heads, dtype=tf.float32)
-
-        # Self-attention
+        # Auto-atenção com máscara causal
         target_att = self.self_att(
-            query=target,
-            value=target,
-            key=target,
-            attention_mask=causal_mask,
-            training=training
+            query=target, value=target, key=target, attention_mask=causal_mask
         )
         target_norm = self.layernorm1(target + self.self_dropout(target_att, training=training))
 
-        # Cross-attention
+        # Atenção com codificador usando máscara de padding
         enc_out_att = self.enc_att(
-            query=target_norm,
-            value=enc_out,
-            key=enc_out,
-            training=training
+            query=target_norm, value=enc_out, key=enc_out, attention_mask=mask
         )
         enc_out_norm = self.layernorm2(target_norm + self.enc_dropout(enc_out_att, training=training))
 
         # Feed-forward
         ffn_out = self.ffn(enc_out_norm)
-        ffn_out_norm = self.layernorm3(enc_out_norm + self.ffn_dropout(ffn_out, training=training))
+        return self.layernorm3(enc_out_norm + self.ffn_dropout(ffn_out, training=training))
 
-        return ffn_out_norm
-    
+class ImageEmbedding(layers.Layer):
+    def __init__(self, num_hid=64):
+        super().__init__()
+        self.conv1 = layers.Conv2D(num_hid, 3, activation='relu', padding='same')
+        self.pool1 = layers.MaxPooling2D()
+        self.conv2 = layers.Conv2D(num_hid, 3, activation='relu', padding='same')
+        self.pool2 = layers.MaxPooling2D()
+        self.flatten = layers.Flatten()
+        self.dense = layers.Dense(num_hid, activation='relu')
+
+    def build(self, input_shape):
+        super().build(input_shape)
+
+    def call(self, x):
+        x = self.conv1(x)
+        x = self.pool1(x)
+        x = self.conv2(x)
+        x = self.pool2(x)
+        x = self.flatten(x)
+        x = self.dense(x)
+        # Expandir dimensão para que possa ser concatenado com o embedding de landmarks
+        x = tf.expand_dims(x, axis=1)
+        return x  # Shape final: (batch_size, 1, num_hid)
+
 class Transformer(keras.Model):
     def __init__(
         self,
         num_hid=64,
         num_head=2,
         num_feed_forward=128,
-        source_maxlen=100,
-        target_maxlen=100,
         num_layers_enc=4,
         num_layers_dec=1,
-        num_classes=60,
+        num_classes=29,
         learning_rate=1e-4,
     ):
         super().__init__()
-        self.loss_metric = keras.metrics.Mean(name="loss")
-        self.acc_metric = keras.metrics.Mean(name="dist")
-        self.categorical_accuracy = keras.metrics.CategoricalAccuracy(name="accuracy")
-        self.precision_metric = keras.metrics.Precision(name="precision")
-        self.recall_metric = keras.metrics.Recall(name="recall")
-        self.num_layers_enc = num_layers_enc
-        self.num_layers_dec = num_layers_dec
-        self.target_maxlen = target_maxlen
         self.num_classes = num_classes
         self.num_hid = num_hid
 
-        # Input embeddings para encoder e decoder
-        self.enc_input = LandmarkEmbedding(num_hid=num_hid, maxlen=source_maxlen)
-        self.dec_input = TokenEmbedding(
-            num_vocab=num_classes, maxlen=target_maxlen, num_hid=num_hid
-        )
+        # Metrics
+        self.loss_metric = keras.metrics.Mean(name="loss")
+        self.categorical_accuracy = keras.metrics.CategoricalAccuracy(name="accuracy")
+        self.precision_metric = keras.metrics.Precision(name="precision")
+        self.recall_metric = keras.metrics.Recall(name="recall")
 
-        # Encoder stack
-        self.encoder_layers = keras.Sequential(
-            [
-                TransformerEncoder(num_hid, num_head, num_feed_forward)
-                for _ in range(num_layers_enc)
-            ]
-        )
+        # Embedding layers
+        self.image_embedding = ImageEmbedding(num_hid=num_hid)
+        self.landmark_embedding = LandmarkEmbedding(num_hid=num_hid)
 
-        # Decoder layers
-        self.decoder_layers = keras.Sequential(
-            [
-                TransformerDecoder(num_hid, num_head, num_feed_forward)
-                for _ in range(num_layers_dec)
-            ]
-        )
+        # Encoder and Decoder layers
+        self.encoder_layers = [
+            TransformerEncoder(num_hid, num_head, num_feed_forward)
+            for _ in range(num_layers_enc)
+        ]
+        self.decoder_layers = [
+            TransformerDecoder(num_hid, num_head, num_feed_forward)
+            for _ in range(num_layers_dec)
+        ]
 
-        # Camada de ajuste (num_hid -> num_classes)
-        self.adjust_layer = layers.TimeDistributed(layers.Dense(num_classes))
+        # Output layer
+        self.final_layer = layers.Dense(num_classes)
 
-        # Classificador final
-        self.classifier = layers.TimeDistributed(layers.Dense(num_classes))
-
-        # Optimizer
+        # Optimizer and loss
         self.optimizer = keras.optimizers.Adam(learning_rate=learning_rate)
-
-        # Losses
         self.compiled_loss = keras.losses.CategoricalCrossentropy(
-            from_logits=True, label_smoothing=0.2
+            from_logits=True, label_smoothing=0.1
         )
 
     def build(self, input_shape):
-        # Construir embeddings
-        self.enc_input.build(input_shape)
-        self.dec_input.build((None, self.target_maxlen))
-
-        # Construir encoder e decoder
-        for layer in self.encoder_layers.layers:
-            layer.build((None, input_shape[-1]))
-        for layer in self.decoder_layers.layers:
-            layer.build((None, input_shape[-1]))
-
-        # Construir classificador
-        self.classifier.build((None, input_shape[1], self.num_classes))
+        # Let Keras handle dynamic shapes
         super().build(input_shape)
 
     def call(self, inputs, training=False):
-        x = inputs
-        print(f"Input shape: {x.shape}")
+        images, landmarks = inputs
 
-        # Passar pelo encoder
-        for i, layer in enumerate(self.encoder_layers.layers):
-            x = layer(x, training=training)
-            print(f"Shape after encoder layer {i}: {x.shape}")
+        if len(images.shape) == 3:
+            images = tf.expand_dims(images, axis=-1)
 
-        # Ajustar embedding do encoder para num_classes
-        x = self.adjust_layer(x)
-        print(f"Shape after embedding adjustment: {x.shape}")
+        # Embeddings
+        images_emb = self.image_embedding(images)  # (batch_size, 1, num_hid)
+        landmarks_emb = self.landmark_embedding(landmarks)  # (batch_size, seq_len, num_hid)
 
-        # Classificador com TimeDistributed
-        x = self.classifier(x)
-        print(f"Shape after classifier: {x.shape}")
+        # Combine embeddings
+        enc_input = tf.concat([images_emb, landmarks_emb], axis=1)  # (batch_size, combined_seq_len, num_hid)
+        tf.print("[DEBUG] Encoder input shape:", tf.shape(enc_input))
 
-        return x
+        # Encoder
+        enc_output = enc_input
+        for encoder_layer in self.encoder_layers:
+            enc_output = encoder_layer(enc_output, training=training)
+        tf.print("[DEBUG] Encoder output shape:", tf.shape(enc_output))
+
+        # Decoder
+        dec_input = images_emb  # (batch_size, 1, num_hid)
+        dec_output = dec_input
+        for decoder_layer in self.decoder_layers:
+            dec_output = decoder_layer(enc_output, dec_output, training=training)
+        tf.print("[DEBUG] Decoder output shape:", tf.shape(dec_output))
+
+        # Final output
+        final_output = self.final_layer(dec_output)  # (batch_size, 1, num_classes)
+        tf.print("[DEBUG] Final output before squeeze:", tf.shape(final_output))
+
+        final_output = tf.squeeze(final_output, axis=1)  # (batch_size, num_classes)
+        tf.print("[DEBUG] Final output after squeeze:", tf.shape(final_output))
+
+        return final_output
 
     @property
     def metrics(self):
         return [
             self.loss_metric,
-            self.acc_metric,
-            self.categorical_accuracy,
-            self.precision_metric,
-            self.recall_metric,
+            self.categorical_accuracy
+            # self.precision_metric,
+            # self.recall_metric,
         ]
 
     def reset_metrics(self):
         for metric in self.metrics:
             metric.reset_state()
 
+    @tf.function
     def train_step(self, batch):
-        source, target = batch
-
-        target = tf.cast(target, tf.int32)
-        target_one_hot = tf.one_hot(target, depth=self.num_classes)
+        inputs, labels = batch
+        images, landmarks = inputs
 
         with tf.GradientTape() as tape:
-            preds = self(source, training=True)
+            preds = self((images, landmarks), training=True)
+            loss = self.compiled_loss(labels, preds)
 
-            # Ajustar predições, se necessário
-            preds = tf.cond(
-                tf.shape(preds)[1] > tf.shape(target_one_hot)[1],
-                true_fn=lambda: preds[:, :tf.shape(target_one_hot)[1], :],
-                false_fn=lambda: preds,
-            )
-
-            # Calcular perda
-            loss = self.compiled_loss(target_one_hot, preds)
-
-        # Calcular gradientes e aplicá-los
+        tf.print("[DEBUG] Predictions shape:", tf.shape(preds))
+        tf.print("[DEBUG] Labels shape:", tf.shape(labels))
+        
         gradients = tape.gradient(loss, self.trainable_variables)
         self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
 
-        # Cálculo da distância de edição
-        try:
-            sparse_target = tf.sparse.from_dense(target)
-            sparse_preds = tf.sparse.from_dense(tf.cast(tf.argmax(preds, axis=-1), tf.int32))
-            non_pad_count = tf.reduce_sum(tf.cast(tf.not_equal(target, 0), dtype=tf.float32))
-            if tf.equal(non_pad_count, 0):
-                edit_dist = tf.constant(float("inf"))
-            else:
-                edit_dist = tf.reduce_mean(tf.edit_distance(sparse_target, sparse_preds))
-        except Exception as e:
-            print(f"Error in edit distance calculation: {e}")
-            edit_dist = tf.constant(float("inf"))
+        # Atualizar métricas
+        self.loss_metric.update_state(loss)
+        self.categorical_accuracy.update_state(labels, preds)
+        # self.precision_metric.update_state(labels, preds)
+        # self.recall_metric.update_state(labels, preds)
+
+        return {
+            "loss": self.loss_metric.result(),
+            "accuracy": self.categorical_accuracy.result()
+            # "precision": self.precision_metric.result(),
+            # "recall": self.recall_metric.result(),
+        }
+
+    @tf.function
+    def test_step(self, batch):
+        inputs, labels = batch
+        images, landmarks = inputs
+
+        preds = self((images, landmarks), training=False)
+        loss = self.compiled_loss(labels, preds)
 
         # Atualizar métricas
         self.loss_metric.update_state(loss)
-        self.categorical_accuracy.update_state(target_one_hot, preds)
-        self.precision_metric.update_state(target_one_hot, preds)
-        self.recall_metric.update_state(target_one_hot, preds)
-        self.acc_metric.update_state(edit_dist)
+        self.categorical_accuracy.update_state(labels, preds)
+        self.precision_metric.update_state(labels, preds)
+        self.recall_metric.update_state(labels, preds)
 
-        # Retornar métricas
         return {
             "loss": self.loss_metric.result(),
-            "dist": self.acc_metric.result(),
             "accuracy": self.categorical_accuracy.result(),
             "precision": self.precision_metric.result(),
             "recall": self.recall_metric.result(),
         }
-
-    # def test_step(self, batch):
-    #     source, target = batch
-
-    #     target = tf.cast(target, tf.int32)
-    #     target_one_hot = tf.one_hot(target, depth=self.num_classes)
-
-    #     preds = self(source, training=False)
-
-    #     preds = tf.cond(
-    #         tf.shape(preds)[1] > tf.shape(target_one_hot)[1],
-    #         true_fn=lambda: preds[:, :tf.shape(target_one_hot)[1], :],
-    #         false_fn=lambda: preds
-    #     )
-
-    #     loss = self.compiled_loss(target_one_hot, preds)
-
-    #     # Update metrics
-    #     self.loss_metric.update_state(loss)
-    #     self.categorical_accuracy.update_state(target_one_hot, preds)
-    #     self.precision_metric.update_state(target_one_hot, preds)
-    #     self.recall_metric.update_state(target_one_hot, preds)
-    #     edit_dist = tf.edit_distance(
-    #         tf.sparse.from_dense(target),
-    #         tf.sparse.from_dense(tf.cast(tf.argmax(preds, axis=-1), tf.int32))
-    #     )
-    #     non_pad_count = tf.math.count_nonzero(target, dtype=tf.float32)
-    #     edit_dist = tf.reduce_sum(edit_dist) / (non_pad_count + keras.backend.epsilon())
-    #     self.acc_metric.update_state(edit_dist)
-
-    #     return {
-    #         "loss": self.loss_metric.result(),
-    #         "dist": self.acc_metric.result(),
-    #         "accuracy": self.categorical_accuracy.result(),
-    #         "precision": self.precision_metric.result(),
-    #         "recall": self.recall_metric.result()
-    #     }
-
-    # def generate(self, source, target_start_token_idx):
-    #     """Performs inference over one batch of inputs using greedy decoding."""
-    #     bs = tf.shape(source)[0]
-    #     # Encodar a entrada
-    #     enc = source
-    #     for layer in self.encoder_layers:
-    #         enc = layer(enc, training=False)
-
-    #     dec_input = tf.ones((bs, 1), dtype=tf.int32) * target_start_token_idx
-    #     dec_logits = []
-
-    #     for _ in range(self.target_maxlen - 1):
-    #         # Passar pela pilha do decoder
-    #         dec_out = dec_input
-    #         for layer in self.decoder_layers:
-    #             dec_out = layer(enc, dec_out, training=False)
-            
-    #         logits = self.classifier(dec_out)
-    #         logits = tf.argmax(logits, axis=-1, output_type=tf.int32)
-    #         last_logit = logits[:, -1][..., tf.newaxis]
-    #         dec_logits.append(last_logit)
-    #         dec_input = tf.concat([dec_input, last_logit], axis=-1)
-
-    #     return tf.concat(dec_logits, axis=1)

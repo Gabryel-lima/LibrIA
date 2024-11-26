@@ -63,26 +63,25 @@ def train_model():
         data_processor = DataProcessor('signals.csv', 'landmarks.csv')
         labels, signals, landmark_features = data_processor.load_or_process_data()
         data_loader = DataLoader(labels, signals, landmark_features)
-        train_dataset, val_dataset, num_classes = data_loader.prepare_data()
+        train_ds, val_ds, num_classes = data_loader.prepare_data()
+
+        # for batch in train_ds.take(1):
+        #     inputs, labels = batch
+        #     source, target_landmarks = inputs
+        #     print(f"[DEBUG] Source shape: {source.shape}")
+        #     print(f"[DEBUG] Target landmarks shape: {target_landmarks.shape}")
+        #     print(f"[DEBUG] Labels shape: {labels.shape}")
 
         # Modelo Transformer
         gesture_net = Transformer(
-            num_hid=32,
-            # num_head=1,
-            # num_feed_forward=32,
-            # source_maxlen=100,
-            # target_maxlen=100,
-            # num_layers_enc=2,
-            # num_layers_dec=1,
             num_classes=num_classes,
-            #learning_rate=1e-4
         )
 
         # Sumário
         gesture_net.summary()
 
         # Compilação do modelo (sem build explícito)
-        gesture_net.compile()
+        gesture_net.compile(optimizer=gesture_net.optimizer)
 
         # Callbacks
         early_stopping = keras.callbacks.EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
@@ -95,14 +94,14 @@ def train_model():
 
         # Treinamento
         history = gesture_net.fit(
-            train_dataset.prefetch(tf.data.AUTOTUNE),
-            validation_data=val_dataset.prefetch(tf.data.AUTOTUNE),
-            epochs=10,
+            train_ds.prefetch(tf.data.AUTOTUNE),
+            validation_data=val_ds.prefetch(tf.data.AUTOTUNE),
+            epochs=2,
             callbacks=callbacks
         )
 
         gesture_net.save('./model/GestureNet.keras')
-        evaluation_results = gesture_net.evaluate(val_dataset)
+        evaluation_results = gesture_net.evaluate(val_ds)
         print(f"Avaliação final: {evaluation_results}")
 
         # Salvar histórico e resultados
