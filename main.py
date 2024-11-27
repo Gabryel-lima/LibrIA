@@ -90,13 +90,13 @@ def train_model():
         csv_logger = keras.callbacks.CSVLogger('training_log.csv')
         tensorboard_callback = keras.callbacks.TensorBoard(log_dir='./logs', histogram_freq=1)
 
-        callbacks = [early_stopping, reduce_lr]
+        callbacks = [early_stopping, reduce_lr, checkpoint, csv_logger, tensorboard_callback]
 
         # Treinamento
         history = gesture_net.fit(
             train_ds.prefetch(tf.data.AUTOTUNE),
             validation_data=val_ds.prefetch(tf.data.AUTOTUNE),
-            epochs=2,
+            epochs=180,
             callbacks=callbacks
         )
 
@@ -191,82 +191,87 @@ import mediapipe as mp
 
 def webcam_predictor():
     """
-    Função para capturar sinais de mão, detectar landmarks, prever sinais de mão e visualizar a detecção em tempo real.
+    Function to capture hand signals, detect landmarks, predict hand signs, and visualize detection in real-time.
     """
-    input_shape = (28, 28, 1)
-    landmark_dim = 63
-    num_classes = 29
 
-    # Inicializar e carregar o modelo Transformer
-    model = Transformer(
-        num_hid=64,
-        num_head=2,
-        num_feed_forward=128,
-        source_maxlen=100,
-        target_maxlen=100,
-        num_layers_enc=4,
-        num_layers_dec=1,
-        num_classes=num_classes,
-    )
-    #model.build(input_shape=[(None, 100, landmark_dim), (None, 100)])  # Ajuste necessário para o modelo ser utilizado corretamente
+    # Initialize and load the Transformer model
+    model = Transformer(num_classes=29)
     model.load_weights('./model/GestureNet.keras')
 
-    # Inicializar MediaPipe para captura de landmarks
+    # Initialize MediaPipe for landmark detection
     mp_hands = mp.solutions.hands
     mp_drawing = mp.solutions.drawing_utils
 
     cap = cv.VideoCapture(0)
     if not cap.isOpened():
-        print('Erro: Câmera não disponível. Saindo...')
+        print('Error: Camera not available. Exiting...')
         return
 
-    class_labels = {i: f'Sinal {chr(65 + i)}' for i in range(num_classes)}
+    # Map class indices to labels
+    class_labels = {
+        0: 'A', 1: 'B', 2: 'C', 3: 'D', 4: 'E',
+        5: 'F', 6: 'G', 7: 'H', 8: 'I', 9: 'J',
+        10: 'K', 11: 'L', 12: 'M', 13: 'N', 14: 'O',
+        15: 'P', 16: 'Q', 17: 'R', 18: 'S', 19: 'T',
+        20: 'U', 21: 'V', 22: 'W', 23: 'X', 24: 'Y',
+        25: 'Z', 26: 'Space', 27: 'Delete', 28: 'Nothing'
+    }
 
     with mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.5) as hands:
         while True:
             ret, frame = cap.read()
             if not ret:
-                print('Erro ao capturar frame. Saindo...')
+                print('Error capturing frame. Exiting...')
                 break
 
-            # Processar a imagem com MediaPipe para detectar landmarks
+            # Process the image with MediaPipe to detect landmarks
             rgb_frame = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
             result = hands.process(rgb_frame)
 
-            # Pré-processar a imagem de entrada para a rede neural
+            # Preprocess the image input for the neural network
             processed_image = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
             processed_image = cv.resize(processed_image, (28, 28))
-            processed_image = processed_image / 255.0  # Normalizar os pixels para [0, 1]
-            processed_image = np.expand_dims(processed_image, axis=-1)  # Adicionar canal
-            processed_image = np.expand_dims(processed_image, axis=0)  # Adicionar dimensão do batch
+            processed_image = processed_image / 255.0  # Normalize pixels to [0, 1]
+            processed_image = np.expand_dims(processed_image, axis=-1)  # Add channel
+            processed_image = np.expand_dims(processed_image, axis=0)  # Add batch dimension
 
-            # Placeholder para características dos gestos (landmarks) - aqui será usado como entrada para o modelo
-            gesture_features = np.zeros((1, landmark_dim), dtype=np.float32)
+            # Initialize gesture_features
+            gesture_features = np.zeros((1, 63), dtype=np.float32)  # Assuming 21 landmarks with x, y, z coordinates
 
-            # Se os landmarks foram detectados, preencher gesture_features com os valores
+            # If landmarks are detected, fill gesture_features with the values
             if result.multi_hand_landmarks:
                 for hand_landmarks in result.multi_hand_landmarks:
                     landmarks = []
                     for landmark in hand_landmarks.landmark:
                         landmarks.extend([landmark.x, landmark.y, landmark.z])
-                    gesture_features = np.array(landmarks, dtype=np.float32).reshape(1, -1)  # Forma (1, 63)
+                    gesture_features = np.array(landmarks, dtype=np.float32).reshape(1, -1)  # Shape (1, 63)
 
-                    # Desenhar os landmarks na imagem original
+                    # Draw the landmarks on the original image
                     mp_drawing.draw_landmarks(frame, hand_landmarks, mp_hands.HAND_CONNECTIONS)
 
-            # Realizar a predição com todas as entradas necessárias
-            inputs = [gesture_features, np.ones((1, 100))]  # Usando apenas landmarks como entrada e sequência fictícia
-            predictions = model(inputs, training=False)
+                # Expand gesture_features to match expected input shape
+                gesture_features = np.expand_dims(gesture_features, axis=1)  # Shape (1, 1, 63)
 
-            # Obter a classificação do sinal
-            pred_label = np.argmax(predictions[0])  # Classe prevista
-            label_text = class_labels.get(pred_label, 'Desconhecido')
+                # Make prediction
+                inputs = (processed_image, gesture_features)
+                predictions = model(inputs, training=False)
 
-            # Exibir resultados
-            cv.putText(frame, f'Classe: {label_text}', (10, 30), cv.FONT_HERSHEY_COMPLEX, 1.0, (255, 255, 255), 2)
+                # Apply softmax to get probabilities
+                pred_probabilities = tf.nn.softmax(predictions[0]).numpy()
+                pred_label = np.argmax(pred_probabilities)
+                confidence = pred_probabilities[pred_label]
+
+                label_text = f'{class_labels.get(pred_label, "Unknown")} ({confidence * 100:.2f}%)'
+
+                # Display results
+                cv.putText(frame, f'Class: {label_text}', (10, 30), cv.FONT_HERSHEY_COMPLEX, 1.0, (255, 255, 255), 2)
+            else:
+                # Handle case when no hand is detected
+                cv.putText(frame, 'No hand detected', (10, 30), cv.FONT_HERSHEY_COMPLEX, 1.0, (0, 0, 255), 2)
+
             cv.imshow('libria_net - Gesture Detector', frame)
 
-            # Fechar ao pressionar 'q'
+            # Close when 'q' is pressed
             if cv.waitKey(1) & 0xFF == ord('q'):
                 break
 

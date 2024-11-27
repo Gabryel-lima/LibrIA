@@ -266,10 +266,13 @@ class TransformerDecoder(layers.Layer):
         return mask
 
     def call(self, enc_out, target, training=False, mask=None):
-        # Máscara causal para auto-atenção
-        causal_mask = self.causal_attention_mask(
-            tf.shape(target)[0], tf.shape(target)[1], self.self_att.num_heads, dtype=tf.float32
-        )
+        batch_size = tf.shape(target)[0]
+        seq_len = tf.shape(target)[1]
+        num_heads = self.self_att.num_heads
+        dtype = target.dtype
+
+        # Gerar a máscara causal
+        causal_mask = self.causal_attention_mask(batch_size, seq_len, num_heads, dtype)
 
         # Auto-atenção com máscara causal
         target_att = self.self_att(
@@ -371,27 +374,22 @@ class Transformer(keras.Model):
 
         # Combine embeddings
         enc_input = tf.concat([images_emb, landmarks_emb], axis=1)  # (batch_size, combined_seq_len, num_hid)
-        tf.print("[DEBUG] Encoder input shape:", tf.shape(enc_input))
 
         # Encoder
         enc_output = enc_input
         for encoder_layer in self.encoder_layers:
             enc_output = encoder_layer(enc_output, training=training)
-        tf.print("[DEBUG] Encoder output shape:", tf.shape(enc_output))
 
         # Decoder
         dec_input = images_emb  # (batch_size, 1, num_hid)
         dec_output = dec_input
         for decoder_layer in self.decoder_layers:
             dec_output = decoder_layer(enc_output, dec_output, training=training)
-        tf.print("[DEBUG] Decoder output shape:", tf.shape(dec_output))
 
         # Final output
         final_output = self.final_layer(dec_output)  # (batch_size, 1, num_classes)
-        tf.print("[DEBUG] Final output before squeeze:", tf.shape(final_output))
 
         final_output = tf.squeeze(final_output, axis=1)  # (batch_size, num_classes)
-        tf.print("[DEBUG] Final output after squeeze:", tf.shape(final_output))
 
         return final_output
 
@@ -399,9 +397,9 @@ class Transformer(keras.Model):
     def metrics(self):
         return [
             self.loss_metric,
-            self.categorical_accuracy
-            # self.precision_metric,
-            # self.recall_metric,
+            self.categorical_accuracy,
+            self.precision_metric,
+            self.recall_metric
         ]
 
     def reset_metrics(self):
@@ -416,9 +414,6 @@ class Transformer(keras.Model):
         with tf.GradientTape() as tape:
             preds = self((images, landmarks), training=True)
             loss = self.compiled_loss(labels, preds)
-
-        tf.print("[DEBUG] Predictions shape:", tf.shape(preds))
-        tf.print("[DEBUG] Labels shape:", tf.shape(labels))
         
         gradients = tape.gradient(loss, self.trainable_variables)
         self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
@@ -426,14 +421,14 @@ class Transformer(keras.Model):
         # Atualizar métricas
         self.loss_metric.update_state(loss)
         self.categorical_accuracy.update_state(labels, preds)
-        # self.precision_metric.update_state(labels, preds)
-        # self.recall_metric.update_state(labels, preds)
+        self.precision_metric.update_state(labels, preds)
+        self.recall_metric.update_state(labels, preds)
 
         return {
             "loss": self.loss_metric.result(),
-            "accuracy": self.categorical_accuracy.result()
-            # "precision": self.precision_metric.result(),
-            # "recall": self.recall_metric.result(),
+            "accuracy": self.categorical_accuracy.result(),
+            "precision": self.precision_metric.result(),
+            "recall": self.recall_metric.result()
         }
 
     @tf.function
@@ -454,5 +449,5 @@ class Transformer(keras.Model):
             "loss": self.loss_metric.result(),
             "accuracy": self.categorical_accuracy.result(),
             "precision": self.precision_metric.result(),
-            "recall": self.recall_metric.result(),
+            "recall": self.recall_metric.result()
         }
