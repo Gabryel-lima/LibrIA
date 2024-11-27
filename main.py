@@ -3,6 +3,7 @@ from src.utils.imports import (np, tf, plt, traceback, json, pd)
 from src.utils.plots import plot_training_history
 from src.utils.error_log import error_log
 import keras
+from keras import Model
 from src.core.GestureNet import Transformer, DataProcessor, DataLoader
 import cv2 as cv
 from sklearn.utils import shuffle
@@ -65,26 +66,51 @@ def train_model():
         data_loader = DataLoader(labels, signals, landmark_features)
         train_ds, val_ds, num_classes = data_loader.prepare_data()
 
-        # for batch in train_ds.take(1):
-        #     inputs, labels = batch
-        #     source, target_landmarks = inputs
-        #     print(f"[DEBUG] Source shape: {source.shape}")
-        #     print(f"[DEBUG] Target landmarks shape: {target_landmarks.shape}")
-        #     print(f"[DEBUG] Labels shape: {labels.shape}")
+        # Obter um batch de dados para verificar as formas
+        for batch in train_ds.take(1):
+            inputs, labels = batch
+            images, landmarks = inputs
+            print(f"[DEBUG] Source shape: {images.shape}")
+            print(f"[DEBUG] Target landmarks shape: {landmarks.shape}")
+            print(f"[DEBUG] Labels shape: {labels.shape}")
+            break
 
-        # Modelo Transformer
-        gesture_net = Transformer(
-            num_classes=num_classes,
+        # Model Gesture_Net_Transformer
+        gesture_net = Transformer(num_classes=num_classes)
+
+        # Inputs
+        images_input = keras.Input(shape=images.shape[1:], batch_size=32)
+        landmarks_input = keras.Input(shape=landmarks.shape[1:], batch_size=32)
+
+        # Call output
+        outputs = gesture_net((images_input, landmarks_input))
+
+        # Functional model keras
+        functional_model = Model(inputs=[images_input, landmarks_input], outputs=outputs)
+
+        # Summary
+        functional_model.summary()
+
+        # Plot Structure
+        plot_model(
+            model=functional_model,
+            to_file="model_structure.png",
+            show_dtype=True,
+            show_layer_activations=True,
+            show_layer_names=True,
+            show_shapes=True,
+            show_trainable=True
         )
 
-        # Sumário
-        gesture_net.summary()
-
-        # Compilação do modelo (sem build explícito)
-        gesture_net.compile(optimizer=gesture_net.optimizer)
+        # Compilation
+        functional_model.compile(
+            optimizer=gesture_net.optimizer,  # Reutilizando o otimizador do modelo original
+            loss=gesture_net.compiled_loss,   # Reutilizando a função de perda do modelo original
+            metrics=gesture_net.metrics       # Reutilizando as métricas do modelo original
+        )
 
         # Callbacks
-        early_stopping = keras.callbacks.EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
+        early_stopping = keras.callbacks.EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
         reduce_lr = keras.callbacks.ReduceLROnPlateau(monitor='val_loss', patience=3, factor=0.2, min_lr=1e-6)
         checkpoint = keras.callbacks.ModelCheckpoint(filepath='./model/best_model.keras', monitor='val_loss', save_best_only=True)
         csv_logger = keras.callbacks.CSVLogger('training_log.csv')
@@ -92,19 +118,20 @@ def train_model():
 
         callbacks = [early_stopping, reduce_lr, checkpoint, csv_logger, tensorboard_callback]
 
-        # Treinamento
-        history = gesture_net.fit(
+        # Train the functional model
+        history = functional_model.fit(
             train_ds.prefetch(tf.data.AUTOTUNE),
             validation_data=val_ds.prefetch(tf.data.AUTOTUNE),
-            epochs=180,
+            epochs=40,
             callbacks=callbacks
         )
 
-        gesture_net.save('./model/GestureNet.keras')
-        evaluation_results = gesture_net.evaluate(val_ds)
+        # Save best weights
+        functional_model.save('./model/GestureNet.keras')
+        evaluation_results = functional_model.evaluate(val_ds)
         print(f"Avaliação final: {evaluation_results}")
 
-        # Salvar histórico e resultados
+        # Save history and results
         with open('results.json', 'w') as f:
             json.dump({
                 "evaluation": {"test_loss": evaluation_results[0], "accuracy": evaluation_results[1]},

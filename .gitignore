@@ -162,7 +162,7 @@ cython_debug/
 # Ignorar diretórios de ambiente Python
 venv/
 .venv/
-model/
+#model/
 logs/
 data/
 /another_network

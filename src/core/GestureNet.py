@@ -179,13 +179,21 @@ class TokenEmbedding(layers.Layer):
 class LandmarkEmbedding(layers.Layer):
     def __init__(self, num_hid=64, maxlen=100):
         super().__init__()
+        self.num_hid = num_hid
+        self.maxlen = maxlen
         self.conv1 = layers.Conv1D(num_hid, 11, strides=2, padding="same", activation="relu")
         self.conv2 = layers.Conv1D(num_hid, 11, strides=2, padding="same", activation="relu")
         self.conv3 = layers.Conv1D(num_hid, 11, strides=2, padding="same", activation="relu")
         self.pos_emb = layers.Embedding(input_dim=maxlen, output_dim=num_hid)
 
     def build(self, input_shape):
+        # Construir as camadas internas
         super().build(input_shape)
+
+    def compute_output_shape(self, input_shape):
+        seq_len = input_shape[1]
+        seq_len = seq_len // (2 ** 3)  # Três convoluções com strides=2
+        return (input_shape[0], seq_len, self.num_hid)
 
     def call(self, x):
         # Garantir que x tenha três dimensões
@@ -219,6 +227,9 @@ class TransformerEncoder(layers.Layer):
     def build(self, input_shape):
         super().build(input_shape)
 
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
     def call(self, inputs, training=False, mask=None):
         # Multi-head attention
         attn_output = self.att(query=inputs, value=inputs, key=inputs, attention_mask=mask)
@@ -235,6 +246,10 @@ class TransformerEncoder(layers.Layer):
 class TransformerDecoder(layers.Layer):
     def __init__(self, embed_dim, num_heads, feed_forward_dim, dropout_rate=0.1):
         super().__init__()
+        self.embed_dim = embed_dim
+        self.num_heads = num_heads
+        self.feed_forward_dim = feed_forward_dim
+
         self.layernorm1 = layers.LayerNormalization(epsilon=1e-6)
         self.layernorm2 = layers.LayerNormalization(epsilon=1e-6)
         self.layernorm3 = layers.LayerNormalization(epsilon=1e-6)
@@ -242,9 +257,9 @@ class TransformerDecoder(layers.Layer):
             num_heads=num_heads, key_dim=embed_dim
         )
         self.enc_att = layers.MultiHeadAttention(num_heads=num_heads, key_dim=embed_dim)
-        self.self_dropout = layers.Dropout(0.5)
-        self.enc_dropout = layers.Dropout(0.1)
-        self.ffn_dropout = layers.Dropout(0.1)
+        self.self_dropout = layers.Dropout(dropout_rate)
+        self.enc_dropout = layers.Dropout(dropout_rate)
+        self.ffn_dropout = layers.Dropout(dropout_rate)
         self.ffn = keras.Sequential(
             [
                 layers.Dense(feed_forward_dim, activation="relu"),
@@ -253,7 +268,12 @@ class TransformerDecoder(layers.Layer):
         )
 
     def build(self, input_shape):
+        # input_shape: [enc_output_shape, dec_input_shape]
         super().build(input_shape)
+
+    def compute_output_shape(self, input_shape):
+        # Retorna a forma do dec_input
+        return input_shape[1]
 
     def causal_attention_mask(self, batch_size, seq_len, num_heads, dtype):
         """Gera uma máscara causal para a atenção."""
@@ -268,7 +288,7 @@ class TransformerDecoder(layers.Layer):
     def call(self, enc_out, target, training=False, mask=None):
         batch_size = tf.shape(target)[0]
         seq_len = tf.shape(target)[1]
-        num_heads = self.self_att.num_heads
+        num_heads = self.num_heads
         dtype = target.dtype
 
         # Gerar a máscara causal
@@ -293,6 +313,7 @@ class TransformerDecoder(layers.Layer):
 class ImageEmbedding(layers.Layer):
     def __init__(self, num_hid=64):
         super().__init__()
+        self.num_hid = num_hid
         self.conv1 = layers.Conv2D(num_hid, 3, activation='relu', padding='same')
         self.pool1 = layers.MaxPooling2D()
         self.conv2 = layers.Conv2D(num_hid, 3, activation='relu', padding='same')
@@ -302,6 +323,11 @@ class ImageEmbedding(layers.Layer):
 
     def build(self, input_shape):
         super().build(input_shape)
+
+    def compute_output_shape(self, input_shape):
+        x = tf.zeros(input_shape)
+        x = self.call(x)
+        return x.shape
 
     def call(self, x):
         x = self.conv1(x)
@@ -314,6 +340,25 @@ class ImageEmbedding(layers.Layer):
         x = tf.expand_dims(x, axis=1)
         return x  # Shape final: (batch_size, 1, num_hid)
 
+class F1Score(tf.keras.metrics.Metric):
+    def __init__(self, name="f1_score", **kwargs):
+        super(F1Score, self).__init__(name=name, **kwargs)
+        self.precision = keras.metrics.Precision()
+        self.recall = keras.metrics.Recall()
+    
+    def update_state(self, y_true, y_pred, sample_weight=None):
+        self.precision.update_state(y_true, y_pred, sample_weight)
+        self.recall.update_state(y_true, y_pred, sample_weight)
+    
+    def result(self):
+        precision = self.precision.result()
+        recall = self.recall.result()
+        return 2 * ((precision * recall) / (precision + recall + tf.keras.backend.epsilon()))
+    
+    def reset_states(self):
+        self.precision.reset_state()
+        self.recall.reset_state()
+
 class Transformer(keras.Model):
     def __init__(
         self,
@@ -323,17 +368,11 @@ class Transformer(keras.Model):
         num_layers_enc=4,
         num_layers_dec=1,
         num_classes=29,
-        learning_rate=1e-4,
+        learning_rate=1e-3,
     ):
         super().__init__()
         self.num_classes = num_classes
         self.num_hid = num_hid
-
-        # Metrics
-        self.loss_metric = keras.metrics.Mean(name="loss")
-        self.categorical_accuracy = keras.metrics.CategoricalAccuracy(name="accuracy")
-        self.precision_metric = keras.metrics.Precision(name="precision")
-        self.recall_metric = keras.metrics.Recall(name="recall")
 
         # Embedding layers
         self.image_embedding = ImageEmbedding(num_hid=num_hid)
@@ -353,13 +392,46 @@ class Transformer(keras.Model):
         self.final_layer = layers.Dense(num_classes)
 
         # Optimizer and loss
-        self.optimizer = keras.optimizers.Adam(learning_rate=learning_rate)
-        self.compiled_loss = keras.losses.CategoricalCrossentropy(
-            from_logits=True, label_smoothing=0.1
-        )
+        self.optimizer = keras.optimizers.Adam(learning_rate=learning_rate, clipnorm=1.0)
+
+        # Metrics
+        self.compiled_loss = keras.losses.CategoricalCrossentropy(from_logits=True, label_smoothing=0.2)
+        self.categorical_accuracy = keras.metrics.CategoricalAccuracy(name="accuracy")
+        self.precision_metric = keras.metrics.Precision(name="precision")
+        self.recall_metric = keras.metrics.Recall(name="recall")
+        self.f1_score = F1Score(name="f1_score")
 
     def build(self, input_shape):
-        # Let Keras handle dynamic shapes
+        images_shape, landmarks_shape = input_shape
+
+        # Construir embeddings sem criar tensores diretamente
+        self.image_embedding.build(images_shape)
+        image_embed_shape = self.image_embedding.compute_output_shape(images_shape)
+
+        self.landmark_embedding.build(landmarks_shape)
+        landmark_embed_shape = self.landmark_embedding.compute_output_shape(landmarks_shape)
+
+        # Combinar embeddings
+        batch_size = None  # Usar None para indicar tamanho de batch variável
+        seq_len = image_embed_shape[1] + landmark_embed_shape[1]
+        num_hid = image_embed_shape[2]
+
+        enc_input_shape = tf.TensorShape([batch_size, seq_len, num_hid])
+
+        # Construir encoder layers
+        for encoder_layer in self.encoder_layers:
+            encoder_layer.build(enc_input_shape)
+
+        # Construir decoder layers
+        dec_input_shape = image_embed_shape
+        for decoder_layer in self.decoder_layers:
+            decoder_layer.build([enc_input_shape, dec_input_shape])
+            dec_input_shape = decoder_layer.compute_output_shape([enc_input_shape, dec_input_shape])
+
+        # Construir camada final
+        self.final_layer.build(dec_input_shape)
+
+        # Chamar o build da superclasse
         super().build(input_shape)
 
     def call(self, inputs, training=False):
@@ -388,7 +460,6 @@ class Transformer(keras.Model):
 
         # Final output
         final_output = self.final_layer(dec_output)  # (batch_size, 1, num_classes)
-
         final_output = tf.squeeze(final_output, axis=1)  # (batch_size, num_classes)
 
         return final_output
@@ -396,10 +467,11 @@ class Transformer(keras.Model):
     @property
     def metrics(self):
         return [
-            self.loss_metric,
+            self.compiled_loss,
             self.categorical_accuracy,
             self.precision_metric,
-            self.recall_metric
+            self.recall_metric,
+            self.f1_score
         ]
 
     def reset_metrics(self):
@@ -419,16 +491,17 @@ class Transformer(keras.Model):
         self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
 
         # Atualizar métricas
-        self.loss_metric.update_state(loss)
         self.categorical_accuracy.update_state(labels, preds)
         self.precision_metric.update_state(labels, preds)
         self.recall_metric.update_state(labels, preds)
+        self.f1_score.update_state(labels, preds)
 
         return {
-            "loss": self.loss_metric.result(),
+            "loss": loss,
             "accuracy": self.categorical_accuracy.result(),
             "precision": self.precision_metric.result(),
-            "recall": self.recall_metric.result()
+            "recall": self.recall_metric.result(),
+            "f1_score": self.f1_score.result()
         }
 
     @tf.function
@@ -440,14 +513,16 @@ class Transformer(keras.Model):
         loss = self.compiled_loss(labels, preds)
 
         # Atualizar métricas
-        self.loss_metric.update_state(loss)
+        self.compiled_loss.update_state(loss)
         self.categorical_accuracy.update_state(labels, preds)
         self.precision_metric.update_state(labels, preds)
         self.recall_metric.update_state(labels, preds)
+        self.f1_score.update_state(labels, preds)
 
         return {
-            "loss": self.loss_metric.result(),
+            "loss": loss,
             "accuracy": self.categorical_accuracy.result(),
             "precision": self.precision_metric.result(),
-            "recall": self.recall_metric.result()
+            "recall": self.recall_metric.result(),
+            "f1_score": self.f1_score.result()
         }
