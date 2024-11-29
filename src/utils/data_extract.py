@@ -108,22 +108,15 @@ def balance_and_split_dataset(csv_path, train_csv_path, test_csv_path, max_sampl
 if __name__ == '__main__':
     # Convert images to CSV and balance/split datasets
     images_to_csv(image_folder="E:\\libria\\data\\asl_hands\\ASL_Alphabet_Dataset\\asl_alphabet_train",
-                  output_csv="E:\\libria\\data\\signals.csv")
+                  output_csv="E:\\libria\\data\\asl_signals.csv")
 
-    balance_and_split_dataset(csv_path="E:\\libria\\data\\signals.csv",
-                              train_csv_path="E:\\libria\\data\\signals_train.csv",
-                              test_csv_path="E:\\libria\\data\\signals_test.csv")
+    # balance_and_split_dataset(csv_path="E:\\libria\\data\\asl_signals.csv",
+    #                           train_csv_path="E:\\libria\\data\\asl_signals_train.csv",
+    #                           test_csv_path="E:\\libria\\data\\asl_signals_test.csv")
 
-    # images_to_csv(image_folder="E:\\libria\\data\\hand_keypoint_dataset_26k\\images\\train",
-    #               output_csv="E:\\libria\\data\\hands.csv")
+    images_to_csv(image_folder="E:\\libria\\data\\hand_keypoint_dataset_26k\\images\\train",
+                  output_csv="E:\\libria\\data\\random_hands.csv")
 
-    # balance_and_split_dataset(csv_path="E:\\libria\\data\\hands.csv",
-    #                           train_csv_path="E:\\libria\\data\\hands_train.csv",
-    #                           test_csv_path="E:\\libria\\data\\hands_test.csv")
-
-    # images_to_csv(image_folder="E:\\libria\\data\\landmarks\\train",
-    #               output_csv="E:\\libria\\data\\landmarks.csv")
-
-    # balance_and_split_dataset(csv_path="E:\\libria\\data\\landmarks.csv",
-    #                           train_csv_path="E:\\libria\\data\\landmarks_train.csv",
-    #                           test_csv_path="E:\\libria\\data\\landmarks_test.csv")
+    # balance_and_split_dataset(csv_path="E:\\libria\\data\\random_hands.csv",
+    #                           train_csv_path="E:\\libria\\data\\random_hands_train.csv",
+    #                           test_csv_path="E:\\libria\\data\\random_hands_test.csv")

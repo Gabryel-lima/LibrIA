@@ -8,38 +8,54 @@ from sklearn.preprocessing import LabelEncoder
 import keras
 from keras import layers, Model
 from tqdm import tqdm
+from imblearn.over_sampling import SMOTE
+from sklearn.preprocessing import LabelEncoder
+import tensorflow as tf
+import numpy as np
+
 
 class DataProcessor:
-    def __init__(self, signals_filename, landmarks_filename):
+    def __init__(self, signals_filename, random_hands_filename):
         self.signals_csv_path = os.path.join('E:\\libria\\data', signals_filename)
-        self.landmarks_csv_path = os.path.join('E:\\libria\\data', landmarks_filename)
+        self.random_hands_csv_path = os.path.join('E:\\libria\\data', random_hands_filename)
+        self.preprocessed = "E:\libria\data\processed_hands_in_landmarks.csv"
 
     def load_or_process_data(self):
         # Carregar os sinais
         signals_df = pd.read_csv(self.signals_csv_path)
+        #hands_df = pd.read_csv(self.random_hands_csv_path)
         labels = signals_df['label'].values
         signals = signals_df.drop(columns=['label']).values
 
-        # Carregar os landmarks
-        landmarks_df = pd.read_csv(self.landmarks_csv_path)
-        landmark_features = landmarks_df.drop(columns=['label']).values
+        # Verificar se o CSV de random_hands já existe
+        if os.path.exists(self.preprocessed):
+            # Carregar os random_hands do CSV
+            print("Carregando random_hands do arquivo CSV...")
+            random_hands_df = pd.read_csv(self.preprocessed)
+            hand_features = random_hands_df.drop(columns=['label']).values
+        else:
+            # Se não existe, processar as imagens para gerar os random_hands
+            print("Arquivo de random_hands não encontrado. Processando imagens com MediaPipe...")
+            hand_features = self.process_images(signals)
 
-        return labels, signals, landmark_features
-    
-    def process_images(self, dataset_df):
+            # Salvar os random_hands processados em um novo arquivo CSV
+            self.save_landmarks(labels, hand_features)
+
+        return labels, signals, hand_features
+
+    def process_images(self, signals):
+        """Função que converte imagens de sinais para desenhos de landmarks"""
         print("Processando imagens com MediaPipe para extrair landmarks...")
-        labels = dataset_df['label'].values
-        pixels = dataset_df.drop(columns=['label']).values
-        pixels_reshaped = pixels.reshape(-1, 28, 28)
+        pixels_reshaped = signals.reshape(-1, 28, 28)
 
         mp_hands = mp.solutions.hands
         landmark_features = []
 
-        with mp_hands.Hands(static_image_mode=True, max_num_hands=1, min_detection_confidence=0.5) as hands:
+        with mp_hands.Hands(static_image_mode=True, max_num_hands=1, min_detection_confidence=0.7) as hands:
             for image in tqdm(pixels_reshaped, desc="Processando imagens com MediaPipe"):
                 image_rgb = np.stack([image] * 3, axis=-1).astype(np.uint8)
                 results = hands.process(image_rgb)
-                
+
                 if results.multi_hand_landmarks:
                     for hand_landmarks in results.multi_hand_landmarks:
                         landmarks = []
@@ -49,89 +65,124 @@ class DataProcessor:
                 else:
                     landmark_features.append([0] * 63)
 
-        return labels, np.array(landmark_features)
+        return np.array(landmark_features)
 
     def save_landmarks(self, labels, landmark_features):
+        # Salvar os landmarks processados em um CSV
         landmarks_df = pd.DataFrame(landmark_features, columns=[f'landmark_{i}' for i in range(63)])
         landmarks_df.insert(0, 'label', labels)
-        landmarks_df.to_csv('E:\\data\\', index=False)
-        print(f"Landmarks salvos em {'E:\\data\\'}")
+        output_path = os.path.join('E:\\libria\\data', 'processed_hands_in_landmarks.csv')
+        landmarks_df.to_csv(output_path, index=False)
+        print(f"Landmarks salvos em {output_path}")
 
-class DataLoader:
-    def __init__(self, labels, images, landmark_features):
-        self.labels = labels
-        self.images = images
-        self.landmark_features = landmark_features
+class DataLoader(DataProcessor):
+    def __init__(self, signals_filename, landmarks_filename):
+        super().__init__(signals_filename, landmarks_filename)
+        # Usar o DataProcessor para carregar os dados
+        self.labels, self.images, self.landmark_features = self.load_or_process_data()
+
+        # Garantir que todos os arrays tenham o mesmo tamanho (sincronizar tamanhos)
+        min_size = min(len(self.labels), len(self.images), len(self.landmark_features))
+        self.labels = self.labels[:min_size]
+        self.images = self.images[:min_size]
+        self.landmark_features = self.landmark_features[:min_size]
 
     def prepare_data(self, max_samples=None):
         label_encoder = LabelEncoder()
-        labels_encoded = label_encoder.fit_transform(self.labels)
-        num_classes = len(label_encoder.classes_)
+
+        # Definir classes que queremos remover
+        classes_to_drop = ['Nothing', 'Space', 'Delete']
+
+        # Filtrar os dados removendo as classes indesejadas
+        mask = ~np.isin(self.labels, classes_to_drop)
+        
+        # Aplicar a máscara para manter a consistência nos tamanhos
+        filtered_labels = self.labels[mask]
+        filtered_images = self.images[mask]
+        filtered_landmarks = self.landmark_features[mask]
+
+        # Garantir que após o filtro os dados ainda estejam sincronizados
+        min_size = min(len(filtered_labels), len(filtered_images), len(filtered_landmarks))
+        filtered_labels = filtered_labels[:min_size]
+        filtered_images = filtered_images[:min_size]
+        filtered_landmarks = filtered_landmarks[:min_size]
+
+        # Codificar os rótulos restantes
+        labels_encoded = label_encoder.fit_transform(filtered_labels)
+        num_classes = len(label_encoder.classes_)  # Deve ser 26 agora
 
         # Codificar os rótulos como one-hot
         labels_encoded = keras.utils.to_categorical(labels_encoded, num_classes=num_classes)
 
         # Dividir os dados em conjuntos de treino e validação
         X_train_images, X_val_images, X_train_landmarks, X_val_landmarks, y_train, y_val = train_test_split(
-            self.images, self.landmark_features, labels_encoded, test_size=0.2, random_state=42
+            filtered_images, filtered_landmarks, labels_encoded, test_size=0.2, random_state=42
         )
+
+        # Aplicar SMOTE para aumentar as classes minoritárias
+        smote = SMOTE(random_state=42)
+
+        # Combinar as imagens e landmarks para aplicar o SMOTE
+        X_train_combined = np.hstack([X_train_images, X_train_landmarks])
+        y_train_combined = np.argmax(y_train, axis=1)  # Convertendo rótulos one-hot para inteiros
+
+        # Aplicar o SMOTE
+        X_train_resampled, y_train_resampled = smote.fit_resample(X_train_combined, y_train_combined)
+
+        # Separar novamente as imagens e landmarks
+        num_image_features = X_train_images.shape[1]
+        X_train_images_resampled = X_train_resampled[:, :num_image_features]
+        X_train_landmarks_resampled = X_train_resampled[:, num_image_features:]
+        
+        # Re-codificar os rótulos para formato one-hot
+        y_train_resampled = keras.utils.to_categorical(y_train_resampled, num_classes=num_classes)
 
         # Limitar o número de amostras se necessário
         if max_samples is not None:
-            X_train_images = X_train_images[:max_samples]
-            X_train_landmarks = X_train_landmarks[:max_samples]
-            y_train = y_train[:max_samples]
-
-        # Verificar os dados brutos
-        self.debug_data(X_train_images, name="X_train_images (raw)")
-        self.debug_data(X_train_landmarks, name="X_train_landmarks (raw)")
+            X_train_images_resampled = X_train_images_resampled[:max_samples]
+            X_train_landmarks_resampled = X_train_landmarks_resampled[:max_samples]
+            y_train_resampled = y_train_resampled[:max_samples]
 
         # Normalizar imagens
-        X_train_images = self.normalize_images(X_train_images)
+        X_train_images_resampled = self.normalize_images(X_train_images_resampled)
         X_val_images = self.normalize_images(X_val_images)
 
         # Normalizar landmarks
-        X_train_landmarks = self.normalize_landmarks(X_train_landmarks)
+        X_train_landmarks_resampled = self.normalize_landmarks(X_train_landmarks_resampled)
         X_val_landmarks = self.normalize_landmarks(X_val_landmarks)
 
-        # Verificar os dados normalizados
-        self.debug_data(X_train_images, name="X_train_images (normalized)")
-        self.debug_data(X_train_landmarks, name="X_train_landmarks (normalized)")
-
         # Convertendo os dados para tensores do TensorFlow
-        X_train_images = tf.convert_to_tensor(X_train_images, dtype=tf.float32)
+        X_train_images_resampled = tf.convert_to_tensor(X_train_images_resampled, dtype=tf.float32)
         X_val_images = tf.convert_to_tensor(X_val_images, dtype=tf.float32)
-        X_train_landmarks = tf.convert_to_tensor(X_train_landmarks, dtype=tf.float32)
+        X_train_landmarks_resampled = tf.convert_to_tensor(X_train_landmarks_resampled, dtype=tf.float32)
         X_val_landmarks = tf.convert_to_tensor(X_val_landmarks, dtype=tf.float32)
 
-        y_train = tf.convert_to_tensor(y_train, dtype=tf.float32)
+        y_train_resampled = tf.convert_to_tensor(y_train_resampled, dtype=tf.float32)
         y_val = tf.convert_to_tensor(y_val, dtype=tf.float32)
 
         # Criar os datasets do TensorFlow com entradas como tuplas
         train_ds = tf.data.Dataset.from_tensor_slices(
-            ((X_train_images, X_train_landmarks), y_train)  # Passando entradas como tuplas
+            ((X_train_images_resampled, X_train_landmarks_resampled), y_train_resampled)
         ).shuffle(1000).batch(64).prefetch(buffer_size=tf.data.AUTOTUNE)
 
         val_ds = tf.data.Dataset.from_tensor_slices(
-            ((X_val_images, X_val_landmarks), y_val)  # Passando entradas como tuplas
+            ((X_val_images, X_val_landmarks), y_val)
         ).batch(64).prefetch(buffer_size=tf.data.AUTOTUNE)
 
-        print(f"Shape final de X_train_images: {X_train_images.shape}")
-        print(f"Shape final de X_train_landmarks: {X_train_landmarks.shape}")
-        print(f"Shape final de y_train: {y_train.shape}")
+        print(f"Shape final de X_train_images: {X_train_images_resampled.shape}")
+        print(f"Shape final de X_train_landmarks: {X_train_landmarks_resampled.shape}")
+        print(f"Shape final de y_train: {y_train_resampled.shape}")
 
         return train_ds, val_ds, num_classes
 
     @staticmethod
     def normalize_images(images):
-        """Normaliza imagens e adiciona o canal."""
         images = images.astype('float32') / 255.0  # Normalização entre 0 e 1
         images = images.reshape(-1, 28, 28, 1)  # Adicionar canal
         return images
 
     @staticmethod
     def normalize_landmarks(landmarks):
-        """Normaliza landmarks usando z-score normalization, evitando divisão por zero."""
         landmarks = landmarks.astype('float32')
         mean = np.mean(landmarks, axis=1, keepdims=True)
         std = np.std(landmarks, axis=1, keepdims=True)
@@ -140,7 +191,6 @@ class DataLoader:
 
     @staticmethod
     def debug_data(data, name="Data"):
-        """Função para verificar e depurar dados."""
         mean = np.mean(data)
         std = np.std(data)
         is_nan = np.isnan(data).any()
@@ -181,9 +231,15 @@ class LandmarkEmbedding(layers.Layer):
         super().__init__()
         self.num_hid = num_hid
         self.maxlen = maxlen
-        self.conv1 = layers.Conv1D(num_hid, 11, strides=2, padding="same", activation="relu")
-        self.conv2 = layers.Conv1D(num_hid, 11, strides=2, padding="same", activation="relu")
-        self.conv3 = layers.Conv1D(num_hid, 11, strides=2, padding="same", activation="relu")
+        self.conv1 = layers.Conv1D(num_hid, 11, strides=2, padding="same", activation="relu")#, kernel_regularizer=keras.regularizers.l2(1e-4))
+        self.dropout1 = layers.Dropout(0.2)  # Dropout após primeira conv
+        
+        self.conv2 = layers.Conv1D(num_hid, 11, strides=2, padding="same", activation="relu")#, kernel_regularizer=keras.regularizers.l2(1e-4))
+        self.dropout2 = layers.Dropout(0.2)  # Dropout após segunda conv
+
+        self.conv3 = layers.Conv1D(num_hid, 11, strides=2, padding="same", activation="relu")#, kernel_regularizer=keras.regularizers.l2(1e-4))
+        self.dropout3 = layers.Dropout(0.2)  # Dropout após terceira conv
+
         self.pos_emb = layers.Embedding(input_dim=maxlen, output_dim=num_hid)
 
     def build(self, input_shape):
@@ -195,13 +251,18 @@ class LandmarkEmbedding(layers.Layer):
         seq_len = seq_len // (2 ** 3)  # Três convoluções com strides=2
         return (input_shape[0], seq_len, self.num_hid)
 
-    def call(self, x):
-        # Garantir que x tenha três dimensões
+    def call(self, x, training=False):
         if len(x.shape) == 2:
             x = tf.expand_dims(x, axis=-1)  # (batch_size, seq_len, 1)
+
         x = self.conv1(x)
+        x = self.dropout1(x, training=training)  # Aplicar dropout
+
         x = self.conv2(x)
+        x = self.dropout2(x, training=training)  # Aplicar dropout
+
         x = self.conv3(x)
+        x = self.dropout3(x, training=training)  # Aplicar dropout
 
         # Aplicar positional embedding
         seq_len = tf.shape(x)[1]
@@ -212,7 +273,7 @@ class LandmarkEmbedding(layers.Layer):
         return x
 
 class TransformerEncoder(layers.Layer):
-    def __init__(self, embed_dim, num_heads, feed_forward_dim, rate=0.1):
+    def __init__(self, embed_dim, num_heads, feed_forward_dim, rate=0.3):
         super().__init__()
         self.att = layers.MultiHeadAttention(num_heads=num_heads, key_dim=embed_dim)
         self.ffn = keras.Sequential([
@@ -314,33 +375,53 @@ class ImageEmbedding(layers.Layer):
     def __init__(self, num_hid=64):
         super().__init__()
         self.num_hid = num_hid
-        self.conv1 = layers.Conv2D(num_hid, 3, activation='relu', padding='same')
+        self.conv1 = layers.Conv2D(num_hid, 3, activation='relu', padding='same', kernel_regularizer=keras.regularizers.l2(1e-4))
         self.pool1 = layers.MaxPooling2D()
-        self.conv2 = layers.Conv2D(num_hid, 3, activation='relu', padding='same')
-        self.pool2 = layers.MaxPooling2D()
-        self.flatten = layers.Flatten()
-        self.dense = layers.Dense(num_hid, activation='relu')
+        self.dropout1 = layers.Dropout(0.3)  # Dropout após primeira pool
 
-    def build(self, input_shape):
-        super().build(input_shape)
+        self.conv2 = layers.Conv2D(num_hid, 3, activation='relu', padding='same', kernel_regularizer=keras.regularizers.l2(1e-4))
+        self.pool2 = layers.MaxPooling2D()
+        self.dropout2 = layers.Dropout(0.3)  # Dropout após segunda pool
+
+        self.flatten = layers.Flatten()
+        self.dense = layers.Dense(num_hid, activation='relu', kernel_regularizer=keras.regularizers.l2(1e-4))
+        self.dropout3 = layers.Dropout(0.3)  # Dropout após camada densa
 
     def compute_output_shape(self, input_shape):
-        x = tf.zeros(input_shape)
-        x = self.call(x)
-        return x.shape
+        # Calcula a saída considerando as camadas Conv2D, MaxPooling e Flatten
+        batch_size = input_shape[0]
+        height, width, channels = input_shape[1], input_shape[2], input_shape[3]
 
-    def call(self, x):
+        # Primeiro bloco Conv2D -> MaxPooling
+        height = height // 2  # MaxPooling reduz pela metade a altura
+        width = width // 2
+
+        # Segundo bloco Conv2D -> MaxPooling
+        height = height // 2
+        width = width // 2
+
+        # A camada Flatten transforma a imagem em um vetor de dimensão `height * width * num_hid`
+        output_shape = (batch_size, 1, self.num_hid)
+
+        return tf.TensorShape(output_shape)
+
+    def call(self, x, training=False):
         x = self.conv1(x)
         x = self.pool1(x)
+        x = self.dropout1(x, training=training)  # Aplicar dropout
+
         x = self.conv2(x)
         x = self.pool2(x)
+        x = self.dropout2(x, training=training)  # Aplicar dropout
+
         x = self.flatten(x)
         x = self.dense(x)
-        # Expandir dimensão para que possa ser concatenado com o embedding de landmarks
-        x = tf.expand_dims(x, axis=1)
+        x = self.dropout3(x, training=training)  # Aplicar dropout
+
+        x = tf.expand_dims(x, axis=1)  # Expandir dimensão para que possa ser concatenado com o embedding de landmarks
         return x  # Shape final: (batch_size, 1, num_hid)
 
-class F1Score(tf.keras.metrics.Metric):
+class F1Score(keras.metrics.Metric):
     def __init__(self, name="f1_score", **kwargs):
         super(F1Score, self).__init__(name=name, **kwargs)
         self.precision = keras.metrics.Precision()
@@ -353,7 +434,7 @@ class F1Score(tf.keras.metrics.Metric):
     def result(self):
         precision = self.precision.result()
         recall = self.recall.result()
-        return 2 * ((precision * recall) / (precision + recall + tf.keras.backend.epsilon()))
+        return 2 * ((precision * recall) / (precision + recall + keras.backend.epsilon()))
     
     def reset_states(self):
         self.precision.reset_state()
@@ -363,12 +444,12 @@ class Transformer(keras.Model):
     def __init__(
         self,
         num_hid=64,
-        num_head=2,
-        num_feed_forward=128,
-        num_layers_enc=4,
+        num_head=1,
+        num_feed_forward=64,
+        num_layers_enc=1,
         num_layers_dec=1,
-        num_classes=29,
-        learning_rate=1e-3,
+        num_classes=26, # len(LabelEncoder.classes_)
+        learning_rate=5e-4,
     ):
         super().__init__()
         self.num_classes = num_classes
@@ -395,7 +476,7 @@ class Transformer(keras.Model):
         self.optimizer = keras.optimizers.Adam(learning_rate=learning_rate, clipnorm=1.0)
 
         # Metrics
-        self.compiled_loss = keras.losses.CategoricalCrossentropy(from_logits=True, label_smoothing=0.2)
+        self.compiled_loss = keras.losses.CategoricalCrossentropy(from_logits=True, label_smoothing=0.1)
         self.categorical_accuracy = keras.metrics.CategoricalAccuracy(name="accuracy")
         self.precision_metric = keras.metrics.Precision(name="precision")
         self.recall_metric = keras.metrics.Recall(name="recall")
@@ -497,7 +578,6 @@ class Transformer(keras.Model):
         self.f1_score.update_state(labels, preds)
 
         return {
-            "loss": loss,
             "accuracy": self.categorical_accuracy.result(),
             "precision": self.precision_metric.result(),
             "recall": self.recall_metric.result(),
@@ -513,16 +593,65 @@ class Transformer(keras.Model):
         loss = self.compiled_loss(labels, preds)
 
         # Atualizar métricas
-        self.compiled_loss.update_state(loss)
         self.categorical_accuracy.update_state(labels, preds)
         self.precision_metric.update_state(labels, preds)
         self.recall_metric.update_state(labels, preds)
         self.f1_score.update_state(labels, preds)
 
         return {
-            "loss": loss,
             "accuracy": self.categorical_accuracy.result(),
             "precision": self.precision_metric.result(),
             "recall": self.recall_metric.result(),
             "f1_score": self.f1_score.result()
         }
+    
+if __name__ == '__main__':
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    import numpy as np
+    import tensorflow as tf
+    from collections import Counter
+
+    # Caminhos dos arquivos CSV
+    signals_csv_path = "asl_signals.csv"
+    landmarks_csv_path = "random_hands.csv"
+
+    # Preparação dos dados
+    data_loader = DataLoader(signals_csv_path, landmarks_csv_path)
+    train_ds, val_ds, num_classes = data_loader.prepare_data()
+
+    # Função auxiliar para contar classes nos datasets do TensorFlow
+    def count_classes_from_dataset(dataset):
+        all_labels = []
+        for _, labels in dataset:
+            all_labels.extend(tf.argmax(labels, axis=1).numpy())
+        return Counter(all_labels)
+
+    # Contar as classes no conjunto de treino e validação
+    train_class_counts = count_classes_from_dataset(train_ds)
+    val_class_counts = count_classes_from_dataset(val_ds)
+
+    # Plotar a distribuição das classes no conjunto de treino
+    plt.figure(figsize=(14, 7))
+
+    plt.subplot(1, 2, 1)
+    plt.bar(train_class_counts.keys(), train_class_counts.values(), color='skyblue')
+    plt.title('Distribuição das Classes - Conjunto de Treino')
+    plt.xlabel('Classes')
+    plt.ylabel('Número de Amostras')
+    plt.xticks(ticks=np.arange(num_classes), labels=np.arange(num_classes), rotation=45)
+    plt.grid(axis='y', linestyle='--', linewidth=0.7)
+
+    # Plotar a distribuição das classes no conjunto de validação
+    plt.subplot(1, 2, 2)
+    plt.bar(val_class_counts.keys(), val_class_counts.values(), color='lightgreen')
+    plt.title('Distribuição das Classes - Conjunto de Validação')
+    plt.xlabel('Classes')
+    plt.ylabel('Número de Amostras')
+    plt.xticks(ticks=np.arange(num_classes), labels=np.arange(num_classes), rotation=45)
+    plt.grid(axis='y', linestyle='--', linewidth=0.7)
+
+    plt.tight_layout()
+    plt.show()
+
+
