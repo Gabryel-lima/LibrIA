@@ -1,44 +1,35 @@
 import os
 import numpy as np
 import pandas as pd
-import tensorflow as tf
 import mediapipe as mp
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder
 import keras
 from keras import layers, Model
 from tqdm import tqdm
 from imblearn.over_sampling import SMOTE
 from sklearn.preprocessing import LabelEncoder
 import tensorflow as tf
-import numpy as np
-
 
 class DataProcessor:
     def __init__(self, signals_filename, random_hands_filename):
         self.signals_csv_path = os.path.join('E:\\libria\\data', signals_filename)
         self.random_hands_csv_path = os.path.join('E:\\libria\\data', random_hands_filename)
-        self.preprocessed = "E:\libria\data\processed_hands_in_landmarks.csv"
+        self.preprocessed = "E:\\libria\\data\\processed_hands_in_landmarks.csv"
 
     def load_or_process_data(self):
         # Carregar os sinais
         signals_df = pd.read_csv(self.signals_csv_path)
-        #hands_df = pd.read_csv(self.random_hands_csv_path)
         labels = signals_df['label'].values
         signals = signals_df.drop(columns=['label']).values
 
         # Verificar se o CSV de random_hands já existe
         if os.path.exists(self.preprocessed):
-            # Carregar os random_hands do CSV
             print("Carregando random_hands do arquivo CSV...")
             random_hands_df = pd.read_csv(self.preprocessed)
             hand_features = random_hands_df.drop(columns=['label']).values
         else:
-            # Se não existe, processar as imagens para gerar os random_hands
             print("Arquivo de random_hands não encontrado. Processando imagens com MediaPipe...")
             hand_features = self.process_images(signals)
-
-            # Salvar os random_hands processados em um novo arquivo CSV
             self.save_landmarks(labels, hand_features)
 
         return labels, signals, hand_features
@@ -46,7 +37,8 @@ class DataProcessor:
     def process_images(self, signals):
         """Função que converte imagens de sinais para desenhos de landmarks"""
         print("Processando imagens com MediaPipe para extrair landmarks...")
-        pixels_reshaped = signals.reshape(-1, 28, 28)
+        # Aumentar a resolução da imagem
+        pixels_reshaped = signals.reshape(-1, 32, 32)  # Aumentado para 32x32
 
         mp_hands = mp.solutions.hands
         landmark_features = []
@@ -75,6 +67,7 @@ class DataProcessor:
         landmarks_df.to_csv(output_path, index=False)
         print(f"Landmarks salvos em {output_path}")
 
+
 class DataLoader(DataProcessor):
     def __init__(self, signals_filename, landmarks_filename):
         super().__init__(signals_filename, landmarks_filename)
@@ -95,7 +88,7 @@ class DataLoader(DataProcessor):
 
         # Filtrar os dados removendo as classes indesejadas
         mask = ~np.isin(self.labels, classes_to_drop)
-        
+
         # Aplicar a máscara para manter a consistência nos tamanhos
         filtered_labels = self.labels[mask]
         filtered_images = self.images[mask]
@@ -120,7 +113,7 @@ class DataLoader(DataProcessor):
         )
 
         # Aplicar SMOTE para aumentar as classes minoritárias
-        smote = SMOTE(random_state=42)
+        smote = SMOTE(random_state=42, sampling_strategy='not majority')  # Ajuste no SMOTE
 
         # Combinar as imagens e landmarks para aplicar o SMOTE
         X_train_combined = np.hstack([X_train_images, X_train_landmarks])
@@ -130,10 +123,18 @@ class DataLoader(DataProcessor):
         X_train_resampled, y_train_resampled = smote.fit_resample(X_train_combined, y_train_combined)
 
         # Separar novamente as imagens e landmarks
-        num_image_features = X_train_images.shape[1]
-        X_train_images_resampled = X_train_resampled[:, :num_image_features]
+        num_image_features = 32 * 32  # Ajuste para 32x32
+        X_train_images_resampled = X_train_resampled[:, :num_image_features].reshape(-1, 32, 32, 1)
         X_train_landmarks_resampled = X_train_resampled[:, num_image_features:]
-        
+
+        # Adicionar uma dimensão extra aos landmarks para garantir a forma correta
+        X_train_landmarks_resampled = np.expand_dims(X_train_landmarks_resampled, axis=1)
+        X_val_landmarks = np.expand_dims(X_val_landmarks, axis=1)
+
+        self.debug_data(X_train_images_resampled, name="X_train_images_resampled")
+        self.debug_data(X_train_landmarks_resampled, name="X_train_landmarks_resampled")
+        self.debug_data(y_train_resampled, name="y_train_resampled")
+
         # Re-codificar os rótulos para formato one-hot
         y_train_resampled = keras.utils.to_categorical(y_train_resampled, num_classes=num_classes)
 
@@ -143,7 +144,7 @@ class DataLoader(DataProcessor):
             X_train_landmarks_resampled = X_train_landmarks_resampled[:max_samples]
             y_train_resampled = y_train_resampled[:max_samples]
 
-        # Normalizar imagens
+        # Normalizar e garantir que as imagens tenham 4 dimensões
         X_train_images_resampled = self.normalize_images(X_train_images_resampled)
         X_val_images = self.normalize_images(X_val_images)
 
@@ -177,17 +178,21 @@ class DataLoader(DataProcessor):
 
     @staticmethod
     def normalize_images(images):
-        images = images.astype('float32') / 255.0  # Normalização entre 0 e 1
-        images = images.reshape(-1, 28, 28, 1)  # Adicionar canal
+        images = (images - np.mean(images)) / (np.std(images) + 1e-8) # Normalização para ter média 0 e desvio padrão 1
+        images = images.reshape(-1, 32, 32, 1)  # Atualizado para 32x32
         return images
 
     @staticmethod
     def normalize_landmarks(landmarks):
         landmarks = landmarks.astype('float32')
-        mean = np.mean(landmarks, axis=1, keepdims=True)
-        std = np.std(landmarks, axis=1, keepdims=True)
-        std = np.where(std == 0, 1e-8, std)  # Substituir std = 0 por um pequeno valor epsilon
-        return (landmarks - mean) / std
+
+        # Centralizar em relação ao ponto médio (por exemplo, o punho)
+        landmarks -= np.mean(landmarks, axis=1, keepdims=True)
+
+        # Padronizar para o intervalo [-1, 1]
+        max_value = np.max(np.abs(landmarks), axis=1, keepdims=True)
+        landmarks /= (max_value + 1e-8)
+        return landmarks
 
     @staticmethod
     def debug_data(data, name="Data"):
@@ -215,6 +220,12 @@ class TokenEmbedding(layers.Layer):
         self.pos_emb = layers.Embedding(input_dim=maxlen, output_dim=num_hid)
 
     def build(self, input_shape):
+        """
+        Build the Transformer model by constructing the embedding, encoder, and decoder layers.
+
+        Args:
+            input_shape (tuple): A tuple containing the shapes of the input tensors for images and landmarks.
+        """
         self.emb.build(input_shape)
         self.pos_emb.build((input_shape[1], self.emb.output_dim))
         super().build(input_shape)
@@ -227,50 +238,49 @@ class TokenEmbedding(layers.Layer):
         return x + positions
 
 class LandmarkEmbedding(layers.Layer):
-    def __init__(self, num_hid=64, maxlen=100):
+    def __init__(self, num_hid=128, maxlen=100):
         super().__init__()
         self.num_hid = num_hid
         self.maxlen = maxlen
-        self.conv1 = layers.Conv1D(num_hid, 11, strides=2, padding="same", activation="relu")#, kernel_regularizer=keras.regularizers.l2(1e-4))
-        self.dropout1 = layers.Dropout(0.2)  # Dropout após primeira conv
+        self.conv1 = layers.Conv1D(num_hid, 11, strides=2, padding="same", activation="relu")
+        self.dropout1 = layers.Dropout(0.3)
         
-        self.conv2 = layers.Conv1D(num_hid, 11, strides=2, padding="same", activation="relu")#, kernel_regularizer=keras.regularizers.l2(1e-4))
-        self.dropout2 = layers.Dropout(0.2)  # Dropout após segunda conv
+        self.conv2 = layers.Conv1D(num_hid, 11, strides=2, padding="same", activation="relu")
+        self.dropout2 = layers.Dropout(0.3)
 
-        self.conv3 = layers.Conv1D(num_hid, 11, strides=2, padding="same", activation="relu")#, kernel_regularizer=keras.regularizers.l2(1e-4))
-        self.dropout3 = layers.Dropout(0.2)  # Dropout após terceira conv
+        self.conv3 = layers.Conv1D(num_hid, 11, strides=2, padding="same", activation="relu")
+        self.dropout3 = layers.Dropout(0.3)
 
         self.pos_emb = layers.Embedding(input_dim=maxlen, output_dim=num_hid)
 
-    def build(self, input_shape):
-        # Construir as camadas internas
-        super().build(input_shape)
-
-    def compute_output_shape(self, input_shape):
-        seq_len = input_shape[1]
-        seq_len = seq_len // (2 ** 3)  # Três convoluções com strides=2
-        return (input_shape[0], seq_len, self.num_hid)
-
     def call(self, x, training=False):
         if len(x.shape) == 2:
-            x = tf.expand_dims(x, axis=-1)  # (batch_size, seq_len, 1)
+            x = tf.expand_dims(x, axis=-1)
 
         x = self.conv1(x)
-        x = self.dropout1(x, training=training)  # Aplicar dropout
+        x = self.dropout1(x, training=training)
 
         x = self.conv2(x)
-        x = self.dropout2(x, training=training)  # Aplicar dropout
+        x = self.dropout2(x, training=training)
 
         x = self.conv3(x)
-        x = self.dropout3(x, training=training)  # Aplicar dropout
+        x = self.dropout3(x, training=training)
 
-        # Aplicar positional embedding
         seq_len = tf.shape(x)[1]
         positions = tf.range(start=0, limit=seq_len, delta=1)
         positions = self.pos_emb(positions)
         x += positions
 
         return x
+    
+    def compute_output_shape(self, input_shape):
+        """
+        Calcula a forma de saída após passar pelas camadas Conv1D.
+        input_shape: (batch_size, seq_len, features)
+        """
+        batch_size, seq_len = input_shape
+        reduced_seq_len = seq_len // (2 ** 3)  # Reduzido por 3 camadas com strides=2
+        return tf.TensorShape((batch_size, reduced_seq_len, self.num_hid))
 
 class TransformerEncoder(layers.Layer):
     def __init__(self, embed_dim, num_heads, feed_forward_dim, rate=0.3):
@@ -292,17 +302,16 @@ class TransformerEncoder(layers.Layer):
         return input_shape
 
     def call(self, inputs, training=False, mask=None):
-        # Multi-head attention
+        if len(inputs.shape) != 3:  # Verificar entrada esperada
+            raise ValueError(f"Esperava entrada de 3 dimensões, mas recebeu {inputs.shape}")
+
         attn_output = self.att(query=inputs, value=inputs, key=inputs, attention_mask=mask)
         attn_output = self.dropout1(attn_output, training=training)
         out1 = self.layernorm1(inputs + attn_output)
 
-        # Feed-forward
         ffn_output = self.ffn(out1)
         ffn_output = self.dropout2(ffn_output, training=training)
-        final_output = self.layernorm2(out1 + ffn_output)
-
-        return final_output
+        return self.layernorm2(out1 + ffn_output)
 
 class TransformerDecoder(layers.Layer):
     def __init__(self, embed_dim, num_heads, feed_forward_dim, dropout_rate=0.1):
@@ -372,54 +381,50 @@ class TransformerDecoder(layers.Layer):
         return self.layernorm3(enc_out_norm + self.ffn_dropout(ffn_out, training=training))
 
 class ImageEmbedding(layers.Layer):
-    def __init__(self, num_hid=64):
+    def __init__(self, num_hid=128):
         super().__init__()
         self.num_hid = num_hid
-        self.conv1 = layers.Conv2D(num_hid, 3, activation='relu', padding='same', kernel_regularizer=keras.regularizers.l2(1e-4))
-        self.pool1 = layers.MaxPooling2D()
-        self.dropout1 = layers.Dropout(0.3)  # Dropout após primeira pool
+        self.conv1 = layers.Conv2D(num_hid, 3, strides=1, activation='relu', padding='same', kernel_regularizer=keras.regularizers.l2(1e-4))
+        self.pool1 = layers.AveragePooling2D(pool_size=(2, 2))
+        self.dropout1 = layers.Dropout(0.3)
 
-        self.conv2 = layers.Conv2D(num_hid, 3, activation='relu', padding='same', kernel_regularizer=keras.regularizers.l2(1e-4))
-        self.pool2 = layers.MaxPooling2D()
-        self.dropout2 = layers.Dropout(0.3)  # Dropout após segunda pool
+        self.conv2 = layers.Conv2D(num_hid, 3, strides=1, activation='relu', padding='same', kernel_regularizer=keras.regularizers.l2(1e-4))
+        self.pool2 = layers.AveragePooling2D(pool_size=(2, 2))
+        self.dropout2 = layers.Dropout(0.3)
 
-        self.flatten = layers.Flatten()
+        self.conv3 = layers.Conv2D(num_hid, 3, strides=1, activation='relu', padding='same', kernel_regularizer=keras.regularizers.l2(1e-4))
+        self.pool3 = layers.AveragePooling2D(pool_size=(2, 2))
+        self.dropout3 = layers.Dropout(0.3)
+
+        self.global_avg_pool = layers.GlobalAveragePooling2D()
         self.dense = layers.Dense(num_hid, activation='relu', kernel_regularizer=keras.regularizers.l2(1e-4))
-        self.dropout3 = layers.Dropout(0.3)  # Dropout após camada densa
+        self.bn = layers.BatchNormalization()
+        self.dropout4 = layers.Dropout(0.3)
 
     def compute_output_shape(self, input_shape):
-        # Calcula a saída considerando as camadas Conv2D, MaxPooling e Flatten
         batch_size = input_shape[0]
-        height, width, channels = input_shape[1], input_shape[2], input_shape[3]
-
-        # Primeiro bloco Conv2D -> MaxPooling
-        height = height // 2  # MaxPooling reduz pela metade a altura
-        width = width // 2
-
-        # Segundo bloco Conv2D -> MaxPooling
-        height = height // 2
-        width = width // 2
-
-        # A camada Flatten transforma a imagem em um vetor de dimensão `height * width * num_hid`
-        output_shape = (batch_size, 1, self.num_hid)
-
-        return tf.TensorShape(output_shape)
+        return tf.TensorShape((batch_size, 1, self.num_hid))
 
     def call(self, x, training=False):
         x = self.conv1(x)
         x = self.pool1(x)
-        x = self.dropout1(x, training=training)  # Aplicar dropout
+        x = self.dropout1(x, training=training)
 
         x = self.conv2(x)
         x = self.pool2(x)
-        x = self.dropout2(x, training=training)  # Aplicar dropout
+        x = self.dropout2(x, training=training)
 
-        x = self.flatten(x)
+        x = self.conv3(x)
+        x = self.pool3(x)
+        x = self.dropout3(x, training=training)
+
+        x = self.global_avg_pool(x)
+        x = self.bn(x, training=training)  # Normalização antes da ativação
         x = self.dense(x)
-        x = self.dropout3(x, training=training)  # Aplicar dropout
+        x = self.dropout4(x, training=training)
 
-        x = tf.expand_dims(x, axis=1)  # Expandir dimensão para que possa ser concatenado com o embedding de landmarks
-        return x  # Shape final: (batch_size, 1, num_hid)
+        x = tf.expand_dims(x, axis=1) # Adicionar dimensão extra para compatibilidade com landmarks
+        return x
 
 class F1Score(keras.metrics.Metric):
     def __init__(self, name="f1_score", **kwargs):
@@ -435,9 +440,9 @@ class F1Score(keras.metrics.Metric):
         precision = self.precision.result()
         recall = self.recall.result()
         return 2 * ((precision * recall) / (precision + recall + keras.backend.epsilon()))
-    
     def reset_states(self):
-        self.precision.reset_state()
+        self.precision.reset_states()
+        self.recall.reset_states()
         self.recall.reset_state()
 
 class Transformer(keras.Model):
@@ -476,16 +481,26 @@ class Transformer(keras.Model):
         self.optimizer = keras.optimizers.Adam(learning_rate=learning_rate, clipnorm=1.0)
 
         # Metrics
-        self.compiled_loss = keras.losses.CategoricalCrossentropy(from_logits=True, label_smoothing=0.1)
+        self.compiled_loss = keras.losses.CategoricalCrossentropy(from_logits=True, label_smoothing=0.05)
         self.categorical_accuracy = keras.metrics.CategoricalAccuracy(name="accuracy")
         self.precision_metric = keras.metrics.Precision(name="precision")
         self.recall_metric = keras.metrics.Recall(name="recall")
         self.f1_score = F1Score(name="f1_score")
 
+    def result(self):
+        precision = self.precision_metric.result()
+        recall = self.recall_metric.result()
+        if precision + recall == 0:  # Prevenir divisão por zero
+            return 0.0
+        return 2 * ((precision * recall) / (precision + recall))
+
     def build(self, input_shape):
         images_shape, landmarks_shape = input_shape
 
-        # Construir embeddings sem criar tensores diretamente
+        # Garantir que images_shape esteja no formato correto
+        if len(images_shape) != 4:
+            raise ValueError(f"images_shape deve ter 4 dimensões, mas tem {len(images_shape)} dimensões: {images_shape}")
+
         self.image_embedding.build(images_shape)
         image_embed_shape = self.image_embedding.compute_output_shape(images_shape)
 
@@ -512,11 +527,10 @@ class Transformer(keras.Model):
         # Construir camada final
         self.final_layer.build(dec_input_shape)
 
-        # Chamar o build da superclasse
-        super().build(input_shape)
+        images_shape = tf.ensure_shape(images_shape, [None, 32, 32, 1])
 
     def call(self, inputs, training=False):
-        images, landmarks = inputs
+        images, landmarks = inputs  # Separe inputs em imagens e landmarks
 
         if len(images.shape) == 3:
             images = tf.expand_dims(images, axis=-1)
@@ -525,7 +539,7 @@ class Transformer(keras.Model):
         images_emb = self.image_embedding(images)  # (batch_size, 1, num_hid)
         landmarks_emb = self.landmark_embedding(landmarks)  # (batch_size, seq_len, num_hid)
 
-        # Combine embeddings
+        # Ajuste para evitar sobreposição e garantir dimensões consistentes
         enc_input = tf.concat([images_emb, landmarks_emb], axis=1)  # (batch_size, combined_seq_len, num_hid)
 
         # Encoder
@@ -534,14 +548,14 @@ class Transformer(keras.Model):
             enc_output = encoder_layer(enc_output, training=training)
 
         # Decoder
-        dec_input = images_emb  # (batch_size, 1, num_hid)
+        dec_input = images_emb
         dec_output = dec_input
         for decoder_layer in self.decoder_layers:
             dec_output = decoder_layer(enc_output, dec_output, training=training)
 
         # Final output
-        final_output = self.final_layer(dec_output)  # (batch_size, 1, num_classes)
-        final_output = tf.squeeze(final_output, axis=1)  # (batch_size, num_classes)
+        final_output = self.final_layer(dec_output)
+        final_output = tf.squeeze(final_output, axis=1)
 
         return final_output
 
@@ -562,10 +576,8 @@ class Transformer(keras.Model):
     @tf.function
     def train_step(self, batch):
         inputs, labels = batch
-        images, landmarks = inputs
-
         with tf.GradientTape() as tape:
-            preds = self((images, landmarks), training=True)
+            preds = self(inputs, training=True)
             loss = self.compiled_loss(labels, preds)
         
         gradients = tape.gradient(loss, self.trainable_variables)
@@ -587,9 +599,7 @@ class Transformer(keras.Model):
     @tf.function
     def test_step(self, batch):
         inputs, labels = batch
-        images, landmarks = inputs
-
-        preds = self((images, landmarks), training=False)
+        preds = self(inputs, training=False)
         loss = self.compiled_loss(labels, preds)
 
         # Atualizar métricas

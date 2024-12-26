@@ -4,7 +4,7 @@ from src.utils.plots import plot_training_history
 from src.utils.error_log import error_log
 import keras
 from keras import Model
-from src.core.GestureNet import Transformer, DataProcessor, DataLoader
+from src.GestureNet import Transformer, DataProcessor, DataLoader
 import cv2 as cv
 from sklearn.utils import shuffle
 import os
@@ -31,7 +31,7 @@ def augment(image):
     new_height = tf.cast(tf.cast(tf.shape(image)[0], tf.float32) * scale, tf.int32)
     new_width = tf.cast(tf.cast(tf.shape(image)[1], tf.float32) * scale, tf.int32)
     image = tf.image.resize(image, [new_height, new_width])
-    image = tf.image.resize_with_crop_or_pad(image, 28, 28)
+    image = tf.image.resize_with_crop_or_pad(image, 32, 32)
 
     # Adicionar ruído gaussiano (menos intenso)
     noise = tf.random.normal(shape=tf.shape(image), mean=0.0, stddev=0.02, dtype=tf.float32)
@@ -40,8 +40,8 @@ def augment(image):
     # Random flip (horizontal)
     image = tf.image.random_flip_left_right(image)
 
-    # Garantir que a imagem tenha tamanho consistente ao final (28, 28)
-    image = tf.image.resize(image, [28, 28])
+    # Garantir que a imagem tenha tamanho consistente ao final (32, 32)
+    image = tf.image.resize(image, [32, 32])
 
     return image
 
@@ -62,35 +62,37 @@ def train_model():
         data_loader = DataLoader('asl_signals.csv', 'random_hands.csv')
         train_ds, val_ds, num_classes = data_loader.prepare_data()
 
-        # Aplicar aumento de dados ao conjunto de treinamento, se necessário
-        #train_ds = train_ds.map(apply_augment, num_parallel_calls=tf.data.AUTOTUNE)
-
-        # Obter um batch de dados para verificar as formas
+        # Verificar um batch de dados
         for batch in train_ds.take(1):
             inputs, labels = batch
             images, landmarks = inputs
-            print(f"[DEBUG] Source shape: {images.shape}")
-            print(f"[DEBUG] Target landmarks shape: {landmarks.shape}")
-            print(f"[DEBUG] Labels shape: {labels.shape}")
+            print(f"[DEBUG] Imagens: {images.shape}, Landmarks: {landmarks.shape}, Labels: {labels.shape}")
             break
 
-        # Model Gesture_Net_Transformer (número de classes = 26)
+        # Certifique-se de que as formas das entradas estão corretas
+        if len(images.shape) != 4 or images.shape[1:] != (32, 32, 1):
+            raise ValueError(f"As imagens devem ter forma (None, 32, 32, 1), mas têm {images.shape}")
+
+        if len(landmarks.shape) != 3 or landmarks.shape[2] != 63:
+            raise ValueError(f"Os landmarks devem ter forma (None, seq_len, 63), mas têm {landmarks.shape}")
+
+        # Model Gesture_Net_Transformer
         gesture_net = Transformer(num_classes=num_classes)
 
-        # Definir entradas
-        images_input = keras.Input(shape=images.shape[1:], batch_size=32)
-        landmarks_input = keras.Input(shape=landmarks.shape[1:], batch_size=32)
+        # Definir entradas com as formas corretas
+        images_input = keras.Input(shape=(32, 32, 1), batch_size=None)
+        landmarks_input = keras.Input(shape=(landmarks.shape[1:],), batch_size=None)
 
-        # Definir saída do modelo
+        # Obter a saída do modelo
         outputs = gesture_net((images_input, landmarks_input))
 
-        # Modelo funcional keras
+        # Criar modelo funcional
         functional_model = Model(inputs=[images_input, landmarks_input], outputs=outputs)
 
-        # Summary
+        # Summary do modelo
         functional_model.summary()
 
-        # Compilação
+        # Compilação do modelo
         functional_model.compile(
             optimizer=gesture_net.optimizer,
             loss=gesture_net.compiled_loss,
@@ -230,7 +232,7 @@ def webcam_predictor():
 
             # Preprocess the image input for the neural network
             processed_image = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
-            processed_image = cv.resize(processed_image, (28, 28))
+            processed_image = cv.resize(processed_image, (32, 32))
             processed_image = processed_image / 255.0  # Normalize pixels to [0, 1]
             processed_image = np.expand_dims(processed_image, axis=-1)  # Add channel
             processed_image = np.expand_dims(processed_image, axis=0)  # Add batch dimension
@@ -319,7 +321,7 @@ def debug_model():
 
             # Preprocessar a imagem para o modelo de classificação
             processed_image = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
-            processed_image = cv.resize(processed_image, (28, 28))
+            processed_image = cv.resize(processed_image, (32, 32))
             processed_image = processed_image / 255.0  # Normalizar pixels para [0, 1]
             processed_image = np.expand_dims(processed_image, axis=-1)  # Adicionar canal
             processed_image = np.expand_dims(processed_image, axis=0)  # Adicionar dimensão do batch

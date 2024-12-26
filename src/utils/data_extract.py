@@ -5,6 +5,7 @@ import os
 from sklearn.model_selection import train_test_split
 from imblearn.over_sampling import SMOTE  # Importando SMOTE para balanceamento
 import traceback
+from tqdm import tqdm
 
 def error_log():
     """Função para registrar o erro em um arquivo log."""
@@ -13,7 +14,7 @@ def error_log():
         f.write(traceback.format_exc())
     print('An exception occurred. Check error_log.txt for details.')
 
-def process_image(image_path, size=(28, 28)):
+def process_image(image_path, size=(32, 32)):
     """
     Process an image by resizing and converting it to grayscale.
     Args:
@@ -28,7 +29,7 @@ def process_image(image_path, size=(28, 28)):
     image_resized = cv2.resize(image, size)
     return image_resized.flatten()
 
-def images_to_csv(image_folder, output_csv, size=(28, 28)):
+def images_to_csv(image_folder, output_csv, size=(32, 32)):
     """
     Converts all images from a folder (including subfolders) into a CSV file with flattened pixel values.
     Args:
@@ -39,19 +40,23 @@ def images_to_csv(image_folder, output_csv, size=(28, 28)):
     data = []
 
     # Iterate over all files in the directory, including subdirectories
-    for root, _, files in os.walk(image_folder):
-        label = os.path.basename(root)  # Use the folder name as the label
-
-        for file in files:
+    files = []
+    for root, _, filenames in os.walk(image_folder):
+        label = os.path.basename(root)
+        for file in filenames:
             if file.endswith(('.jpg', '.png')):  # Supports jpg and png images
                 image_path = os.path.join(root, file)
-                pixels = process_image(image_path, size)
+                files.append((label, image_path))
+    
+    # Use tqdm to show the progress
+    for label, image_path in tqdm(files, desc="Processing Images"):
+        pixels = process_image(image_path, size)
 
-                if pixels is None:
-                    continue  # Skip images that could not be processed
+        if pixels is None:
+            continue  # Skip images that could not be processed
 
-                # Append label and pixel data
-                data.append([label] + pixels.tolist())
+        # Append label and pixel data
+        data.append([label] + pixels.tolist())
 
     # Create a DataFrame and save to CSV
     if data:
