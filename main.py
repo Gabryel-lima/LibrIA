@@ -59,69 +59,77 @@ def apply_augment(features, label):
 def train_model():
     try:
         # Preparação dos dados
-        data_loader = DataLoader('asl_signals.csv', 'random_hands.csv')
+        data_processor = DataProcessor('asl_signals.csv', 'random_hands.csv')
+        labels, signals, landmark_features = data_processor.load_or_process_data()
+        data_loader = DataLoader(labels, signals, landmark_features)
         train_ds, val_ds, num_classes = data_loader.prepare_data()
 
-        # Verificar um batch de dados
+        # Obter um batch de dados para verificar as formas
         for batch in train_ds.take(1):
             inputs, labels = batch
             images, landmarks = inputs
-            print(f"[DEBUG] Imagens: {images.shape}, Landmarks: {landmarks.shape}, Labels: {labels.shape}")
+            print(f"[DEBUG] Source shape: {images.shape}")
+            print(f"[DEBUG] Target landmarks shape: {landmarks.shape}")
+            print(f"[DEBUG] Labels shape: {labels.shape}")
             break
-
-        # Certifique-se de que as formas das entradas estão corretas
-        if len(images.shape) != 4 or images.shape[1:] != (32, 32, 1):
-            raise ValueError(f"As imagens devem ter forma (None, 32, 32, 1), mas têm {images.shape}")
-
-        if len(landmarks.shape) != 3 or landmarks.shape[2] != 63:
-            raise ValueError(f"Os landmarks devem ter forma (None, seq_len, 63), mas têm {landmarks.shape}")
 
         # Model Gesture_Net_Transformer
         gesture_net = Transformer(num_classes=num_classes)
 
-        # Definir entradas com as formas corretas
-        images_input = keras.Input(shape=(32, 32, 1), batch_size=None)
-        landmarks_input = keras.Input(shape=(landmarks.shape[1:],), batch_size=None)
+        # Inputs
+        images_input = keras.Input(shape=images.shape[1:], batch_size=32)
+        landmarks_input = keras.Input(shape=landmarks.shape[1:], batch_size=32)
 
-        # Obter a saída do modelo
+        # Call output
         outputs = gesture_net((images_input, landmarks_input))
 
-        # Criar modelo funcional
+        # Functional model keras
         functional_model = Model(inputs=[images_input, landmarks_input], outputs=outputs)
 
-        # Summary do modelo
+        # Summary
         functional_model.summary()
 
-        # Compilação do modelo
+        # Plot Structure
+        plot_model(
+            model=functional_model,
+            to_file="model_structure.png",
+            show_dtype=True,
+            show_layer_activations=True,
+            show_layer_names=True,
+            show_shapes=True,
+            show_trainable=True
+        )
+
+        # Compilation
         functional_model.compile(
-            optimizer=gesture_net.optimizer,
-            loss=gesture_net.compiled_loss,
-            metrics=gesture_net.metrics
+            optimizer=gesture_net.optimizer,  # Reutilizando o otimizador do modelo original
+            loss=gesture_net.compiled_loss,   # Reutilizando a função de perda do modelo original
+            metrics=gesture_net.metrics       # Reutilizando as métricas do modelo original
         )
 
         # Callbacks
         early_stopping = keras.callbacks.EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
-        reduce_lr = keras.callbacks.ReduceLROnPlateau(monitor='val_loss', patience=3, factor=0.1, min_lr=1e-6)
+        reduce_lr = keras.callbacks.ReduceLROnPlateau(monitor='val_loss', patience=3, factor=0.2, min_lr=1e-6)
         checkpoint = keras.callbacks.ModelCheckpoint(filepath='./model/best_model.keras', monitor='val_loss', save_best_only=True)
         csv_logger = keras.callbacks.CSVLogger('training_log.csv')
         tensorboard_callback = keras.callbacks.TensorBoard(log_dir='./logs', histogram_freq=1)
 
         callbacks = [early_stopping, reduce_lr, checkpoint, csv_logger, tensorboard_callback]
 
-        # Treinar o modelo funcional
+        # Train the functional model
         history = functional_model.fit(
             train_ds.prefetch(tf.data.AUTOTUNE),
             validation_data=val_ds.prefetch(tf.data.AUTOTUNE),
-            epochs=30,
+            epochs=40,
             callbacks=callbacks
         )
 
-        # Salvar os melhores pesos
+        # Save best weights
         functional_model.save('./model/GestureNet.keras')
         evaluation_results = functional_model.evaluate(val_ds)
         print(f"Avaliação final: {evaluation_results}")
 
-        # Salvar histórico e resultados
+        # Save history and results
         with open('results.json', 'w') as f:
             json.dump({
                 "evaluation": {"test_loss": evaluation_results[0], "accuracy": evaluation_results[1]},
