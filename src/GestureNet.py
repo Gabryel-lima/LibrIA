@@ -110,20 +110,21 @@ def imshow(data):
 class Net(nn.Module):
     def __init__(self, num_classe: int = 29):
         super(Net, self).__init__()
-        self.conv1 = nn.Conv2d(1, 6, 5)
-        self.pool = nn.MaxPool2d(2, 2)
-        self.conv2 = nn.Conv2d(6, 16, 5)
-        self.fc1 = nn.Linear(16 * 5 * 5, 120)
-        self.fc2 = nn.Linear(120, 84)
-        self.fc3 = nn.Linear(84, num_classe)
+        self.conv1 = nn.Conv2d(1, 6, 5) # Aplica uma convolução 2D
+        self.pool = nn.MaxPool2d(2, 2) # Aplica uma média no grupo local em 2D
+        self.conv2 = nn.Conv2d(6, 16, 5) # Dobrando as saídas
+        self.fc1 = nn.Linear(16 * 5 * 5, 120) # Aplica uma camada totalmente conectada para combinar as características extraídas em representações abstratas
+        self.fc2 = nn.Linear(120, 84) # Reduz a dimensionalidade para comprimir e refinar as representações
+        self.fc3 = nn.Linear(84, num_classe) # Conecta a saída ao número de classes para a tarefa de classificação
 
     def forward(self, x):
-        x = self.pool(F.relu(self.conv1(x)))
-        x = self.pool(F.relu(self.conv2(x)))
-        x = x.view(-1, 16 * 5 *5)
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = self.fc3(x)
+        # Propagação 
+        x = self.pool(F.relu(self.conv1(x)))  # Convolução + ReLU + MaxPooling
+        x = self.pool(F.relu(self.conv2(x)))  # Convolução + ReLU + MaxPooling
+        x = x.view(-1, 16 * 5 *5) # Achatamento de 3d para 1d
+        x = F.relu(self.fc1(x)) # Primeira camada totalmente conectada com ReLU
+        x = F.relu(self.fc2(x)) # Segunda camada totalmente conectada com ReLU
+        x = self.fc3(x) # Camada de saída
         return x
 
 if __name__ == '__main__':
