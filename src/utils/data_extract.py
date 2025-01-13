@@ -1,4 +1,3 @@
-import cv2
 import pandas as pd
 import numpy as np
 import os
@@ -6,6 +5,7 @@ from sklearn.model_selection import train_test_split
 from imblearn.over_sampling import SMOTE  # Importando SMOTE para balanceamento
 import traceback
 from tqdm import tqdm
+import cv2
 
 def error_log():
     """Função para registrar o erro em um arquivo log."""
@@ -14,58 +14,41 @@ def error_log():
         f.write(traceback.format_exc())
     print('An exception occurred. Check error_log.txt for details.')
 
-def process_image(image_path, size=(32, 32)):
+def images_to_csv(image_folder, output_csv, batch_size=100):
     """
-    Process an image by resizing and converting it to grayscale.
+    Converts images from a folder into a CSV without modifying their format.
     Args:
-    - image_path: Path to the image file.
-    - size: Tuple indicating the size to which the image should be resized.
-    Returns:
-    - Flattened array of the processed image, or None if the image could not be processed.
-    """
-    image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
-    if image is None:
-        return None  # Skip if the image could not be loaded
-    image_resized = cv2.resize(image, size)
-    return image_resized.flatten()
-
-def images_to_csv(image_folder, output_csv, size=(32, 32)):
-    """
-    Converts all images from a folder (including subfolders) into a CSV file with flattened pixel values.
-    Args:
-    - image_folder: Path to the folder containing images (can have subfolders).
+    - image_folder: Path to the folder containing images.
     - output_csv: Path to save the output CSV file.
-    - size: Size to which images are resized.
+    - batch_size: Number of images to process before writing to the CSV.
     """
-    data = []
-
-    # Iterate over all files in the directory, including subdirectories
     files = []
     for root, _, filenames in os.walk(image_folder):
-        label = os.path.basename(root)
+        label = os.path.basename(root)  # Use the folder name as the label
         for file in filenames:
-            if file.endswith(('.jpg', '.png')):  # Supports jpg and png images
+            if file.lower().endswith(('.jpg', '.png', '.jpeg')):  # Supports common formats
                 image_path = os.path.join(root, file)
                 files.append((label, image_path))
-    
-    # Use tqdm to show the progress
-    for label, image_path in tqdm(files, desc="Processing Images"):
-        pixels = process_image(image_path, size)
 
-        if pixels is None:
-            continue  # Skip images that could not be processed
+    batch = []
+    for idx, (label, image_path) in enumerate(tqdm(files, desc="Processing Images")):
+        image = cv2.imread(image_path)  # Load the image as-is (BGR format)
+        if image is None:
+            print(f"Warning: Unable to load image {image_path}")
+            continue
 
-        # Append label and pixel data
-        data.append([label] + pixels.tolist())
+        # Flatten the image and append the label
+        image_flattened = image.flatten()  # Preserve original resolution and channels
+        batch.append([label, image_path] + image_flattened.tolist())
 
-    # Create a DataFrame and save to CSV
-    if data:
-        columns = ['label'] + [f'pixel_{i}' for i in range(size[0] * size[1])]
-        df = pd.DataFrame(data, columns=columns)
-        df.to_csv(output_csv, index=False)
-        print(f"CSV saved at: {output_csv}")
-    else:
-        print(f"No valid images were found in the specified folder {image_folder}. CSV not created.")
+        # Write in batches to avoid memory overflow
+        if len(batch) >= batch_size or idx == len(files) - 1:
+            columns = ['label', 'image_path'] + [f'pixel_{i}' for i in range(len(image_flattened))]
+            batch_df = pd.DataFrame(batch, columns=columns)
+
+            # Write in append mode
+            batch_df.to_csv(output_csv, mode='a', index=False, header=not os.path.exists(output_csv))
+            batch = []
 
 def balance_and_split_dataset(csv_path, train_csv_path, test_csv_path, max_samples=50000, test_size=0.2, random_state=42):
     """
@@ -112,16 +95,16 @@ def balance_and_split_dataset(csv_path, train_csv_path, test_csv_path, max_sampl
 # Example Usage
 if __name__ == '__main__':
     # Convert images to CSV and balance/split datasets
-    images_to_csv(image_folder="E:\\libria\\data\\asl_hands\\ASL_Alphabet_Dataset\\asl_alphabet_train",
-                  output_csv="E:\\libria\\data\\asl_signals.csv")
+    images_to_csv(image_folder="E:\\Projects\\\libria\\data\\asl_hands\\ASL_Alphabet_Dataset\\asl_alphabet_train",
+                  output_csv="E:\\Projects\\\libria\\data\\asl_signals.csv")
 
-    # balance_and_split_dataset(csv_path="E:\\libria\\data\\asl_signals.csv",
-    #                           train_csv_path="E:\\libria\\data\\asl_signals_train.csv",
-    #                           test_csv_path="E:\\libria\\data\\asl_signals_test.csv")
+    # balance_and_split_dataset(csv_path="E:\\Projects\\\libria\\data\\asl_signals.csv",
+    #                           train_csv_path="E:\\Projects\\\libria\\data\\asl_signals_train.csv",
+    #                           test_csv_path="E:\\Projects\\\libria\\data\\asl_signals_test.csv")
 
-    images_to_csv(image_folder="E:\\libria\\data\\hand_keypoint_dataset_26k\\images\\train",
-                  output_csv="E:\\libria\\data\\random_hands.csv")
+    images_to_csv(image_folder="E:\\Projects\\\libria\\data\\hand_keypoint_dataset_26k\\images\\train",
+                  output_csv="E:\\Projects\\\libria\\data\\random_hands.csv")
 
-    # balance_and_split_dataset(csv_path="E:\\libria\\data\\random_hands.csv",
-    #                           train_csv_path="E:\\libria\\data\\random_hands_train.csv",
-    #                           test_csv_path="E:\\libria\\data\\random_hands_test.csv")
+    # balance_and_split_dataset(csv_path="E:\\Projects\\\libria\\data\\random_hands.csv",
+    #                           train_csv_path="E:\\Projects\\\libria\\data\\random_hands_train.csv",
+    #                           test_csv_path="E:\\Projects\\\libria\\data\\random_hands_test.csv")
