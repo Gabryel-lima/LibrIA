@@ -9,6 +9,23 @@ import torch.nn.functional as F
 import torch
 from PIL import Image
 from tqdm import tqdm
+from dotenv import load_dotenv
+import os
+
+# Carregar as variáveis do .env
+load_dotenv()
+
+# Acessar a Secret Key
+secret_key = os.getenv("SECRET_KEY")
+
+
+# Labels
+IMG_DIR = "/kaggle/input/asl-alphabet/asl_alphabet_train/asl_alphabet_train"
+labels = []
+alphabet = list(str(ascii(labels)).upper())
+labels.extend(alphabet)
+#labels.extend(["del", "nothing", "space"])
+print(labels)
 
 class CustomImageDataset(Dataset):
     def __init__(self, img_labels, transform=None, target_transform=None):
@@ -32,14 +49,12 @@ class CustomImageDataset(Dataset):
 
         return image, label
 
-def datasset(save_path='E:\\Projects\\libria\\transformed_data.pth'):
+def datasset(save_path=''):
     if os.path.exists(save_path):
         print(f'Loading: {save_path}...')
         return torch.load(save_path, weights_only=False)
 
     print('Transforming data...')
-    
-    IMG_DIR = 'E:\\Projects\\libria\\data\\asl_hands\\ASL_Alphabet_Dataset'
 
     # Define transformations
     transform = transforms.Compose([
@@ -187,8 +202,8 @@ if __name__ == '__main__':
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
 
-    torch.save(net, 'E:\\Projects\\libria\\model_full.pth')
-    torch.save(net.state_dict(), 'E:\\Projects\\libria\\model_weights.pth')
+    torch.save(net, )
+    torch.save(net.state_dict(), )
     print(f'Accuracy on training data after epoch {epoch + 1}: {100 * correct / total}%')
     
     # Exibir uma imagem de predição e seu rótulo

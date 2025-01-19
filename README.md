@@ -1,2 +1,0 @@
-# libria
-AI pound translator
