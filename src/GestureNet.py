@@ -1,102 +1,17 @@
 import os
+import random
+import string
 import numpy as np
-import pandas as pd
-from torch.utils.data import Dataset, DataLoader
-import matplotlib.pyplot as plt
-import torchvision.transforms as transforms
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch
+from torch.utils.data import Dataset, DataLoader
+import torchvision.transforms as transforms
 from PIL import Image
 from tqdm import tqdm
-from dotenv import load_dotenv
-import os
-import string
-
-# Carregar variáveis do .env
-load_dotenv()
-secret_key = os.getenv("SECRET_KEY")
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # Obtém o diretório do script atual
-
-# Labels
-IMG_DIR = os.path.join(BASE_DIR, "../data/archive/ASL_Alphabet_Dataset/asl_alphabet_train")
-labels = list(string.ascii_uppercase) + ["del", "nothing", "space"]
-
-# Criar diretório de modelos
-DIR_NAME = os.path.join(BASE_DIR, "./models")
-ALL_MODEL = os.path.join(BASE_DIR,"./models/asl_model.pth")
-WEIGHTS_ONLY = os.path.join(BASE_DIR, "./models/asl_model_weights.pth")
-
-class CustomImageDataset(Dataset):
-    def __init__(self, img_labels, transform=None, target_transform=None):
-        self.img_labels = img_labels
-        self.transform = transform
-        self.target_transform = target_transform
-
-    def __len__(self):
-        return len(self.img_labels)
-    
-    def __getitem__(self, idx):
-        image_path, label = self.img_labels[idx]
-        image = Image.open(image_path).convert('L')  # Converte para escala de cinza (1 canal)
-
-        if self.transform:
-            image = self.transform(image)
-        if self.target_transform:
-            label = self.target_transform(label)
-
-        label = torch.tensor(label)  # Cria um tensor explícito para o rótulo
-
-        return image, label
-
-def datasset():
-    print('Transforming data...')
-
-    # Define transformations
-    transform = transforms.Compose([
-        transforms.Resize((32, 32)),
-        transforms.Grayscale(num_output_channels=1),
-        transforms.ToTensor(),
-        transforms.Normalize((0.5,), (0.5,)) # -1 - 1
-    ])
-
-    # data objects
-    all_data = []
-    label_to_idx = {}
-    idx = 0
-    
-    # Walk through the directories and collect all images and their labels
-    for root, dirs, files in os.walk(os.path.join(IMG_DIR)):
-        if dirs:  # Verifica se o diretório tem subdiretórios (pastas de classe)
-            for dir_name in dirs:
-                label = dir_name
-                if label not in label_to_idx:
-                    label_to_idx[label] = idx
-                    idx += 1
-                label_idx = label_to_idx[label]
-                class_dir = os.path.join(root, dir_name)
-                print(f"Processando diretório: {class_dir}")  # Verificação
-                for file in os.listdir(class_dir):
-                    if file.lower().endswith(('.jpg', '.png', '.jpeg')):
-                        image_path = os.path.join(class_dir, file)
-                        all_data.append((image_path, label_idx))
-
-    # Check how many images we have
-    print(f'Total de imagens encontradas: {len(all_data)}')
-
-    # Split data into train and test
-    split_index = int(len(all_data) * 0.8)  # 80% for training, 20% for testing
-    training_data_raw = all_data[:split_index]
-    test_data_raw = all_data[split_index:]
-    
-    # Create the datasets
-    training_data = CustomImageDataset(training_data_raw, transform=transform)
-    test_data = CustomImageDataset(test_data_raw, transform=transform)
-    
-    print(f'Número de amostras de treino: {len(training_data)}')
-    print(f'Número de amostras de teste: {len(test_data)}')
-
-    return training_data, test_data
+from sklearn.model_selection import train_test_split
+import matplotlib.pyplot as plt
+from pathlib import Path
 
 def imshow(data):
     figure = plt.figure(figsize=(8, 8))
@@ -114,115 +29,287 @@ def imshow(data):
         plt.axis('off')
         plt.imshow(img, cmap='gray')
     plt.show()
+
+def _plot_predictions(model, dataset, device, epoch, plot_dir, num_samples=6):
+    """Plot sample predictions with labels"""
+    model.eval()
+    indices = np.random.choice(len(dataset), num_samples, replace=False)
     
-class Net(nn.Module):
-    def __init__(self, num_classe: int = 29):
-        super(Net, self).__init__()
-        self.conv1 = nn.Conv2d(1, 6, 5) # Aplica uma convolução 2D
-        self.pool = nn.MaxPool2d(2, 2) # Aplica uma média no grupo local em 2D
-        self.conv2 = nn.Conv2d(6, 16, 5) # Dobrando as saídas
-        self.fc1 = nn.Linear(16 * 5 * 5, 120) # Aplica uma camada totalmente conectada para combinar as características extraídas em representações abstratas
-        self.fc2 = nn.Linear(120, 84) # Reduz a dimensionalidade para comprimir e refinar as representações
-        self.fc3 = nn.Linear(84, num_classe) # Conecta a saída ao número de classes para a tarefa de classificação
+    plt.figure(figsize=(12, 8))
+    for i, idx in enumerate(indices, 1):
+        image, label = dataset[idx]
+        image = image.unsqueeze(0).to(device)
+        
+        with torch.no_grad():
+            output = model(image)
+            _, pred = torch.max(output, 1)
+        
+        # Denormalize image
+        img = image.squeeze().cpu().numpy()
+        img = img * 0.5 + 0.5  # Undo normalization
+        
+        plt.subplot(2, 3, i)
+        plt.imshow(img, cmap='gray')
+        plt.title(f"True: {config.LABELS[label]}\nPred: {config.LABELS[pred.item()]}")
+        plt.axis('off')
+    
+    plt.tight_layout()
+    plt.savefig(plot_dir/f"predictions_epoch_{epoch}.png")
+    plt.close()
+
+def _plot_metrics(train_losses, val_accuracies, plot_dir):
+    """Plot training and validation metrics"""
+    plt.figure(figsize=(12, 5))
+    
+    # Loss plot
+    plt.subplot(1, 2, 1)
+    plt.plot(train_losses, label='Training Loss')
+    plt.title("Training Loss")
+    plt.xlabel("Epoch")
+    plt.grid(True)
+    
+    # Accuracy plot
+    plt.subplot(1, 2, 2)
+    plt.plot(val_accuracies, label='Validation Accuracy', color='orange')
+    plt.title("Validation Accuracy")
+    plt.xlabel("Epoch")
+    plt.grid(True)
+    
+    plt.tight_layout()
+    plt.savefig(plot_dir/"training_metrics.png")
+    plt.close()
+
+def _plot_confusion_matrix(preds, labels, plot_dir):
+    """Plot confusion matrix at end of training"""
+    from sklearn.metrics import confusion_matrix
+    import seaborn as sns
+    
+    cm = confusion_matrix(labels, preds)
+    plt.figure(figsize=(15, 12))
+    sns.heatmap(cm, annot=False, fmt='d', cmap='Blues', 
+                xticklabels=config.LABELS, 
+                yticklabels=config.LABELS)
+    plt.title("Confusion Matrix")
+    plt.xlabel("Predicted")
+    plt.ylabel("True")
+    plt.savefig(plot_dir/"confusion_matrix.png")
+    plt.close()
+
+# Configuration
+class Config:
+    # Data
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    DATA_DIR = os.path.join(BASE_DIR, "../data/archive/ASL_Alphabet_Dataset/asl_alphabet_train")
+    LABELS = list(string.ascii_uppercase) + ["del", "nothing", "space"]
+    IMG_SIZE = 32
+    BATCH_SIZE = 64
+    
+    # Model
+    NUM_CLASSES = len(LABELS)
+    DROPOUT = 0.5
+    
+    # Training
+    EPOCHS = 10
+    LR = 0.001
+    MOMENTUM = 0.9
+    DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    # Paths
+    MODEL_DIR = os.path.join(BASE_DIR, "./models")
+    BEST_MODEL = os.path.join(MODEL_DIR, "best_model.pth")
+
+config = Config()
+
+# Custom Dataset with error handling
+class ASLDataset(Dataset):
+    def __init__(self, data, transform=None):
+        self.data = data
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        img_path, label = self.data[idx]
+        try:
+            image = Image.open(img_path).convert('L')  # Grayscale
+            if self.transform:
+                image = self.transform(image)
+            return image, torch.tensor(label)
+        except Exception as e:
+            print(f"Error loading {img_path}: {str(e)}")
+            return self[(idx + 1) % len(self)]  # Skip corrupted files
+
+# Enhanced CNN Model
+class ASLNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.features = nn.Sequential(
+            nn.Conv2d(1, 32, 3, padding=1),
+            nn.BatchNorm2d(32),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+            nn.Conv2d(32, 64, 3, padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+            nn.Conv2d(64, 128, 3, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+        )
+        self.classifier = nn.Sequential(
+            nn.Linear(128 * (config.IMG_SIZE//8)**2, 512),
+            nn.ReLU(),
+            nn.Dropout(config.DROPOUT),
+            nn.Linear(512, config.NUM_CLASSES),
+        )
 
     def forward(self, x):
-        # Propagação 
-        x = self.pool(F.relu(self.conv1(x)))  # Convolução + ReLU + MaxPooling
-        x = self.pool(F.relu(self.conv2(x)))  # Convolução + ReLU + MaxPooling
-        x = x.view(x.size(0), -1) # Achatamento de 3d para 1d
-        x = F.relu(self.fc1(x)) # Primeira camada totalmente conectada com ReLU
-        x = F.relu(self.fc2(x)) # Segunda camada totalmente conectada com ReLU
-        x = self.fc3(x) # Camada de saída
+        x = self.features(x)
+        x = torch.flatten(x, 1)
+        x = self.classifier(x)
         return x
 
-if __name__ == '__main__':
-    # load data
-    training_data, test_data = datasset()
+# Data preparation
+def prepare_data():
+    # Collect all labeled images
+    data = []
+    for label_idx, label in enumerate(config.LABELS):
+        class_dir = os.path.join(config.DATA_DIR, label)
+        if not os.path.exists(class_dir):
+            continue
+            
+        for file in os.listdir(class_dir):
+            if file.lower().endswith(('.jpg', '.png', '.jpeg')):
+                data.append((
+                    os.path.join(class_dir, file),
+                    label_idx
+                ))
+
+    # Split with stratification
+    train_data, test_data = train_test_split(
+        data, 
+        test_size=0.2, 
+        stratify=[d[1] for d in data],
+        random_state=42
+    )
     
-    train_dataloader = DataLoader(training_data, batch_size=64, shuffle=True, num_workers=2)
-    test_dataloader = DataLoader(test_data, batch_size=64, shuffle=True, num_workers=2)
+    # Transforms with augmentation
+    train_transform = transforms.Compose([
+        transforms.RandomRotation(15),
+        transforms.RandomAffine(0, translate=(0.1, 0.1)),
+        transforms.Resize((config.IMG_SIZE, config.IMG_SIZE)),
+        transforms.ToTensor(),
+        transforms.Normalize([0.5], [0.5])
+    ])
     
-    print(f'Número de amostras de treino: {len(training_data)}')
-    print(f'Número de amostras de teste: {len(test_data)}')
+    test_transform = transforms.Compose([
+        transforms.Resize((config.IMG_SIZE, config.IMG_SIZE)),
+        transforms.ToTensor(),
+        transforms.Normalize([0.5], [0.5])
+    ])
+
+    return (
+        ASLDataset(train_data, train_transform),
+        ASLDataset(test_data, test_transform)
+    )
+
+# Training loop
+def train_model():
+    # Initialize
+    train_set, test_set = prepare_data()
+    train_loader = DataLoader(train_set, batch_size=config.BATCH_SIZE, 
+                            shuffle=True, num_workers=4, pin_memory=True)
+    test_loader = DataLoader(test_set, batch_size=config.BATCH_SIZE,
+                           num_workers=4, pin_memory=True)
     
-    # Exibe imagens do conjunto de treino
-    # imshow(training_data)
-    
-    # Mostra batch do DataLoader
-    train_features, train_labels = next(iter(train_dataloader))
-    
-    # after normalize
-    # print(f"Labels batch shape: {len(train_labels)}")
-    # print(f"First label: {train_labels[0]}")  # Mostra o primeiro rótulo
-    
-    # img = train_features[0].squeeze(0)
-    # label = train_labels[0]
-    # plt.imshow(img, cmap='gray')
-    # plt.title(f'Label: {label}')
-    # plt.show()
-    
-    # variation of LeNet
-    net = Net()
-    
+    model = ASLNet().to(config.DEVICE)
     criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=config.LR)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=2)
     
-    for epoch in range(12):  # loop over the dataset multiple times
+    # Track metrics
+    train_losses = []
+    val_accuracies = []
+    best_acc = 0.0
+    
+    # Create output directory
+    plot_dir = Path("./training_plots")
+    plot_dir.mkdir(exist_ok=True)
+    
+    # Training loop
+    for epoch in range(config.EPOCHS):
+        model.train()
         running_loss = 0.0
+        progress_bar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{config.EPOCHS}")
         
-        # Adiciona a barra de progresso para os batches dentro de cada epoch
-        progress_bar = tqdm(enumerate(train_dataloader, 0), total=len(train_dataloader), desc=f"Epoch {epoch+1}")
-        
-        for i, data in progress_bar:
-            inputs, labels = data
-
+        for images, labels in progress_bar:
+            images, labels = images.to(config.DEVICE), labels.to(config.DEVICE)
+            
             optimizer.zero_grad()
-
-            outputs = net(inputs)
+            outputs = model(images)
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
-            running_loss += loss.item()
             
-            # Atualiza a barra de progresso com a perda média do batch
-            progress_bar.set_postfix(loss=running_loss / (i + 1))
+            running_loss += loss.item() * images.size(0)
+            progress_bar.set_postfix(loss=loss.item())
             
-            if i % 2000 == 1999:
-                print(f'[Epoch {epoch + 1}, Batch {i + 1}] Loss: {running_loss / 2000}')
-                running_loss = 0.0
+        # Calculate epoch loss
+        epoch_loss = running_loss / len(train_set)
+        train_losses.append(epoch_loss)
+        
+        # Validation
+        model.eval()
+        correct = 0
+        total = 0
+        all_preds = []
+        all_labels = []
+        with torch.no_grad():
+            for images, labels in test_loader:
+                images, labels = images.to(config.DEVICE), labels.to(config.DEVICE)
+                outputs = model(images)
+                _, predicted = torch.max(outputs.data, 1)
+                total += labels.size(0)
+                correct += (predicted == labels).sum().item()
+                # Store for confusion matrix
+                all_preds.extend(predicted.cpu().numpy())
+                all_labels.extend(labels.cpu().numpy())
+                
+        # Calculate validation accuracy
+        val_acc = 100 * correct / total
+        val_accuracies.append(val_acc)
+        
+        # Plot sample predictions
+        _plot_predictions(
+            model=model,
+            dataset=test_set,
+            device=config.DEVICE,
+            epoch=epoch+1,
+            plot_dir=plot_dir,
+            num_samples=6
+        )        
 
-    # Monitor accuracy for each epoch to track progress
-    correct = 0
-    total = 0
-    with torch.no_grad():
-        for data in train_dataloader:
-            images, labels = data
-            outputs = net(images)
-            _, predicted = torch.max(outputs.data, 1)
-            total += labels.size(0)
-            correct += (predicted == labels).sum().item()
+        # Update scheduler
+        scheduler.step(val_acc)
+        
+        # Save best model
+        if val_acc > best_acc:
+            best_acc = val_acc
+            os.makedirs(config.MODEL_DIR, exist_ok=True)
+            torch.save(model.state_dict(), config.BEST_MODEL)
+        
+        # Printepoch summary
+        print(f"Epoch {epoch+1} | Loss: {running_loss/len(train_set):.4f} | " 
+              f"Val Acc: {val_acc:.2f}% | Best Acc: {best_acc:.2f}%")
 
-    # Criar diretório se não existir
-    os.makedirs(DIR_NAME, exist_ok=True)
+        # Plot metrics after each epoch
+        _plot_metrics(train_losses, val_accuracies, plot_dir)
     
-    # save
-    torch.save(net, ALL_MODEL)
-    torch.save(net.state_dict(), WEIGHTS_ONLY)
-    print(f'Accuracy on training data after epoch {epoch + 1}: {100 * correct / total}%')
-    
-    # Exibir uma imagem de predição e seu rótulo
-    sample_idx = torch.randint(len(train_dataloader.dataset), size=(1,)).item()
-    image, label = train_dataloader.dataset[sample_idx]
-    image = image.squeeze(0)  # Remover o canal extra para visualização
+    # Final plots
+    _plot_confusion_matrix(all_preds, all_labels, plot_dir)
 
-    # Inferência com a imagem selecionada
-    output = net(image.unsqueeze(0))  # Adicionar um lote fictício
-    _, predicted = torch.max(output.data, 1)
-
-    # Exibir imagem e classe prevista
-    plt.imshow(image, cmap='gray')
-    plt.title(f'Predicted: {labels[predicted.item()]}, Real: {labels[label.item()]}')
-    plt.tight_layout()
-    plt.axis('off')
-    plt.savefig("./sample_predict")
-    plt.show()
+if __name__ == "__main__":
+    train_model()
+    print("Training completed. Best model saved to:", config.BEST_MODEL)
