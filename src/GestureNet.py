@@ -11,21 +11,21 @@ from PIL import Image
 from tqdm import tqdm
 from dotenv import load_dotenv
 import os
+import string
 
-# Carregar as variáveis do .env
+# Carregar variáveis do .env
 load_dotenv()
-
-# Acessar a Secret Key
 secret_key = os.getenv("SECRET_KEY")
-
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # Obtém o diretório do script atual
 
 # Labels
-IMG_DIR = "/kaggle/input/asl-alphabet/asl_alphabet_train/asl_alphabet_train"
-labels = []
-alphabet = list(str(ascii(labels)).upper())
-labels.extend(alphabet)
-#labels.extend(["del", "nothing", "space"])
-print(labels)
+IMG_DIR = os.path.join(BASE_DIR, "../data/archive/ASL_Alphabet_Dataset/asl_alphabet_train")
+labels = list(string.ascii_uppercase) + ["del", "nothing", "space"]
+
+# Criar diretório de modelos
+DIR_NAME = os.path.join(BASE_DIR, "./models")
+ALL_MODEL = os.path.join(BASE_DIR,"./models/asl_model.pth")
+WEIGHTS_ONLY = os.path.join(BASE_DIR, "./models/asl_model_weights.pth")
 
 class CustomImageDataset(Dataset):
     def __init__(self, img_labels, transform=None, target_transform=None):
@@ -49,11 +49,7 @@ class CustomImageDataset(Dataset):
 
         return image, label
 
-def datasset(save_path=''):
-    if os.path.exists(save_path):
-        print(f'Loading: {save_path}...')
-        return torch.load(save_path, weights_only=False)
-
+def datasset():
     print('Transforming data...')
 
     # Define transformations
@@ -61,15 +57,16 @@ def datasset(save_path=''):
         transforms.Resize((32, 32)),
         transforms.Grayscale(num_output_channels=1),
         transforms.ToTensor(),
-        transforms.Normalize((0.0,), (1.0,))
+        transforms.Normalize((0.5,), (0.5,)) # -1 - 1
     ])
 
+    # data objects
     all_data = []
     label_to_idx = {}
     idx = 0
     
     # Walk through the directories and collect all images and their labels
-    for root, dirs, files in os.walk(os.path.join(IMG_DIR, 'asl_alphabet_train')):
+    for root, dirs, files in os.walk(os.path.join(IMG_DIR)):
         if dirs:  # Verifica se o diretório tem subdiretórios (pastas de classe)
             for dir_name in dirs:
                 label = dir_name
@@ -98,10 +95,6 @@ def datasset(save_path=''):
     
     print(f'Número de amostras de treino: {len(training_data)}')
     print(f'Número de amostras de teste: {len(test_data)}')
-    
-    # Save data
-    print(f'Saving: {save_path}...')
-    torch.save((training_data, test_data), save_path)
 
     return training_data, test_data
 
@@ -136,7 +129,7 @@ class Net(nn.Module):
         # Propagação 
         x = self.pool(F.relu(self.conv1(x)))  # Convolução + ReLU + MaxPooling
         x = self.pool(F.relu(self.conv2(x)))  # Convolução + ReLU + MaxPooling
-        x = x.view(-1, 16 * 5 *5) # Achatamento de 3d para 1d
+        x = x.view(x.size(0), -1) # Achatamento de 3d para 1d
         x = F.relu(self.fc1(x)) # Primeira camada totalmente conectada com ReLU
         x = F.relu(self.fc2(x)) # Segunda camada totalmente conectada com ReLU
         x = self.fc3(x) # Camada de saída
@@ -176,7 +169,11 @@ if __name__ == '__main__':
     
     for epoch in range(12):  # loop over the dataset multiple times
         running_loss = 0.0
-        for i, data in enumerate(train_dataloader, 0):
+        
+        # Adiciona a barra de progresso para os batches dentro de cada epoch
+        progress_bar = tqdm(enumerate(train_dataloader, 0), total=len(train_dataloader), desc=f"Epoch {epoch+1}")
+        
+        for i, data in progress_bar:
             inputs, labels = data
 
             optimizer.zero_grad()
@@ -185,8 +182,11 @@ if __name__ == '__main__':
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
-
             running_loss += loss.item()
+            
+            # Atualiza a barra de progresso com a perda média do batch
+            progress_bar.set_postfix(loss=running_loss / (i + 1))
+            
             if i % 2000 == 1999:
                 print(f'[Epoch {epoch + 1}, Batch {i + 1}] Loss: {running_loss / 2000}')
                 running_loss = 0.0
@@ -202,8 +202,12 @@ if __name__ == '__main__':
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
 
-    torch.save(net, )
-    torch.save(net.state_dict(), )
+    # Criar diretório se não existir
+    os.makedirs(DIR_NAME, exist_ok=True)
+    
+    # save
+    torch.save(net, ALL_MODEL)
+    torch.save(net.state_dict(), WEIGHTS_ONLY)
     print(f'Accuracy on training data after epoch {epoch + 1}: {100 * correct / total}%')
     
     # Exibir uma imagem de predição e seu rótulo
@@ -217,7 +221,8 @@ if __name__ == '__main__':
 
     # Exibir imagem e classe prevista
     plt.imshow(image, cmap='gray')
-    plt.title(f'Predicted: {predicted.item()}, Actual: {label.item()}')
-    plt.axis('off')
+    plt.title(f'Predicted: {labels[predicted.item()]}, Real: {labels[label.item()]}')
     plt.tight_layout()
+    plt.axis('off')
+    plt.savefig("./sample_predict")
     plt.show()
