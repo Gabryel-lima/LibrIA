@@ -1,3 +1,9 @@
+"""
+@author : Gabryel-lima
+@when : 2025-01-30
+@homepage : https://github.com/Gabryel-lima
+"""
+
 import os
 import random
 import string
@@ -12,6 +18,10 @@ from tqdm import tqdm
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
 from pathlib import Path
+from conf import Config_Img_Classifier
+
+# Config
+config = Config_Img_Classifier()
 
 def imshow(data):
     figure = plt.figure(figsize=(8, 8))
@@ -94,31 +104,6 @@ def _plot_confusion_matrix(preds, labels, plot_dir):
     plt.ylabel("True")
     plt.savefig(plot_dir/"confusion_matrix.png")
     plt.close()
-
-# Configuration
-class Config:
-    # Data
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    DATA_DIR = os.path.join(BASE_DIR, "../data/archive/ASL_Alphabet_Dataset/asl_alphabet_train")
-    LABELS = list(string.ascii_uppercase) + ["del", "nothing", "space"]
-    IMG_SIZE = 32
-    BATCH_SIZE = 64
-    
-    # Model
-    NUM_CLASSES = len(LABELS)
-    DROPOUT = 0.5
-    
-    # Training
-    EPOCHS = 10
-    LR = 0.001
-    MOMENTUM = 0.9
-    DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
-    # Paths
-    MODEL_DIR = os.path.join(BASE_DIR, "./models")
-    BEST_MODEL = os.path.join(MODEL_DIR, "best_model.pth")
-
-config = Config()
 
 # Custom Dataset with error handling
 class ASLDataset(Dataset):
