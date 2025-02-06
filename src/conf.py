@@ -2,7 +2,7 @@ import os
 import string
 import torch
 
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+__DEVICE__ = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Configuration
 class Config_Img_Classifier:
@@ -46,4 +46,9 @@ class Config_Transformer:
     clip = 1.0
     weight_decay = 5e-4
     inf = float('inf')
-    
+
+__all__ = [
+    '__DEVICE__',
+    'Config_Img_Classifier',
+    'Config_Transformer'
+]

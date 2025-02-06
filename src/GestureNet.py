@@ -4,6 +4,8 @@
 @homepage : https://github.com/Gabryel-lima
 """
 
+### GestureNet - Classifier
+
 import os
 import random
 import string

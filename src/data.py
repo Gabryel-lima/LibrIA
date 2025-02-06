@@ -19,7 +19,7 @@ train, valid, test = loader.make_dataset()
 loader.build_vocab(train_data=train, min_freq=2)
 train_iter, valid_iter, test_iter = loader.make_iter(train, valid, test,
                                                      batch_size=config.batch_size,
-                                                     device=DEVICE)
+                                                     device=__DEVICE__)
 
 src_pad_idx = loader.source.vocab.stoi['<pad>']
 trg_pad_idx = loader.target.vocab.stoi['<pad>']
