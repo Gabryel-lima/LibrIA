@@ -152,10 +152,11 @@ int main() {
 ```
 Agora, **a câmera está conectada ao modelo de IA**, permitindo a inferência diretamente no C++ sem depender de Python!
 
-## Caso queira compilar com as libs diretamente pelo compilador g++
+## Gabryel não esqueça do c_cpp_ propeties.json, caso queirar compilar um projeto simples
+### Passe o caminho correto do include
 
 ```bash
-g++ cam.cpp -o cam.exe `pkg-config --cflags --libs opencv4`
+find /usr/include -name "opencv2" --> "/usr/include/opencv4/"
 ```
 ---
 
