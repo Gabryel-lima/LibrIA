@@ -4,7 +4,9 @@
 
 int main() {
     torch::jit::script::Module model;
-    model = torch::jit::load("src/saved/classification.pth"); // Carrega o modelo treinado
+
+    const std::string PATH = "src/saved/classification.pth";
+    model = torch::jit::load(PATH); // Carrega o modelo treinado
 
     cv::Mat frame;
     cv::VideoCapture cap(0);
