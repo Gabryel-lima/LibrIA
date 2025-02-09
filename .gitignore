@@ -165,5 +165,6 @@ venv/
 data/
 notebooks/
 .vscode/
-/src/interfaces/libtorch
+src/interfaces/libtorch
 libtorch-shared-with-deps-latest.zip
+src/interfaces/dep

@@ -20,7 +20,7 @@ from tqdm import tqdm
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
 from pathlib import Path
-from conf import Config_Img_Classifier
+from conf import *
 
 # Config
 config = Config_Img_Classifier()
@@ -211,7 +211,7 @@ def train_model():
     test_loader = DataLoader(test_set, batch_size=config.BATCH_SIZE,
                            num_workers=4, pin_memory=True)
     
-    model = ASLNet().to(config.DEVICE)
+    model = ASLNet().to(__DEVICE__)
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.AdamW(model.parameters(), lr=config.LR)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=2)
@@ -232,7 +232,7 @@ def train_model():
         progress_bar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{config.EPOCHS}")
         
         for images, labels in progress_bar:
-            images, labels = images.to(config.DEVICE), labels.to(config.DEVICE)
+            images, labels = images.to(__DEVICE__), labels.to(__DEVICE__)
             
             optimizer.zero_grad()
             outputs = model(images)
@@ -255,7 +255,7 @@ def train_model():
         all_labels = []
         with torch.no_grad():
             for images, labels in test_loader:
-                images, labels = images.to(config.DEVICE), labels.to(config.DEVICE)
+                images, labels = images.to(__DEVICE__), labels.to(__DEVICE__)
                 outputs = model(images)
                 _, predicted = torch.max(outputs.data, 1)
                 total += labels.size(0)
@@ -272,7 +272,7 @@ def train_model():
         _plot_predictions(
             model=model,
             dataset=test_set,
-            device=config.DEVICE,
+            device=__DEVICE__,
             epoch=epoch+1,
             plot_dir=plot_dir,
             num_samples=6
@@ -296,7 +296,9 @@ def train_model():
     
     # Final plots
     _plot_confusion_matrix(all_preds, all_labels, plot_dir)
-
+    
 if __name__ == "__main__":
-    train_model()
-    print("Training completed. Best model saved to:", config.BEST_MODEL)
+    # train_model()
+    # print("Training completed. Best model saved to:", config.BEST_MODEL)
+    from cam import cam
+    cam()
