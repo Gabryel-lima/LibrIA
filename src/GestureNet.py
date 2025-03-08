@@ -209,7 +209,7 @@ def train_model():
     train_loader = DataLoader(train_set, batch_size=config.BATCH_SIZE, 
                             shuffle=True, num_workers=4, pin_memory=True)
     test_loader = DataLoader(test_set, batch_size=config.BATCH_SIZE,
-                           num_workers=4, pin_memory=True)
+                            num_workers=4, pin_memory=True)
     
     model = ASLNet().to(__DEVICE__)
     criterion = nn.CrossEntropyLoss()
@@ -289,7 +289,7 @@ def train_model():
         
         # Printepoch summary
         print(f"Epoch {epoch+1} | Loss: {running_loss/len(train_set):.4f} | " 
-              f"Val Acc: {val_acc:.2f}% | Best Acc: {best_acc:.2f}%")
+                f"Val Acc: {val_acc:.2f}% | Best Acc: {best_acc:.2f}%")
 
         # Plot metrics after each epoch
         _plot_metrics(train_losses, val_accuracies, plot_dir)

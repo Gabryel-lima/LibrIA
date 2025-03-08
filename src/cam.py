@@ -22,7 +22,7 @@ def cam():
         return
 
     # Abre a câmera com fallback
-    cap = cv2.VideoCapture("http://192.168.1.4:4747/video")
+    cap = cv2.VideoCapture("http://192.168.1.3:4747/video")
     if not cap.isOpened():
         print("Erro ao abrir a câmera IP. Tentando câmera local...")
         cap = cv2.VideoCapture(0)
