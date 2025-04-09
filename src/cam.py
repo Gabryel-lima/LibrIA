@@ -4,6 +4,7 @@ import numpy as np
 from pathlib import Path
 from conf import Config_Img_Classifier
 from GestureNet import ASLNet  # Certifique-se de importar corretamente o modelo
+from grad_cam import GradCAM  # Importa o GradCAM real
 
 # Configuração do dispositivo
 __DEVICE__ = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -30,12 +31,12 @@ def open_camera(ip_url="http://192.168.1.3:4747/video", fallback_device=0):
 
 def preprocess_frame(frame, img_size):
     """Converte o frame para grayscale, redimensiona e normaliza."""
-    gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)  # <= AQUI!
+    gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     resized_frame = cv2.resize(gray_frame, (img_size, img_size))
     normalized_frame = resized_frame.astype(np.float32) / 255.0
     input_tensor = torch.from_numpy(normalized_frame).float()
     input_tensor = input_tensor.unsqueeze(0).unsqueeze(0)  # [Batch, Channel, H, W]
-    return input_tensor
+    return input_tensor, resized_frame
 
 def cam():
     try:
@@ -44,6 +45,11 @@ def cam():
         model.load_state_dict(torch.load(config.BEST_MODEL, map_location=__DEVICE__))
         model.eval()
         print("[INFO] Modelo carregado com sucesso.")
+
+        # Cria o GradCAM
+        target_layer = model.features[6]  # <- Ajuste se quiser uma camada melhor
+        cam_generator = GradCAM(model, target_layer)
+
     except Exception as e:
         print(f"[ERROR] Falha ao carregar o modelo: {e}")
         return
@@ -53,18 +59,19 @@ def cam():
     if cap is None:
         return
 
-    window_name = "Câmera + Inferência"
-    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)  # Cria apenas UMA janela
+    window_name = "Câmera + Inferência + Grad-CAM"
+    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
 
     while True:
         ret, frame = cap.read()
 
         if not ret or frame is None:
             print("[WARN] Frame inválido recebido. Tentando novamente...")
-            continue  # Não tenta exibir frame quebrado!
+            continue
 
         # Pré-processamento
-        input_tensor = preprocess_frame(frame, config.IMG_SIZE).to(__DEVICE__)
+        input_tensor, gray_frame = preprocess_frame(frame, config.IMG_SIZE)
+        input_tensor = input_tensor.to(__DEVICE__)
 
         # Inferência
         try:
@@ -75,16 +82,25 @@ def cam():
         except Exception as e:
             print(f"[ERROR] Falha na inferência: {e}")
             predicted_name = "Erro"
+            continue  # Pula esse frame com erro
 
-        # Overlay de texto na imagem
-        cv2.putText(frame, f"Pred: {predicted_name}", (10, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
+        # Gera o Grad-CAM verdadeiro
+        cam_map = cam_generator.generate_cam(input_tensor)
+        heatmap = np.uint8(255 * cam_map)
+        heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
+        heatmap = cv2.resize(heatmap, (frame.shape[1], frame.shape[0]))
 
-        # Mostrar a imagem sempre na mesma janela
-        cv2.imshow(window_name, frame)
+        # Combina o frame original com o heatmap
+        combined = cv2.addWeighted(frame, 0.6, heatmap, 0.4, 0)
 
-        # Esperar pela tecla ESC (27) para sair
-        if cv2.waitKey(10) & 0xFF == 27:
+        # Overlay de texto no combinado
+        cv2.putText(combined, f"Pred: {predicted_name}", (10, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+
+        # Mostrar a imagem combinada
+        cv2.imshow(window_name, combined)
+
+        if cv2.waitKey(10) & 0xFF == 27:  # ESC para sair
             print("[INFO] Encerrando...")
             break
 
