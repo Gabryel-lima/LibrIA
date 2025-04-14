@@ -9,7 +9,7 @@ import time
 from torch import nn, optim
 from torch.optim import Adam
 
-from data import *
+from src.models.data import *
 from models.model.transformer import Transformer
 from util.bleu import idx_to_word, get_bleu
 from util.epoch_timer import epoch_time
