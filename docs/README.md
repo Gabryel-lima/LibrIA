@@ -8,6 +8,10 @@
     <li><strong>Suportar entrada em tempo real</strong> de vídeo, permitindo uma tradução dinâmica e interativa.</li>
     <li><strong>Fornecer explicabilidade</strong> ao modelo, utilizando técnicas como Grad-CAM para destacar as regiões mais relevantes na decisão da rede.</li>
     <li><strong>Implementar processamento temporal</strong> para melhorar a tradução de sequências gestuais complexas.</li>
+    <li><strong>Conjunto de dados</strong>
+    
+    (https://www.kaggle.com/code/scratchpad/notebook0d0495f523/edit)</li> # TODO: Me ajuda?
+
 </ul>
 
 <h2>Diferenciais</h2>

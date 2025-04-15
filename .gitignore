@@ -168,3 +168,5 @@ notebooks/
 src/interfaces/libtorch
 libtorch-shared-with-deps-latest.zip
 src/interfaces/dep
+ASL_Alphabet_Dataset/
+*.zip

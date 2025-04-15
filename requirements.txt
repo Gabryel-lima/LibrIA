@@ -1,3 +1,4 @@
+# O pipenv parece ser muito melhor do que o pip
 absl-py==2.1.0
 astunparse==1.6.3
 build==1.2.2.post1

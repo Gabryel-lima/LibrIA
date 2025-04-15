@@ -1,6 +1,8 @@
 import os
 import datetime
 
+# Ainda não parece ter funcionado mesmo o add no .git/hook/pre-commit.sh ??
+
 # Autor fixo
 AUTHOR = "Gabryel-lima"
 HOMEPAGE = "https://github.com/Gabryel-lima"
