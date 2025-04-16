@@ -201,7 +201,7 @@ model = Model(inputs=base_model.input, outputs=predictions)
 model.compile(optimizer=Adam(learning_rate=0.001), loss='categorical_crossentropy', metrics=['accuracy'])
 
 # Callbacks
-checkpoint = ModelCheckpoint('asl_vgg16_best_weights.h5', save_best_only=True, monitor='val_accuracy', mode='max')
+checkpoint = ModelCheckpoint('asl_vgg16_best_weights.pth', save_best_only=True, monitor='val_accuracy', mode='max')
 
 # Train the Model
 history = model.fit(
@@ -306,7 +306,7 @@ fig.update_layout(
 fig.show(iframe_connected=True)
 
 # Confusion Matrix
-fine_tuned_model = load_model("/kaggle/working/asl_vgg16_best_weights.h5")
+fine_tuned_model = load_model("/kaggle/working/asl_vgg16_best_weights.pth")
 predictions = fine_tuned_model.predict(test_generator)
 
 # Get the true labels from the generator
@@ -586,162 +586,173 @@ from sklearn.metrics import confusion_matrix
 import seaborn as sns
 
 import tensorflow as tf
-from tensorflow.keras.preprocessing.image import load_img, img_to_array
-from tensorflow.keras.applications import VGG16
-from tensorflow.keras.models import Model, load_model
-from tensorflow.keras.layers import Dense, Flatten, Dropout
-from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
-from tensorflow.keras.callbacks import ModelCheckpoint
 
-# Configuração
-class CFG:
-    batch_size = 64
-    img_height = 64
-    img_width = 64
-    epochs = 10
-    num_classes = 29
-    img_channels = 3
+"""Api keras old"""
+# from tensorflow.keras.preprocessing.image import load_img, img_to_array
+# from tensorflow.keras.applications import VGG16
+# from tensorflow.keras.models import Model, load_model
+# from tensorflow.keras.layers import Dense, Flatten, Dropout
+# from tensorflow.keras.optimizers import Adam
+# from tensorflow.keras.preprocessing.image import ImageDataGenerator
+# from tensorflow.keras.callbacks import ModelCheckpoint
 
-TRAIN_PATH = "./ASL_Alphabet_Dataset/asl_alphabet_train"
-TEST_PATH = "./ASL_Alphabet_Dataset/asl_alphabet_test"
-LABELS = list(string.ascii_uppercase) + ["del", "nothing", "space"]
+"""Api keras new"""
+from keras._tf_keras.keras.preprocessing.image import load_img, img_to_array
+from keras._tf_keras.keras.applications import VGG16
+from keras._tf_keras.keras.models import Model, load_model
+from keras._tf_keras.keras.layers import Dense, Flatten, Dropout
+from keras._tf_keras.keras.optimizers import Adam
+from keras._tf_keras.keras.preprocessing.image import ImageDataGenerator
+from keras._tf_keras.keras.callbacks import ModelCheckpoint
 
+# # Configuração
+# class CFG:
+#     batch_size = 64
+#     img_height = 64
+#     img_width = 64
+#     epochs = 10
+#     num_classes = 29
+#     img_channels = 3
 
-def seed_everything(seed=2023):
-    random.seed(seed)
-    os.environ["PYTHONHASHSEED"] = str(seed)
-    np.random.seed(seed)
-    tf.random.set_seed(seed)
-
-
-# --- Split do Dataset ---
-def prepare_metadata():
-    image_paths, image_labels = [], []
-    for label in LABELS:
-        folder = os.path.join(TRAIN_PATH, label)
-        files = glob.glob(os.path.join(folder, '*'))
-        image_paths.extend(files)
-        image_labels.extend([label] * len(files))
-
-    df = pd.DataFrame({"image_path": image_paths, "label": image_labels})
-
-    # Split: 70% treino, 15% val, 15% teste
-    X_train, X_test, y_train, y_test = train_test_split(
-        df["image_path"], df["label"],
-        test_size=0.15, stratify=df["label"], random_state=2023
-    )
-
-    df_train = pd.DataFrame({"image_path": X_train, "label": y_train})
-    X_train, X_val, y_train, y_val = train_test_split(
-        df_train["image_path"], df_train["label"],
-        test_size=0.15/0.85, stratify=df_train["label"], random_state=2023
-    )
-
-    return (
-        pd.DataFrame({"image_path": X_train, "label": y_train}),
-        pd.DataFrame({"image_path": X_val, "label": y_val}),
-        pd.DataFrame({"image_path": X_test, "label": y_test})
-    )
+# TRAIN_PATH = "./ASL_Alphabet_Dataset/asl_alphabet_train"
+# TEST_PATH = "./ASL_Alphabet_Dataset/asl_alphabet_test"
+# LABELS = list(string.ascii_uppercase) + ["del", "nothing", "space"]
 
 
-# --- Geradores de Dados ---
-def create_generators(data_train, data_val, data_test):
-    datagen = ImageDataGenerator(rescale=1./255)
-
-    train_gen = datagen.flow_from_dataframe(
-        data_train,
-        x_col='image_path',
-        y_col='label',
-        target_size=(CFG.img_height, CFG.img_width),
-        class_mode='categorical',
-        batch_size=CFG.batch_size
-    )
-
-    val_gen = datagen.flow_from_dataframe(
-        data_val,
-        x_col='image_path',
-        y_col='label',
-        target_size=(CFG.img_height, CFG.img_width),
-        class_mode='categorical',
-        batch_size=CFG.batch_size
-    )
-
-    test_gen = datagen.flow_from_dataframe(
-        data_test,
-        x_col='image_path',
-        y_col='label',
-        target_size=(CFG.img_height, CFG.img_width),
-        class_mode='categorical',
-        batch_size=1,
-        shuffle=False
-    )
-
-    return train_gen, val_gen, test_gen
+# def seed_everything(seed=2023):
+#     random.seed(seed)
+#     os.environ["PYTHONHASHSEED"] = str(seed)
+#     np.random.seed(seed)
+#     tf.random.set_seed(seed)
 
 
-# --- Construção do Modelo ---
-def build_model():
-    base_model = VGG16(weights='imagenet', include_top=False, input_shape=(CFG.img_height, CFG.img_width, CFG.img_channels))
+# # --- Split do Dataset ---
+# def prepare_metadata():
+#     image_paths, image_labels = [], []
+#     for label in LABELS:
+#         folder = os.path.join(TRAIN_PATH, label)
+#         files = glob.glob(os.path.join(folder, '*'))
+#         image_paths.extend(files)
+#         image_labels.extend([label] * len(files))
 
-    for layer in base_model.layers:
-        layer.trainable = False
+#     df = pd.DataFrame({"image_path": image_paths, "label": image_labels})
 
-    x = base_model.output
-    x = Flatten()(x)
-    x = Dense(512, activation='relu')(x)
-    x = Dropout(0.5)(x)
-    x = Dense(512, activation='relu')(x)
-    x = Dropout(0.5)(x)
-    predictions = Dense(CFG.num_classes, activation='softmax')(x)
+#     # Split: 70% treino, 15% val, 15% teste
+#     X_train, X_test, y_train, y_test = train_test_split(
+#         df["image_path"], df["label"],
+#         test_size=0.15, stratify=df["label"], random_state=2023
+#     )
 
-    model = Model(inputs=base_model.input, outputs=predictions)
-    model.compile(optimizer=Adam(learning_rate=0.001), loss='categorical_crossentropy', metrics=['accuracy'])
-    return model
+#     df_train = pd.DataFrame({"image_path": X_train, "label": y_train})
+#     X_train, X_val, y_train, y_val = train_test_split(
+#         df_train["image_path"], df_train["label"],
+#         test_size=0.15/0.85, stratify=df_train["label"], random_state=2023
+#     )
 
-
-# --- Treinamento ---
-def train_model(model, train_gen, val_gen):
-    checkpoint_cb = ModelCheckpoint("best_model.h5", save_best_only=True, monitor='val_accuracy', mode='max')
-
-    history = model.fit(
-        train_gen,
-        validation_data=val_gen,
-        epochs=CFG.epochs,
-        steps_per_epoch=len(train_gen),
-        validation_steps=len(val_gen),
-        callbacks=[checkpoint_cb]
-    )
-    return history
+#     return (
+#         pd.DataFrame({"image_path": X_train, "label": y_train}),
+#         pd.DataFrame({"image_path": X_val, "label": y_val}),
+#         pd.DataFrame({"image_path": X_test, "label": y_test})
+#     )
 
 
-# --- Avaliação e Visualização ---
-def evaluate_and_plot(model, test_gen, history):
-    loss, acc = model.evaluate(test_gen)
-    print(f"Test Accuracy: {acc*100:.2f}%")
+# # --- Geradores de Dados ---
+# def create_generators(data_train, data_val, data_test):
+#     datagen = ImageDataGenerator(rescale=1./255)
 
-    # Plot Loss & Accuracy
-    plt.figure(figsize=(10, 4))
+#     train_gen = datagen.flow_from_dataframe(
+#         data_train,
+#         x_col='image_path',
+#         y_col='label',
+#         target_size=(CFG.img_height, CFG.img_width),
+#         class_mode='categorical',
+#         batch_size=CFG.batch_size
+#     )
 
-    plt.subplot(1, 2, 1)
-    plt.plot(history.history['loss'], label='Train')
-    plt.plot(history.history['val_loss'], label='Val')
-    plt.title('Loss')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.grid(True)
-    plt.legend()
+#     val_gen = datagen.flow_from_dataframe(
+#         data_val,
+#         x_col='image_path',
+#         y_col='label',
+#         target_size=(CFG.img_height, CFG.img_width),
+#         class_mode='categorical',
+#         batch_size=CFG.batch_size
+#     )
 
-    plt.subplot(1, 2, 2)
-    plt.plot(history.history['accuracy'], label='Train')
-    plt.plot(history.history['val_accuracy'], label='Val')
-    plt.title('Accuracy')
-    plt.xlabel('Epoch')
-    plt.ylabel('Accuracy')
-    plt.grid(True)
-    plt.legend()
+#     test_gen = datagen.flow_from_dataframe(
+#         data_test,
+#         x_col='image_path',
+#         y_col='label',
+#         target_size=(CFG.img_height, CFG.img_width),
+#         class_mode='categorical',
+#         batch_size=1,
+#         shuffle=False
+#     )
 
-    plt.tight_layout()
-    plt.savefig("loss_accuracy.png")
-    plt.close()
+#     return train_gen, val_gen, test_gen
+
+
+# # --- Construção do Modelo ---
+# def build_model():
+#     base_model = VGG16(weights='imagenet', include_top=False, input_shape=(CFG.img_height, CFG.img_width, CFG.img_channels))
+
+#     for layer in base_model.layers:
+#         layer.trainable = False
+
+#     x = base_model.output
+#     x = Flatten()(x)
+#     x = Dense(512, activation='relu')(x)
+#     x = Dropout(0.5)(x)
+#     x = Dense(512, activation='relu')(x)
+#     x = Dropout(0.5)(x)
+#     predictions = Dense(CFG.num_classes, activation='softmax')(x)
+
+#     model = Model(inputs=base_model.input, outputs=predictions)
+#     model.compile(optimizer=Adam(learning_rate=0.001), loss='categorical_crossentropy', metrics=['accuracy'])
+#     return model
+
+
+# # --- Treinamento ---
+# def train_model(model, train_gen, val_gen):
+#     checkpoint_cb = ModelCheckpoint("best_model.pth", save_best_only=True, monitor='val_accuracy', mode='max')
+
+#     history = model.fit(
+#         train_gen,
+#         validation_data=val_gen,
+#         epochs=CFG.epochs,
+#         steps_per_epoch=len(train_gen),
+#         validation_steps=len(val_gen),
+#         callbacks=[checkpoint_cb]
+#     )
+#     return history
+
+
+# # --- Avaliação e Visualização ---
+# def evaluate_and_plot(model, test_gen, history):
+#     loss, acc = model.evaluate(test_gen)
+#     print(f"Test Accuracy: {acc*100:.2f}%")
+
+#     # Plot Loss & Accuracy
+#     plt.figure(figsize=(10, 4))
+
+#     plt.subplot(1, 2, 1)
+#     plt.plot(history.history['loss'], label='Train')
+#     plt.plot(history.history['val_loss'], label='Val')
+#     plt.title('Loss')
+#     plt.xlabel('Epoch')
+#     plt.ylabel('Loss')
+#     plt.grid(True)
+#     plt.legend()
+
+#     plt.subplot(1, 2, 2)
+#     plt.plot(history.history['accuracy'], label='Train')
+#     plt.plot(history.history['val_accuracy'], label='Val')
+#     plt.title('Accuracy')
+#     plt.xlabel('Epoch')
+#     plt.ylabel('Accuracy')
+#     plt.grid(True)
+#     plt.legend()
+
+#     plt.tight_layout()
+#     plt.savefig("loss_accuracy.png")
+#     plt.close()
 

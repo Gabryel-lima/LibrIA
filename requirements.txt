@@ -1,3 +1,8 @@
+# O pipenv parece ser muito melhor do que o pip, este arquivo não pe mais necessário
+# Apenas para referência, e se caso eu for utilizar algum ambiente futuro sem o pipenv
+# E apenas o python3-pip puro; python3 -m venv .venv, que eu quero dizer. Padrão do Python.
+# https://pypi.org/project/pipenv/
+
 absl-py==2.1.0
 astunparse==1.6.3
 build==1.2.2.post1
@@ -30,6 +35,7 @@ mdurl==0.1.2
 ml-dtypes==0.4.1
 mpmath==1.3.0
 namex==0.0.8
+narwhals==1.35.0
 networkx==3.4.2
 numpy==2.0.2
 nvidia-cublas-cu12==12.4.5.8
@@ -50,6 +56,7 @@ optree==0.14.0
 packaging==24.2
 pandas==2.2.3
 pillow==11.1.0
+plotly==6.0.1
 protobuf==5.29.3
 pybind11==2.13.6
 Pygments==2.19.1
