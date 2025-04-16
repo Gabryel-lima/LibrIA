@@ -25,6 +25,12 @@ else
     python3 -m venv "$VENV_NAME"
 fi
 
+# Verifica se o script está sendo executado como superusuário
+if [ "$EUID" -ne 0 ]; then
+    echo "❌ Este script deve ser executado com permissões de superusuário (sudo)."
+    exit 1
+fi
+
 # Ativa o ambiente virtual
 info "Ativando o ambiente virtual..."
 # shellcheck source=/dev/null
