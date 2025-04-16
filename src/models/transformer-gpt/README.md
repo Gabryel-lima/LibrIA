@@ -1,4 +1,4 @@
-# Diretório `models`
+# Diretório `src/models/transformer-gpt`
 
 Este diretório contém uma prévia de um modelo baseado na arquitetura Transformer GPT. O modelo aqui presente serve como uma base inicial para estudos e experimentações. 
 

@@ -2,6 +2,22 @@
 
 set -e  # Encerra o script ao primeiro erro
 
+# Script de configuração do ambiente para o projeto com pipenv
+# Deve ser executado SEM permissões de superusuário (sudo).
+# Apenas chmod +x arquivo.sh e execute o script.
+
+# 🔐 Verifica se é superusuário para não executar
+if [ "$EUID" -ne 0 ]; then
+    echo "Por favor, execute como root apenas essa parte: sudo apt install pipenv"
+    exit -1
+fi
+
+# 🔄 Atualiza os pacotes do sistema
+echo "🔄 Atualizando pacotes do sistema..."
+apt update && apt upgrade -y
+echo "Trava padrão. Não UTILIZAR SUDO AQUI."
+echo ""
+
 # Nome do ambiente virtual
 VENV_NAME=".venv"
 VENV_PATH="./$VENV_NAME"
