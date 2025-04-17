@@ -23,8 +23,8 @@ class Config_Img_Classifier:
     MOMENTUM = 0.9
     
     # Paths
-    MODEL_DIR = os.path.join(BASE_DIR, "./saved")
-    BEST_MODEL = os.path.join(MODEL_DIR, "classification.pth")
+    MODEL_DIR = os.path.join(BASE_DIR, "./")
+    BEST_MODEL = os.path.join(MODEL_DIR, "asl_vgg_best_weights.keras")
 
 __all__ = [
     '__DEVICE__',

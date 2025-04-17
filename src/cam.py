@@ -4,7 +4,8 @@ import numpy as np
 from pathlib import Path
 from conf import Config_Img_Classifier
 from GestureNet import ASLNet  # Certifique-se de importar corretamente o modelo
-from grad_cam import GradCAM  # Importa o GradCAM real
+#from grad_cam import GradCAM  # Importa o GradCAM real
+from test_kaggle_corrected import GradCAM
 
 # Configuração do dispositivo
 __DEVICE__ = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -70,7 +71,7 @@ def cam():
             continue
 
         # Pré-processamento
-        input_tensor, gray_frame = preprocess_frame(frame, config.IMG_SIZE)
+        input_tensor, gray_frame = preprocess_frame(frame, 64) # config.IMAGE_SIZE
         input_tensor = input_tensor.to(__DEVICE__)
 
         # Inferência
