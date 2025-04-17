@@ -54,13 +54,13 @@ class CFG:
     batch_size = 64
     img_height = 64
     img_width = 64
-    epochs = 10
+    epochs = 6
     num_classes = 29
     img_channels = 3
 
-TRAIN_PATH = "./src/ASL_Alphabet_Dataset/asl_alphabet_train"
-TEST_PATH = "./src/ASL_Alphabet_Dataset/asl_alphabet_test"
-LABELS = list(string.ascii_uppercase) + ["del", "nothing", "space"]
+TRAIN_PATH = "./data/archive/ASL_Alphabet_Dataset/asl_alphabet_train"
+TEST_PATH = "./data/archive/ASL_Alphabet_Dataset/asl_alphabet_test"
+# LABELS = list(string.ascii_uppercase) + ["del", "nothing", "space"]
 
 def seed_everything(seed=2023):
     random.seed(seed)
@@ -74,20 +74,20 @@ def seed_everything(seed=2023):
 
 if __name__ == "__main__":
     # Labels
-    # labels = []
-    # alphabet = list(string.ascii_uppercase)
-    # labels.extend(alphabet)
-    # labels.extend(["del", "nothing", "space"])
-    print(LABELS)
+    labels = []
+    alphabet = list(string.ascii_uppercase)
+    labels.extend(alphabet)
+    labels.extend(["del", "nothing", "space"])
+    print(labels)
 
-    def sample_images(LABELS):
+    def sample_images(labels):
         # Create Subplots
         y_size = 12
-        if(len(LABELS)<10):
-            y_size = y_size * len(LABELS) / 10
-        fig, axs = plt.subplots(len(LABELS), 9, figsize=(y_size, 13))
+        if(len(labels)<10):
+            y_size = y_size * len(labels) / 10
+        fig, axs = plt.subplots(len(labels), 9, figsize=(y_size, 13))
 
-        for i, label in enumerate(LABELS):
+        for i, label in enumerate(labels):
             axs[i, 0].text(0.5, 0.5, label, ha='center', va='center', fontsize=8)
             axs[i, 0].axis('off')
 
@@ -110,7 +110,7 @@ if __name__ == "__main__":
     # Create Metadata
     list_path = []
     list_labels = []
-    for label in LABELS:
+    for label in labels:
         label_path = os.path.join(TRAIN_PATH, label, "*")
         image_files = glob.glob(label_path)
         
@@ -163,7 +163,7 @@ if __name__ == "__main__":
         # Training Dataset
         train_generator = datagen.flow_from_dataframe(
             data_train,
-            directory="./src/",
+            directory=None,
             x_col="image_path",
             y_col="label",
             class_mode="categorical",
@@ -174,7 +174,7 @@ if __name__ == "__main__":
         # Validation Dataset
         validation_generator = datagen.flow_from_dataframe(
             data_val,
-            directory="./src/",
+            directory=None,
             x_col="image_path",
             y_col="label",
             class_mode="categorical",
@@ -185,7 +185,7 @@ if __name__ == "__main__":
         # Testing Dataset
         test_generator = datagen.flow_from_dataframe(
             data_test,
-            directory="./src/",
+            directory=None,
             x_col="image_path",
             y_col="label",
             class_mode="categorical",
@@ -219,7 +219,7 @@ if __name__ == "__main__":
     model.compile(optimizer=Adam(learning_rate=0.001), loss='categorical_crossentropy', metrics=['accuracy'])
 
     # Callbacks
-    checkpoint = ModelCheckpoint('./src/saved/asl_vgg16_best_weights.pth', save_best_only=True, monitor='val_accuracy', mode='max')
+    checkpoint = ModelCheckpoint('./src/saved/asl_vgg16_best_weights.keras', save_best_only=True, monitor='val_accuracy', mode='max')
 
     # Train the Model
     history = model.fit(
@@ -233,6 +233,9 @@ if __name__ == "__main__":
 
     scores = model.evaluate(test_generator)
     print("%s: %.2f%%" % ("Evaluate Test Accuracy", scores[1]*100))
+    
+    # Save the Model
+    model.save("src/saved/asl_vgg16.keras")
 
     # Visualize Training and Validation Results
 
@@ -324,7 +327,7 @@ if __name__ == "__main__":
     fig.show(iframe_connected=True)
 
     # Confusion Matrix
-    fine_tuned_model = load_model("src/saved/asl_vgg16_best_weights.pth")
+    fine_tuned_model = load_model("src/saved/asl_vgg16_best_weights.keras")
     predictions = fine_tuned_model.predict(test_generator)
 
     # Get the true labels from the generator
@@ -343,8 +346,8 @@ if __name__ == "__main__":
     fig.add_trace(
         go.Heatmap(
             z=confusion_matrix,
-            x=LABELS,
-            y=LABELS,
+            x=labels,
+            y=labels,
             text=confusion_matrix,
             texttemplate="<b>%{text}</b>",
             textfont={"size":8},
@@ -381,7 +384,7 @@ if __name__ == "__main__":
     dense_model = Model(inputs=fine_tuned_model.inputs, outputs=fine_tuned_model.layers[-3].output)
     dense_model.summary()
 
-    print(LABELS)
+    print(labels)
 
     # Extract Features in Dense Layer
     def dense_feature_prediction(img_path):
@@ -393,7 +396,7 @@ if __name__ == "__main__":
         return dense_feature
 
     reduction_data = pd.DataFrame()
-    for label in LABELS:
+    for label in labels:
         label_data = data_test[data_test["label"]==label][:100]
         reduction_data = reduction_data.append(label_data)
 
