@@ -32,21 +32,19 @@ from plotly.subplots import make_subplots
 import tensorflow as tf
 
 """Api keras old"""
-# from tensorflow.keras.preprocessing.image import load_img, img_to_array
+# from tensorflow.keras.preprocessing.image import ImageDataGenerator, load_img, img_to_array
 # from tensorflow.keras.applications import VGG16
 # from tensorflow.keras.models import Model, load_model
 # from tensorflow.keras.layers import Dense, Flatten, Dropout
 # from tensorflow.keras.optimizers import Adam
-# from tensorflow.keras.preprocessing.image import ImageDataGenerator
 # from tensorflow.keras.callbacks import ModelCheckpoint
 
-"""Api keras new"""
-from keras._tf_keras.keras.preprocessing.image import load_img, img_to_array
+"""Api keras legacy"""
+from keras._tf_keras.keras.preprocessing.image import ImageDataGenerator, load_img, img_to_array
 from keras._tf_keras.keras.applications import VGG16
 from keras._tf_keras.keras.models import Model, load_model
 from keras._tf_keras.keras.layers import Dense, Flatten, Dropout
 from keras._tf_keras.keras.optimizers import Adam
-from keras._tf_keras.keras.preprocessing.image import ImageDataGenerator
 from keras._tf_keras.keras.callbacks import ModelCheckpoint
 
 # Configuração
