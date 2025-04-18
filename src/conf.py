@@ -4,19 +4,23 @@ import torch
 import tensorflow as tf
 import matplotlib.pyplot as plt
 
-__DEVICE__ = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# Super-Potato
+#__DEVICE__ = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+# Potato
+__DEVICE__ = torch.device("cpu")
 
 # Configuration
 class Config_Img_Classifier:
     # Data
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     DATA_DIR = os.path.join(BASE_DIR, "../data/archive/ASL_Alphabet_Dataset/asl_alphabet_train")
-    LABELS = list(string.ascii_uppercase) + ["del", "nothing", "space"]
+    # LABELS = list(string.ascii_uppercase) + ["del", "nothing", "space"]
     IMG_SIZE = 32
     BATCH_SIZE = 64
     
     # Model
-    NUM_CLASSES = len(LABELS)
+    # NUM_CLASSES = len(LABELS)
     DROPOUT = 0.5
     
     # Training

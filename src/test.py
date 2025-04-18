@@ -23,6 +23,14 @@ def test_dataset():
     print("Teste do dataset passou com sucesso!")
     
 if __name__ == "__main__":
-    test_dataset()
+    #test_dataset()
+    import torch
+    from GestureNet import ASLNet
+
+    model = ASLNet().to("cpu")  # Teste com CPU primeiro
+    dummy_input = torch.randn(1, 1, 32, 32)
+    output = model(dummy_input)
+    print("Output OK:", output.shape)
+
 
 

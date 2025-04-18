@@ -2,12 +2,10 @@ import torch
 import cv2
 import numpy as np
 from pathlib import Path
-from conf import Config_Img_Classifier
+from conf import Config_Img_Classifier, __DEVICE__, CFG
 from GestureNet import ASLNet  # Certifique-se de importar corretamente o modelo
 from grad_cam import GradCAM  # Importa o GradCAM real
-
-# Configuração do dispositivo
-__DEVICE__ = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+import tensorflow as tf
 
 # Carregar configuração
 config = Config_Img_Classifier()
@@ -117,6 +115,39 @@ from keras._tf_keras.keras.layers import Dense, Flatten, Dropout
 from keras._tf_keras.keras.optimizers import Adam
 from keras._tf_keras.keras.callbacks import ModelCheckpoint
 
+# Configuração
+MODEL_WEIGHTS_PATH = "src/saved/asl_vgg16_best_weights.keras"
+
+def preprocess_frame_ImageNet(frame, img_size=224):
+    """ Converte o frame para RGB, redimensiona e normaliza para a ImageNet """
+    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # Converte para RGB
+    resized_frame = cv2.resize(frame_rgb, (img_size, img_size))  # Redimensiona para 224x224
+    img_array = img_to_array(resized_frame)  # Converte para array
+    img_array = np.expand_dims(img_array, axis=0)  # Adiciona batch dimension
+    img_array = preprocess_input(img_array)  # Pré-processamento específico para ImageNet
+    return img_array, resized_frame
+
+def generate_gradcam(model, image_tensor, target_layer_name="block5_conv3"):
+    grad_model = Model(
+        inputs=model.inputs,
+        outputs=[model.get_layer(target_layer_name).output, model.output]
+    )
+
+    with tf.GradientTape() as tape:
+        conv_outputs, predictions = grad_model(image_tensor)
+        class_idx = tf.argmax(predictions[0])
+        loss = predictions[:, class_idx]
+
+    grads = tape.gradient(loss, conv_outputs)[0]
+    pooled_grads = tf.reduce_mean(grads, axis=(0, 1, 2))
+    conv_outputs = conv_outputs[0]
+
+    cam = tf.reduce_sum(tf.multiply(pooled_grads, conv_outputs), axis=-1)
+    cam = tf.maximum(cam, 0)
+    cam = cam / tf.math.reduce_max(cam)
+    cam = tf.image.resize(cam[..., tf.newaxis], (224, 224)).numpy()
+    return cam.squeeze()
+
 # Configuração de modelo
 def create_model():
     """ Cria o modelo VGG16 com camadas congeladas e novas camadas para classificação """
@@ -135,19 +166,10 @@ def create_model():
     predictions = Dense(29, activation='softmax')(x)
 
     model = Model(inputs=base_model.input, outputs=predictions)
-    model.load_weights('src/saved/asl_vgg16_best_weights.keras')  # Carregar pesos salvos
+    model.load_weights(MODEL_WEIGHTS_PATH)  # Carregar pesos salvos
     model.evaluate()  # Colocar o modelo em modo de avaliação
     model.summary()
     return model
-
-def preprocess_frame_ImageNet(frame, img_size=224):
-    """ Converte o frame para RGB, redimensiona e normaliza para a ImageNet """
-    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # Converte para RGB
-    resized_frame = cv2.resize(frame_rgb, (img_size, img_size))  # Redimensiona para 224x224
-    img_array = img_to_array(resized_frame)  # Converte para array
-    img_array = np.expand_dims(img_array, axis=0)  # Adiciona batch dimension
-    img_array = preprocess_input(img_array)  # Pré-processamento específico para ImageNet
-    return img_array, resized_frame
 
 def camImageNet():
     """ Aplica Grad-CAM usando o modelo VGG16 """
@@ -179,24 +201,24 @@ def camImageNet():
 
         # Pré-processamento do frame
         input_tensor, gray_frame = preprocess_frame_ImageNet(frame, 224)  # Para o VGG16
-        input_tensor = torch.from_numpy(input_tensor).float().to(__DEVICE__)
+        input_tensor = tf.convert_to_tensor(input_tensor, dtype=tf.float32)
 
         # Inferência
         try:
-            with torch.no_grad():
-                output = torch.softmax(model(input_tensor), dim=1)
-            predicted_label = torch.argmax(output, dim=1).item()
-            predicted_name = config.LABELS[predicted_label]
+            output = model(input_tensor, training=False)
+            predicted_label = tf.argmax(output[0]).numpy()
+            predicted_name = CFG.labels[predicted_label]
         except Exception as e:
             print(f"[ERROR] Falha na inferência: {e}")
             predicted_name = "Erro"
             continue  # Pula este frame em caso de erro
 
         # Gera o Grad-CAM
-        cam_map = cam_generator.generate_cam(input_tensor)
+        cam_map = generate_gradcam(model, input_tensor)
         heatmap = np.uint8(255 * cam_map)
         heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
         heatmap = cv2.resize(heatmap, (frame.shape[1], frame.shape[0]))
+        combined = cv2.addWeighted(frame, 0.6, heatmap, 0.4, 0)
 
         # Combina a imagem original com o mapa de calor
         combined = cv2.addWeighted(frame, 0.6, heatmap, 0.4, 0)
