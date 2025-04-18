@@ -7,10 +7,10 @@
 set -e  # Para o script imediatamente em caso de erro
 
 # 🔐 Verifica se é superusuário para não executar
-if [ "$EUID" -ne 0 ]; then
-    echo "Por favor, execute como root apenas essa parte: sudo apt install pipenv"
-    exit -1
-fi
+# if [ "$EUID" -ne 0 ]; then
+#     echo "Por favor, execute como root apenas essa parte: sudo apt install pipenv"
+#     exit -1
+# fi
 
 # 🧰 Função auxiliar
 # 🔐 Verifica se é superusuário para executar

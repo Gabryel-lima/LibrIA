@@ -6,11 +6,11 @@ set -e  # Encerra o script ao primeiro erro
 # Deve ser executado SEM permissões de superusuário (sudo).
 # Apenas chmod +x arquivo.sh e execute o script.
 
-# 🔐 Verifica se é superusuário para não executar
-if [ "$EUID" -ne 0 ]; then
-    echo "Por favor, execute como root apenas essa parte: sudo apt install pipenv"
-    exit -1
-fi
+# 🔐 Verifica se é superusuário e encerra 
+# if [ "$EUID" -ne 0 ]; then
+#     echo "Por favor, execute como root apenas essa parte: sudo apt install pipenv"
+#     exit -1
+# fi
 
 # 🔄 Atualiza os pacotes do sistema
 echo "🔄 Atualizando pacotes do sistema..."
