@@ -5,10 +5,10 @@ import tensorflow as tf
 import matplotlib.pyplot as plt
 
 # Super-Potato
-#__DEVICE__ = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+__DEVICE__ = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Potato
-__DEVICE__ = torch.device("cpu")
+#__DEVICE__ = torch.device("cpu")
 
 # Configuration
 class Config_Img_Classifier:
@@ -30,7 +30,7 @@ class Config_Img_Classifier:
     
     # Paths
     MODEL_DIR = os.path.join(BASE_DIR, "./")
-    BEST_MODEL = os.path.join(MODEL_DIR, "asl_vgg_best_weights.keras")
+    BEST_MODEL = os.path.join(MODEL_DIR, "classification.pth")
     
     
 # Configuração

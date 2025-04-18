@@ -5,7 +5,7 @@ from pathlib import Path
 from conf import Config_Img_Classifier, __DEVICE__, CFG
 from GestureNet import ASLNet  # Certifique-se de importar corretamente o modelo
 from grad_cam import GradCAM  # Importa o GradCAM real
-import tensorflow as tf
+#import tensorflow as tf
 
 # Carregar configuração
 config = Config_Img_Classifier()
@@ -238,6 +238,6 @@ def camImageNet():
     cv2.destroyAllWindows()
 
 if __name__ == "__main__":
-    #camASLNet()
-    camImageNet()
+    camASLNet()
+    #camImageNet()
     

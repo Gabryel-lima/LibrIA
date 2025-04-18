@@ -300,5 +300,5 @@ def train_model():
 if __name__ == "__main__":
     # train_model()
     # print("Training completed. Best model saved to:", config.BEST_MODEL)
-    from cam import cam
-    cam()
+    from cam import camASLNet
+    camASLNet()
