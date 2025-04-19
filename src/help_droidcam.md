@@ -71,4 +71,4 @@ Isso apagará o cliente, o módulo e as configurações associadas ([Diolinux](h
 > **Observação sobre áudio**  
 > Embora exista o script `install-sound`, muitos usuários enfrentam instabilidades mantendo o DroidCam apenas para vídeo e usando um microfone dedicado para áudio. Se optar por utilizar o áudio do smartphone, esteja preparado para ajustar manualmente módulos ALSA ou PulseAudio/PipeWire ([dev47apps.com](https://www.dev47apps.com/droidcam/linux/?utm_source=chatgpt.com)).
 
-Com esses passos, o seu Ubuntu estará apto a utilizar o smartphone como webcam com o DroidCam.
+Lembrando, inicie o droidcam em um terminal anterior, antes de passar o código.

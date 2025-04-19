@@ -6,6 +6,7 @@ from keras.api.applications.vgg16 import preprocess_input
 from conf import CFG
 
 def open_camera(ip_url="/dev/video1", fallback_device=0):
+    # Lembrando, inicie o droidcam em um terminal anterior, antes de passar o código.
     """Tenta abrir a câmera IP; se falhar, tenta abrir a câmera local."""
     cap = cv2.VideoCapture(ip_url)
     if cap.isOpened():

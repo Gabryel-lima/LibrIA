@@ -3,6 +3,9 @@ import string
 import torch
 import tensorflow as tf
 import matplotlib.pyplot as plt
+import os
+import random
+import numpy as np
 
 # Super-Potato
 __DEVICE__ = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -53,9 +56,6 @@ class CFG:
     print(labels)
 
     def seed_everything(seed=2023):
-        import os
-        import random
-        import numpy as np
         random.seed(seed)
         os.environ["PYTHONHASHSEED"] = str(seed)
         np.random.seed(seed)

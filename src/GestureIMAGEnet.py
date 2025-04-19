@@ -6,14 +6,13 @@ warnings.filterwarnings("ignore")
 
 import glob
 import cv2
-import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import string
-import random
 from sklearn.model_selection import train_test_split
 
-import tensorflow as tf
+
+from conf import CFG, seed_everything
 
 """Api keras old"""
 # from tensorflow.keras.preprocessing.image import ImageDataGenerator, load_img, img_to_array
@@ -50,7 +49,7 @@ if __name__ == "__main__":
             axs[i, 0].text(0.5, 0.5, label, ha='center', va='center', fontsize=8)
             axs[i, 0].axis('off')
 
-            label_path = os.path.join(TRAIN_PATH, label)
+            label_path = os.path.join(CFG.TRAIN_PATH, label)
             list_files = os.listdir(label_path)
 
             for j in range(8):
@@ -70,7 +69,7 @@ if __name__ == "__main__":
     list_path = []
     list_labels = []
     for label in labels:
-        label_path = os.path.join(TRAIN_PATH, label, "*")
+        label_path = os.path.join(CFG.TRAIN_PATH, label, "*")
         image_files = glob.glob(label_path)
         
         sign_label = [label] * len(image_files)

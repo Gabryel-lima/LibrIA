@@ -42,7 +42,7 @@ def plot_training_history(history, save_path='training_history.png'):
 def sample_correct_class():
     import numpy as np
     import matplotlib.pyplot as plt
-    from src.GestureNet import Libria  # Certifique-se de que Libria está configurado corretamente
+    from src.GestureASLnet import Libria  # Certifique-se de que Libria está configurado corretamente
 
     # Inicialização da rede e carregamento de dados
     libria = Libria(input_shape=(28, 28, 1), num_blocks=[2, 2, 2, 2])

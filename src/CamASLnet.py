@@ -3,14 +3,15 @@ import cv2
 import numpy as np
 from pathlib import Path
 from conf import Config_Img_Classifier, __DEVICE__, CFG
-from GestureNet import ASLNet  # Certifique-se de importar corretamente o modelo
+from src.GestureASLnet import ASLNet  # Certifique-se de importar corretamente o modelo
 from src.GradCam import GradCAM  # Importa o GradCAM real
 #import tensorflow as tf
 
 # Carregar configuração
 config = Config_Img_Classifier()
 
-def open_camera(ip_url="http://192.168.1.4:4747/video", fallback_device=0):
+def open_camera(ip_url="/dev/video1", fallback_device=0):
+    # Lembrando, inicie o droidcam em um terminal anterior, antes de passar o código.
     """Tenta abrir a câmera IP; se falhar, tenta abrir a câmera local."""
     cap = cv2.VideoCapture(ip_url)
     if cap.isOpened():
