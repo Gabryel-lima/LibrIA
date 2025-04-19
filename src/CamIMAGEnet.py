@@ -5,6 +5,8 @@ from keras.api.models import load_model, Model
 from keras.api.applications.vgg16 import preprocess_input
 from conf import CFG
 
+from GradCam import GradCAM
+
 def open_camera(ip_url="/dev/video1", fallback_device=0):
     # Lembrando, inicie o droidcam em um terminal anterior, antes de passar o código.
     """Tenta abrir a câmera IP; se falhar, tenta abrir a câmera local."""
@@ -93,7 +95,7 @@ def cam_imagenet():
 
         inp, _      = preprocess_frame(frame)
         preds       = model.predict(inp, verbose=0)
-        label       = CFG.labels[np.argmax(preds[0])]
+        label       = CFG.labels[np.argmax(preds[0])] # Assuming CFG.labels is a list of labels
 
         cam_map     = generate_gradcam(model, inp)
         heat        = np.uint8(255 * cam_map)
@@ -104,6 +106,8 @@ def cam_imagenet():
         cv2.putText(combined, f"Pred: {label}", (10,30),
                     cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 2)
         cv2.imshow("Grad-CAM", combined)
+        
+        # Press 'Esc' to exit
         if cv2.waitKey(10) & 0xFF == 27:
             break
 

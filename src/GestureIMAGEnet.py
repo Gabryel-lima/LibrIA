@@ -11,8 +11,7 @@ import matplotlib.pyplot as plt
 import string
 from sklearn.model_selection import train_test_split
 
-
-from conf import CFG, seed_everything
+from conf import CFG
 
 """Api keras old"""
 # from tensorflow.keras.preprocessing.image import ImageDataGenerator, load_img, img_to_array
@@ -32,38 +31,7 @@ from keras.api.callbacks import ModelCheckpoint
 
 if __name__ == "__main__":
     # Labels
-    labels = []
-    alphabet = list(string.ascii_uppercase)
-    labels.extend(alphabet)
-    labels.extend(["del", "nothing", "space"])
-    print(labels)
-
-    def sample_images(labels):
-        # Create Subplots
-        y_size = 12
-        if(len(labels)<10):
-            y_size = y_size * len(labels) / 10
-        fig, axs = plt.subplots(len(labels), 9, figsize=(y_size, 13))
-
-        for i, label in enumerate(labels):
-            axs[i, 0].text(0.5, 0.5, label, ha='center', va='center', fontsize=8)
-            axs[i, 0].axis('off')
-
-            label_path = os.path.join(CFG.TRAIN_PATH, label)
-            list_files = os.listdir(label_path)
-
-            for j in range(8):
-                img_label = cv2.imread(os.path.join(label_path, list_files[j]))
-                img_label = cv2.cvtColor(img_label, cv2.COLOR_BGR2RGB)
-                axs[i, j+1].imshow(img_label)
-                axs[i, j+1].axis("off")
-
-        # Title
-        plt.suptitle("Sample Images in ASL Alphabet Dataset", x=0.55, y=0.92)
-
-        # Show
-        plt.show()
-        
+    labels = CFG.labels
 
     # Create Metadata
     list_path = []
@@ -154,7 +122,7 @@ if __name__ == "__main__":
         
         return train_generator, validation_generator, test_generator
 
-    seed_everything(2023)
+    CFG.seed_everything(2023)
     train_generator, validation_generator, test_generator = data_augmentation()
 
     # Load VGG16 model and modify for ASL recognition
@@ -177,7 +145,7 @@ if __name__ == "__main__":
     model.compile(optimizer=Adam(learning_rate=0.001), loss='categorical_crossentropy', metrics=['accuracy'])
 
     # Callbacks
-    checkpoint = ModelCheckpoint('./src/saved/asl_vgg16_full_model.keras', save_best_only=True, monitor='val_accuracy', mode='max')
+    checkpoint = ModelCheckpoint('./src/saved/asl_vgg16_chpt.keras', save_best_only=True, monitor='val_accuracy', mode='max')
 
     # Train the Model
     history = model.fit(
@@ -193,4 +161,4 @@ if __name__ == "__main__":
     print("%s: %.2f%%" % ("Evaluate Test Accuracy", scores[1]*100))
     
     # Save the Model
-    model.save("src/saved/asl_vgg16.keras")
+    model.save("src/saved/asl_vgg16_full_model.keras")
