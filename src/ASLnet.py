@@ -7,12 +7,11 @@
 ### GestureNet - Classifier
 
 import os
-import random
-import string
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torchvision import models
 from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms as transforms
 from PIL import Image
@@ -20,6 +19,7 @@ from tqdm import tqdm
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
 from pathlib import Path
+import cv2
 from conf import *
 
 # Config
@@ -107,6 +107,54 @@ def _plot_confusion_matrix(preds, labels, plot_dir):
     plt.savefig(plot_dir/"confusion_matrix.png")
     plt.close()
 
+class GradCAM:
+    def __init__(self, model, target_layer):
+        self.model = model
+        self.target_layer = target_layer
+        self.gradients = None
+        self.activations = None
+        self.hook_layers()
+
+    def hook_layers(self):
+        def backward_hook(module, grad_input, grad_output):
+            self.gradients = grad_output[0]
+
+        def forward_hook(module, input, output):
+            self.activations = output
+
+        self.target_layer.register_forward_hook(forward_hook)
+        self.target_layer.register_backward_hook(backward_hook)
+
+    def generate_cam(self, input_tensor, class_idx=None):
+        # Forward
+        output = self.model(input_tensor)
+
+        if class_idx is None:
+            class_idx = output.argmax(dim=1).item()
+
+        # Zero gradients
+        self.model.zero_grad()
+
+        # Backward
+        target = output[0, class_idx]
+        target.backward()
+
+        # Gradients e Ativações
+        gradients = self.gradients.cpu().data.numpy()[0]
+        activations = self.activations.cpu().data.numpy()[0]
+
+        weights = np.mean(gradients, axis=(1, 2))  # Média sobre H e W
+        cam = np.zeros(activations.shape[1:], dtype=np.float32)
+
+        for i, w in enumerate(weights):
+            cam += w * activations[i]
+
+        cam = np.maximum(cam, 0)
+        cam = cv2.resize(cam, (input_tensor.shape[3], input_tensor.shape[2]))
+        cam -= np.min(cam)
+        cam /= np.max(cam)
+        return cam
+
 # Custom Dataset with error handling
 class ASLDataset(Dataset):
     def __init__(self, data, transform=None):
@@ -154,6 +202,41 @@ class ASLNet(nn.Module):
 
     def forward(self, x):
         x = self.features(x)
+        x = torch.flatten(x, 1)
+        x = self.classifier(x)
+        return x
+
+class HybridASLNet(nn.Module):
+    def __init__(self, num_classes=29, dropout=0.5):
+        super(HybridASLNet, self).__init__()
+        
+        # Carrega a VGG16 pré-treinada
+        vgg = models.vgg16(pretrained=True)
+        
+        # Congela os pesos convolucionais
+        for param in vgg.features.parameters():
+            param.requires_grad = False
+
+        # Extrator de características (até o final da convolução)
+        self.features = vgg.features  # Até o último MaxPool
+
+        # Adaptação do flatten
+        self.avgpool = vgg.avgpool  # Aplica AdaptiveAvgPool2d((7, 7))
+
+        # Classificador personalizado
+        self.classifier = nn.Sequential(
+            nn.Linear(512 * 7 * 7, 512),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout),
+            nn.Linear(512, 256),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout),
+            nn.Linear(256, num_classes)
+        )
+
+    def forward(self, x):
+        x = self.features(x)
+        x = self.avgpool(x)
         x = torch.flatten(x, 1)
         x = self.classifier(x)
         return x
@@ -298,7 +381,7 @@ def train_model():
     _plot_confusion_matrix(all_preds, all_labels, plot_dir)
     
 if __name__ == "__main__":
-    # train_model()
-    # print("Training completed. Best model saved to:", config.BEST_MODEL)
-    from src.CamASLnet import camASLNet
-    camASLNet()
+    train_model()
+    print("Training completed. Best model saved to:", config.BEST_MODEL)
+    # from cam import camASLNet
+    # camASLNet()

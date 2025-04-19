@@ -1,11 +1,8 @@
 import torch
 import cv2
 import numpy as np
-from pathlib import Path
-from conf import Config_Img_Classifier, __DEVICE__, CFG
-from GestureASLnet import ASLNet  # Certifique-se de importar corretamente o modelo
-from GradCam import GradCAM  # Importa o GradCAM real
-#import tensorflow as tf
+from conf import Config_Img_Classifier, __DEVICE__
+from ASLnet import ASLNet, GradCAM  # Certifique-se de importar corretamente o modelo
 
 # Carregar configuração
 config = Config_Img_Classifier()
@@ -41,7 +38,7 @@ def camASLNet():
     try:
         # Carrega o modelo
         model = ASLNet().to(__DEVICE__)
-        model.load_state_dict(torch.load(config.BEST_MODEL, map_location=__DEVICE__))
+        model.load_state_dict(torch.load(config.BEST_MODEL, map_location=__DEVICE__, weights_only=True))
         model.eval()
         print("[INFO] Modelo carregado com sucesso.")
 
@@ -84,7 +81,7 @@ def camASLNet():
             continue  # Pula esse frame com erro
 
         # Gera o Grad-CAM verdadeiro
-        cam_map = cam_generator.generate_cam(input_tensor)
+        cam_map = cam_generator.generate_cam(input_tensor, class_idx=predicted_label)
         heatmap = np.uint8(255 * cam_map)
         heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
         heatmap = cv2.resize(heatmap, (frame.shape[1], frame.shape[0]))

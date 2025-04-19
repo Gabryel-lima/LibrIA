@@ -18,12 +18,12 @@ class Config_Img_Classifier:
     # Data
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     DATA_DIR = os.path.join(BASE_DIR, "../data/archive/ASL_Alphabet_Dataset/asl_alphabet_train")
-    # LABELS = list(string.ascii_uppercase) + ["del", "nothing", "space"]
-    IMG_SIZE = 32
+    LABELS = list(string.ascii_uppercase) + ["del", "nothing", "space"]
+    IMG_SIZE = 64
     BATCH_SIZE = 64
     
     # Model
-    # NUM_CLASSES = len(LABELS)
+    NUM_CLASSES = len(LABELS)
     DROPOUT = 0.5
     
     # Training
@@ -32,9 +32,7 @@ class Config_Img_Classifier:
     MOMENTUM = 0.9
     
     # Paths
-    MODEL_DIR = os.path.join(BASE_DIR, "./")
-    BEST_MODEL = os.path.join(MODEL_DIR, "classification.pth")
-    
+    BEST_MODEL = "src/saved/classification.pth"
     
 # Configuração
 class CFG:
@@ -49,17 +47,17 @@ class CFG:
     TEST_PATH = "./data/archive/ASL_Alphabet_Dataset/asl_alphabet_test"
     # LABELS = list(string.ascii_uppercase) + ["del", "nothing", "space"]
     
-    labels = []
-    alphabet = list(string.ascii_uppercase)
-    labels.extend(alphabet)
-    labels.extend(["del", "nothing", "space"])
-    print(labels)
+    # labels = []
+    # alphabet = list(string.ascii_uppercase)
+    # labels.extend(alphabet)
+    # labels.extend(["del", "nothing", "space"])
+    # print(labels)
 
-    def seed_everything(seed=2023):
-        random.seed(seed)
-        os.environ["PYTHONHASHSEED"] = str(seed)
-        np.random.seed(seed)
-        tf.random.set_seed(seed)
+    # def seed_everything(seed=2023):
+    #     random.seed(seed)
+    #     os.environ["PYTHONHASHSEED"] = str(seed)
+    #     np.random.seed(seed)
+    #     tf.random.set_seed(seed)
 
 __all__ = [
     '__DEVICE__',
