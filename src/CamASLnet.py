@@ -3,8 +3,8 @@ import cv2
 import numpy as np
 from pathlib import Path
 from conf import Config_Img_Classifier, __DEVICE__, CFG
-from src.GestureASLnet import ASLNet  # Certifique-se de importar corretamente o modelo
-from src.GradCam import GradCAM  # Importa o GradCAM real
+from GestureASLnet import ASLNet  # Certifique-se de importar corretamente o modelo
+from GradCam import GradCAM  # Importa o GradCAM real
 #import tensorflow as tf
 
 # Carregar configuração
