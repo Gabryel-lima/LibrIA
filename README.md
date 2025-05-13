@@ -14,7 +14,7 @@
 
 <h2>Demonstração</h2>
 <video class="demo-video" controls>
-  <source src="docs/api/Filter_87.mp4" type="video/mp4">
+  <source src="./docs/api/Filter_87.mp4" type="video/mp4">
   Seu navegador não suporta o elemento <code>video</code>.
     <style>
         .demo-video {
