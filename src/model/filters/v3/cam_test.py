@@ -558,7 +558,7 @@ def inference_with_gradcam_and_hands(model_path, source=0, target_layer_name='co
 if __name__ == "__main__":
     inference_with_gradcam_and_hands(
         "src/model/filters/v3/v3_land_63.pt",
-        source=2,  # Use 0 para webcam padrão
+        source=0,  # Use 0 para webcam padrão
         target_layer_name='conv5_3',
         inference_fps=15  # Ajuste conforme FPS desejado e capacidade do hardware
     )

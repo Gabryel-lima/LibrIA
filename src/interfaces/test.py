@@ -47,7 +47,7 @@ def debug_landmarks(frame, hand_landmarks, threshold_overlap=20):
 
     return frame
 
-def cam(device_index=2):
+def cam(device_index=0):
     cap = cv2.VideoCapture(device_index) # Verifique o valor correto do droidcam
     if not cap.isOpened():
         raise RuntimeError(f"Não foi possível abrir a câmera no índice {device_index}")

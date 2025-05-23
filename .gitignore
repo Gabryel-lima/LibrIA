@@ -172,6 +172,7 @@ ASL_Alphabet_Dataset/
 *.zip
 
 # Modelos grandes de LibrIA
+/src/interfaces/*.pth
 src/saved/vgg16/*.h5
 src/saved/vgg16/*.keras
 src/saved/*.keras

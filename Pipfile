@@ -4,6 +4,7 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
+mediapipe = "*"
 absl-py = "==2.1.0"
 annotated-types = "==0.7.0"
 astunparse = "==1.6.3"

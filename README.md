@@ -13,17 +13,13 @@
 </ul>
 
 <h2>Demonstração</h2>
-<video class="demo-video" controls>
-  <source src="./docs/api/Filter_87.mp4" type="video/mp4">
-  Seu navegador não suporta o elemento <code>video</code>.
-    <style>
-        .demo-video {
-            width: 100%;
-            height: auto;
-        }
-    </style>
-</video>
+<p>Para visualizar a demonstração do sistema, você pode:</p>
+<ul>
+    <li>Baixar o vídeo de demonstração <a href="docs/api/Filter_87.mp4">aqui</a></li>
+    <li>Ou assistir diretamente no repositório através do link: <a href="docs/api/Filter_87.mp4">Vídeo de Demonstração</a></li>
+</ul>
 
+<p><strong>Nota:</strong> Se o vídeo não carregar diretamente no GitHub, você pode baixá-lo e reproduzir localmente.</p>
 
 <h2>Diferenciais</h2>
 <ul>

@@ -5,7 +5,7 @@
 int main() {
     torch::jit::script::Module model;
 
-    const std::string PATH = "src/saved/classification.pth";
+    const std::string PATH = "src/interfaces/best_model.pth";
     try {
         model = torch::jit::load(PATH); // Carrega o modelo treinado
         model.to(torch::kCPU);
