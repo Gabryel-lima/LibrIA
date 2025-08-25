@@ -286,7 +286,16 @@ def setup_video_recording(cap, output_path: str, fps: float = 20.0):
     """
     frame_width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
     frame_height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
-    fourcc = cv.VideoWriter_fourcc(*'XVID')
+    
+    # Determinar o codec baseado na extensão do arquivo
+    if output_path.lower().endswith('.mp4'):
+        fourcc = cv.VideoWriter_fourcc(*'mp4v')
+    elif output_path.lower().endswith('.avi'):
+        fourcc = cv.VideoWriter_fourcc(*'XVID')
+    else:
+        # Padrão para MP4
+        fourcc = cv.VideoWriter_fourcc(*'mp4v')
+    
     return cv.VideoWriter(output_path, fourcc, fps, (frame_width, frame_height))
 
 def validate_image_path(image_path: str) -> bool:

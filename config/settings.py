@@ -51,7 +51,7 @@ INFERENCE_CONFIG = {
     'min_detection_confidence': 0.3,
     'prediction_interval': 20,  # Frames entre predições
     'record_video': True,
-    'output_video_path': 'output.avi'
+    'output_video_path': 'output.mp4'
 }
 
 # Configurações de Interface

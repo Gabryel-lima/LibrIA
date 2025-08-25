@@ -12,8 +12,8 @@ cap = cv.VideoCapture(0)
 frame_width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
 frame_height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
 
-fourcc = cv.VideoWriter_fourcc(*'XVID')
-out = cv.VideoWriter('out.avi', fourcc, 20.0, (frame_width, frame_height))
+fourcc = cv.VideoWriter_fourcc(*'mp4v')
+out = cv.VideoWriter('out.mp4', fourcc, 20.0, (frame_width, frame_height))
 
 mp_hands = mp.solutions.hands
 mp_drawing = mp.solutions.drawing_utils

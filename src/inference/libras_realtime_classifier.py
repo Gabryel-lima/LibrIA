@@ -68,7 +68,7 @@ class LibrasRealtimeClassifier:
         except Exception as e:
             raise RuntimeError(f"Erro ao carregar modelo: {e}")
     
-    def start_classification(self, record_video: bool = False, output_path: str = 'output.avi'):
+    def start_classification(self, record_video: bool = False, output_path: str = 'output.mp4'):
         """
         Inicia a classificação em tempo real.
         
@@ -281,7 +281,16 @@ class LibrasRealtimeClassifier:
         """Configura a gravação de vídeo."""
         frame_width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
         frame_height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
-        fourcc = cv.VideoWriter_fourcc(*'XVID')
+        
+        # Determinar o codec baseado na extensão do arquivo
+        if output_path.lower().endswith('.mp4'):
+            fourcc = cv.VideoWriter_fourcc(*'mp4v')
+        elif output_path.lower().endswith('.avi'):
+            fourcc = cv.VideoWriter_fourcc(*'XVID')
+        else:
+            # Padrão para MP4
+            fourcc = cv.VideoWriter_fourcc(*'mp4v')
+        
         return cv.VideoWriter(output_path, fourcc, 20.0, (frame_width, frame_height))
     
     def _toggle_video_recording(self, cap, video_writer, output_path: str):
