@@ -1,0 +1,15 @@
+# Dependências principais
+opencv-python>=4.5.0
+mediapipe>=0.8.0
+scikit-learn>=1.0.0
+numpy>=1.21.0
+
+# Dependências opcionais para desenvolvimento
+# matplotlib>=3.5.0  # Para visualização de dados
+# jupyter>=1.0.0     # Para notebooks
+# pandas>=1.3.0      # Para manipulação de dados
+# seaborn>=0.11.0    # Para visualizações estatísticas
+
+# Dependências para testes (opcional)
+# pytest>=6.0.0
+# pytest-cov>=2.0.0
