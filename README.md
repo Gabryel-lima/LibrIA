@@ -364,7 +364,6 @@ Contribuições são bem-vindas! Para contribuir:
 - [ ] Interface gráfica (GUI)
 - [ ] Modelo neural mais avançado
 - [ ] Suporte para múltiplas mãos
-- [ ] Aplicação mobile
 - [ ] Testes automatizados
 - [ ] CI/CD pipeline
 

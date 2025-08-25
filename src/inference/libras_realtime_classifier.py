@@ -23,9 +23,7 @@ import time
 class LibrasRealtimeClassifier:
     """Classe para classificação em tempo real de Libras."""
     
-    def __init__(self, model_path: str = './model/model.pickle', 
-                 min_detection_confidence: float = 0.3,
-                 prediction_interval: int = 20):
+    def __init__(self, model_path: str = './model/model.pickle', min_detection_confidence: float = 0.3, prediction_interval: int = 20):
         """
         Inicializa o classificador em tempo real.
         
@@ -54,8 +52,7 @@ class LibrasRealtimeClassifier:
         )
         
         # Dicionário do alfabeto
-        self.alphabet_dict = {i: chr(65 + i) for i in range(26) 
-                             if chr(65 + i) not in ['J', 'Z']}
+        self.alphabet_dict = {i: chr(65 + i) for i in range(26) if chr(65 + i) not in ['J', 'Z']}
         
         # Variáveis de controle
         self.counter = 0
@@ -71,8 +68,7 @@ class LibrasRealtimeClassifier:
         except Exception as e:
             raise RuntimeError(f"Erro ao carregar modelo: {e}")
     
-    def start_classification(self, record_video: bool = False, 
-                           output_path: str = 'output.avi'):
+    def start_classification(self, record_video: bool = False, output_path: str = 'output.avi'):
         """
         Inicia a classificação em tempo real.
         
