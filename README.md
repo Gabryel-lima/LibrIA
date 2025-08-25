@@ -28,6 +28,7 @@ O **LibrIA** é um sistema completo de reconhecimento de linguagem de sinais (Li
 - 📊 **Pipeline completo** de dados
 - 🔄 **Inferência contínua** com feedback visual
 - 📱 **Interface intuitiva** com overlay de informações
+- 🏗️ **Arquitetura modular** e bem organizada
 
 ## 🛠️ Tecnologias Utilizadas
 
@@ -40,24 +41,44 @@ O **LibrIA** é um sistema completo de reconhecimento de linguagem de sinais (Li
 | **NumPy** | 1.21+ | Computação numérica |
 | **Pickle** | - | Serialização de dados |
 
-## 📁 Estrutura do Projeto
+## 📁 Nova Estrutura do Projeto
 
 ```
 LibrIA/
-├── 📁 data/                 # Dataset de imagens coletadas
-│   ├── 0/                  # Classe A (0-299 imagens)
-│   ├── 1/                  # Classe B (0-299 imagens)
-│   └── ...                 # Outras classes (2-25)
-├── 📁 dataset/             # Dados processados
-│   └── data.pickle         # Dataset com landmarks
-├── 📁 model/               # Modelos treinados
-│   └── model.pickle        # Modelo Random Forest
-├── 📄 collect_data.py      # Coleta de dados via webcam
-├── 📄 create_dataset.py    # Processamento do dataset
-├── 📄 model.py             # Treinamento do modelo
-├── 📄 inference_classifier.py # Inferência em tempo real
-├── 📄 README.md            # Documentação
-└── 📄 .gitignore           # Arquivos ignorados pelo Git
+├── 📁 src/                          # Código fonte principal
+│   ├── 📁 data_collection/          # Coleta de dados via webcam
+│   │   ├── __init__.py
+│   │   └── libras_data_collector.py
+│   ├── 📁 data_processing/          # Processamento de imagens
+│   │   ├── __init__.py
+│   │   └── libras_dataset_processor.py
+│   ├── 📁 model_training/           # Treinamento de modelos
+│   │   ├── __init__.py
+│   │   └── libras_model_trainer.py
+│   ├── 📁 inference/                # Inferência em tempo real
+│   │   ├── __init__.py
+│   │   └── libras_realtime_classifier.py
+│   └── __init__.py
+├── 📁 config/                       # Configurações centralizadas
+│   ├── __init__.py
+│   └── settings.py
+├── 📁 utils/                        # Utilitários e funções auxiliares
+│   ├── __init__.py
+│   └── helpers.py
+├── 📁 data/                         # Dataset de imagens coletadas
+│   ├── 0/                          # Classe A (0-299 imagens)
+│   ├── 1/                          # Classe B (0-299 imagens)
+│   └── ...                         # Outras classes (2-25)
+├── 📁 dataset/                      # Dados processados
+│   └── data.pickle                 # Dataset com landmarks
+├── 📁 model/                        # Modelos treinados
+│   └── model.pickle                # Modelo Random Forest
+├── 📁 output/                       # Saídas (vídeos, screenshots)
+├── 📁 backup_old_files/             # Arquivos antigos (backup)
+├── 📄 main.py                       # Script principal unificado
+├── 📄 README.md                     # Documentação
+├── 📄 requirements.txt              # Dependências
+└── 📄 .gitignore                    # Arquivos ignorados pelo Git
 ```
 
 ## 🚀 Instalação e Configuração
@@ -72,7 +93,7 @@ LibrIA/
 
 1. **Clone o repositório**
    ```bash
-   git clone https://github.com/seu-usuario/LibrIA.git
+   git clone https://github.com/Gabryel-lima/LibrIA.git
    cd LibrIA
    ```
 
@@ -86,10 +107,7 @@ LibrIA/
 
 3. **Instale as dependências**
    ```bash
-   pip install opencv-python
-   pip install mediapipe
-   pip install scikit-learn
-   pip install numpy
+   pip install -r requirements.txt
    ```
 
 4. **Verifique a instalação**
@@ -99,12 +117,55 @@ LibrIA/
 
 ## 📊 Como Usar
 
-### 1. Coleta de Dados
+### 🎯 Interface Unificada
 
-Execute o script de coleta para criar seu próprio dataset:
+O projeto agora possui uma interface unificada através do script `main.py`:
 
 ```bash
-python collect_data.py
+# Mostrar ajuda
+python main.py help
+
+# Executar pipeline completo
+python main.py all
+
+# Executar etapas individuais
+python main.py collect     # Coletar dados
+python main.py process     # Processar dataset
+python main.py train       # Treinar modelo
+python main.py infer       # Inferência em tempo real
+```
+
+### 📋 Comandos Disponíveis
+
+| Comando | Descrição | Pré-requisitos |
+|---------|-----------|----------------|
+| `collect` | Coletar dados via webcam | Webcam funcional |
+| `process` | Processar dataset coletado | Dados coletados |
+| `train` | Treinar modelo | Dataset processado |
+| `infer` | Inferência em tempo real | Modelo treinado |
+| `all` | Pipeline completo | Webcam funcional |
+| `help` | Mostrar ajuda | Nenhum |
+
+### 🔄 Pipeline Completo
+
+Para executar todo o pipeline de uma vez:
+
+```bash
+python main.py all
+```
+
+Este comando irá:
+1. ✅ Coletar dados via webcam
+2. ✅ Processar imagens e extrair landmarks
+3. ✅ Treinar modelo Random Forest
+4. ✅ Executar inferência em tempo real
+
+### 📝 Instruções Detalhadas
+
+#### 1. Coleta de Dados (`collect`)
+
+```bash
+python main.py collect
 ```
 
 **Instruções durante a coleta:**
@@ -114,12 +175,10 @@ python collect_data.py
 - O sistema captura 150 imagens por mão (300 total por letra)
 - Pressione **'q'** para sair a qualquer momento
 
-### 2. Processamento do Dataset
-
-Após a coleta, processe os dados:
+#### 2. Processamento do Dataset (`process`)
 
 ```bash
-python create_dataset.py
+python main.py process
 ```
 
 Este script:
@@ -127,28 +186,26 @@ Este script:
 - Normaliza as coordenadas
 - Salva o dataset processado em `dataset/data.pickle`
 
-### 3. Treinamento do Modelo
-
-Treine o classificador:
+#### 3. Treinamento do Modelo (`train`)
 
 ```bash
-python model.py
+python main.py train
 ```
 
 **Resultados esperados:**
 - Acurácia: ~99%
 - Modelo salvo em `model/model.pickle`
 
-### 4. Inferência em Tempo Real
-
-Execute o sistema de reconhecimento:
+#### 4. Inferência em Tempo Real (`infer`)
 
 ```bash
-python inference_classifier.py
+python main.py infer
 ```
 
 **Controles:**
 - **'q'**: Sair do programa
+- **'r'**: Alternar gravação de vídeo
+- **'s'**: Capturar screenshot
 - **Detecção automática**: A cada 20 frames
 - **Feedback visual**: Retângulo verde + letra prevista
 
@@ -223,24 +280,31 @@ if results.multi_hand_landmarks:
 
 ### Ajustando Parâmetros
 
-Você pode modificar os seguintes parâmetros nos scripts:
+Você pode modificar os parâmetros no arquivo `config/settings.py`:
 
 ```python
-# collect_data.py
+# Configurações de coleta
 DATASET_SIZE = 150          # Imagens por classe
-NUMBER_OF_CLASSES = 26      # Total de classes
 
-# inference_classifier.py
-min_detection_confidence = 0.3  # Sensibilidade da detecção
-prediction_interval = 20        # Frames entre predições
+# Configurações de inferência
+INFERENCE_CONFIG = {
+    'min_detection_confidence': 0.3,
+    'prediction_interval': 20,  # Frames entre predições
+}
+
+# Configurações do modelo
+MODEL_CONFIG = {
+    'n_estimators': 100,
+    'random_state': 42,
+}
 ```
 
 ### Adicionando Novas Classes
 
-1. Modifique `ALPHABET_DICT` nos scripts
-2. Execute `collect_data.py` para as novas classes
-3. Reprocesse com `create_dataset.py`
-4. Retreine com `model.py`
+1. Modifique `ALPHABET_DICT` em `config/settings.py`
+2. Execute `python main.py collect` para as novas classes
+3. Reprocesse com `python main.py process`
+4. Retreine com `python main.py train`
 
 ## 🐛 Solução de Problemas
 
@@ -252,15 +316,36 @@ prediction_interval = 20        # Frames entre predições
 | **Baixa acurácia** | Colete mais dados ou melhore a iluminação |
 | **Detecção instável** | Ajuste `min_detection_confidence` |
 | **Erro de importação** | Instale as dependências corretamente |
+| **Módulo não encontrado** | Execute `python main.py` a partir da raiz do projeto |
 
 ### Logs e Debug
 
-Para debug detalhado, adicione:
+Para debug detalhado, verifique o arquivo `libras.log`:
 
-```python
-import logging
-logging.basicConfig(level=logging.DEBUG)
+```bash
+tail -f libras.log
 ```
+
+## 🏗️ Melhorias na Arquitetura
+
+### ✅ O que foi melhorado:
+
+1. **Estrutura Modular**: Código organizado em módulos específicos
+2. **Configurações Centralizadas**: Todas as configurações em `config/settings.py`
+3. **Utilitários Reutilizáveis**: Funções auxiliares em `utils/helpers.py`
+4. **Interface Unificada**: Script principal `main.py` com comandos claros
+5. **Documentação Melhorada**: Docstrings e comentários detalhados
+6. **Tratamento de Erros**: Melhor gestão de exceções
+7. **Logging**: Sistema de logs para debug
+8. **Validação**: Verificação de pré-requisitos antes da execução
+
+### 🔄 Migração dos Arquivos Antigos
+
+Os arquivos antigos foram movidos para `backup_old_files/`:
+- `collect_data.py` → `src/data_collection/libras_data_collector.py`
+- `create_dataset.py` → `src/data_processing/libras_dataset_processor.py`
+- `model.py` → `src/model_training/libras_model_trainer.py`
+- `inference_classifier.py` → `src/inference/libras_realtime_classifier.py`
 
 ## 🤝 Contribuindo
 
@@ -280,6 +365,8 @@ Contribuições são bem-vindas! Para contribuir:
 - [ ] Modelo neural mais avançado
 - [ ] Suporte para múltiplas mãos
 - [ ] Aplicação mobile
+- [ ] Testes automatizados
+- [ ] CI/CD pipeline
 
 ## 📄 Licença
 
@@ -287,9 +374,9 @@ Este projeto está licenciado sob a Licença MIT - veja o arquivo [LICENSE](LICE
 
 ## 👨‍💻 Autor
 
-**João Emanuel**
-- LinkedIn: [João Emanuel](https://www.linkedin.com/in/joao-emanuel-7bb2981a4/)
-- GitHub: [@seu-usuario](https://github.com/seu-usuario)
+**Gabryel Lima**
+- LinkedIn: [Gabryel Lima](https://www.linkedin.com/in/gabryel-lima-9076541b2/)
+- GitHub: [@Gabryel-lima](https://github.com/Gabryel-lima)
 
 ## 🙏 Agradecimentos
 
@@ -302,9 +389,9 @@ Este projeto está licenciado sob a Licença MIT - veja o arquivo [LICENSE](LICE
 
 Se você encontrar algum problema ou tiver dúvidas:
 
-- 📧 Email: seu-email@exemplo.com
-- 🐛 Issues: [GitHub Issues](https://github.com/seu-usuario/LibrIA/issues)
-- 💬 Discussões: [GitHub Discussions](https://github.com/seu-usuario/LibrIA/discussions)
+- 📧 Email: gabbryellimasi@gmail.com
+- 🐛 Issues: [GitHub Issues](https://github.com/Gabryel-lima/LibrIA/issues)
+- 💬 Discussões: [GitHub Discussions](https://github.com/Gabryel-lima/LibrIA/discussions)
 
 ---
 
