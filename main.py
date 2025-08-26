@@ -26,13 +26,15 @@ import os
 import argparse
 from pathlib import Path
 
-# Adicionar src ao path
-sys.path.append(str(Path(__file__).parent / "src"))
+# Configurar o path do projeto para importações corretas
+project_root = Path(__file__).parent
+sys.path.insert(0, str(project_root))
 
-from data_collection.libras_data_collector import LibrasDataCollector
-from data_processing.libras_dataset_processor import LibrasDatasetProcessor
-from model_training.libras_model_trainer import LibrasModelTrainer
-from inference.libras_realtime_classifier import LibrasRealtimeClassifier
+# Importações do projeto
+from src.data_collection.libras_data_collector import LibrasDataCollector
+from src.data_processing.libras_dataset_processor import LibrasDatasetProcessor
+from src.model_training.libras_model_trainer import LibrasModelTrainer
+from src.inference.libras_realtime_classifier import LibrasRealtimeClassifier
 from config.settings import create_directories, validate_config
 from utils.helpers import setup_logging
 
@@ -166,57 +168,57 @@ def run_pipeline():
 def show_help():
     """Mostra a ajuda do sistema."""
     help_text = """
-LibrIA - Sistema de Reconhecimento de Libras
-============================================
+        LibrIA - Sistema de Reconhecimento de Libras
+        ============================================
 
-Este sistema implementa um pipeline completo para reconhecimento de 
-linguagem de sinais brasileira (Libras) usando visão computacional.
+        Este sistema implementa um pipeline completo para reconhecimento de 
+        linguagem de sinais brasileira (Libras) usando visão computacional.
 
-COMANDOS DISPONÍVEIS:
+        COMANDOS DISPONÍVEIS:
 
-  collect     Coletar dados via webcam para treinar o modelo
-  process     Processar dataset coletado (extrair landmarks)
-  train       Treinar modelo de machine learning
-  infer       Executar reconhecimento em tempo real
-  all         Executar pipeline completo (collect → process → train → infer)
-  help        Mostrar esta ajuda
+        collect     Coletar dados via webcam para treinar o modelo
+        process     Processar dataset coletado (extrair landmarks)
+        train       Treinar modelo de machine learning
+        infer       Executar reconhecimento em tempo real
+        all         Executar pipeline completo (collect → process → train → infer)
+        help        Mostrar esta ajuda
 
-EXEMPLOS DE USO:
+        EXEMPLOS DE USO:
 
-  # Executar pipeline completo
-  python main.py all
+        # Executar pipeline completo
+        python main.py all
 
-  # Apenas coletar dados
-  python main.py collect
+        # Apenas coletar dados
+        python main.py collect
 
-  # Apenas treinar modelo (se já tiver dados)
-  python main.py train
+        # Apenas treinar modelo (se já tiver dados)
+        python main.py train
 
-  # Apenas inferência (se já tiver modelo treinado)
-  python main.py infer
+        # Apenas inferência (se já tiver modelo treinado)
+        python main.py infer
 
-ESTRUTURA DO PROJETO:
+        ESTRUTURA DO PROJETO:
 
-  src/
-  ├── data_collection/     # Coleta de dados via webcam
-  ├── data_processing/     # Processamento de imagens
-  ├── model_training/      # Treinamento de modelos
-  ├── inference/          # Inferência em tempo real
-  config/                 # Configurações do projeto
-  utils/                  # Utilitários e funções auxiliares
-  data/                   # Dados coletados (imagens)
-  dataset/                # Dataset processado
-  model/                  # Modelos treinados
-  output/                 # Saídas (vídeos, screenshots)
+        src/
+        ├── data_collection/     # Coleta de dados via webcam
+        ├── data_processing/     # Processamento de imagens
+        ├── model_training/      # Treinamento de modelos
+        ├── inference/          # Inferência em tempo real
+        config/                 # Configurações do projeto
+        utils/                  # Utilitários e funções auxiliares
+        data/                   # Dados coletados (imagens)
+        dataset/                # Dataset processado
+        model/                  # Modelos treinados
+        output/                 # Saídas (vídeos, screenshots)
 
-REQUISITOS:
+        REQUISITOS:
 
-  - Python 3.8+
-  - Webcam funcional
-  - Dependências listadas em requirements.txt
+        - Python 3.8+
+        - Webcam funcional
+        - Dependências listadas em requirements.txt
 
-Para mais informações, consulte o README.md
-"""
+        Para mais informações, consulte o README.md
+        """
     print(help_text)
 
 def main():
