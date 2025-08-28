@@ -300,8 +300,8 @@ class LibrasTemporalCNNTrainer:
         history = self.model.fit(
             train_data, y_train,
             validation_data=(test_data, y_test),
-            epochs=100,
-            batch_size=32,
+            epochs=10,
+            batch_size=64,
             callbacks=callbacks,
             verbose=1
         )
