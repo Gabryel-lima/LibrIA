@@ -18,8 +18,7 @@ OUTPUT_DIR = './output'
 # Configurações de Coleta de Dados
 DATASET_SIZE = 150  # Imagens por classe
 NUMBER_OF_CLASSES = 26
-ALPHABET_DICT = {i: chr(65 + i) for i in range(NUMBER_OF_CLASSES) 
-                 if chr(65 + i) not in ['J', 'Z']}
+ALPHABET_DICT = {i: chr(65 + i) for i in range(NUMBER_OF_CLASSES) if chr(65 + i) not in ['J', 'Z']}
 HANDS = ['Right', 'Left']
 
 # Configurações do MediaPipe
