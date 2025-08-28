@@ -52,7 +52,7 @@ class LibrasRealtimeClassifier:
         )
         
         # Dicionário do alfabeto
-        self.alphabet_dict = {i: chr(65 + i) for i in range(26) if chr(65 + i) not in ['J', 'Z']}
+        self.alphabet_dict = {i: chr(65 + i) for i in range(26)}
         
         # Variáveis de controle
         self.counter = 0

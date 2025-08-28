@@ -30,8 +30,7 @@ class LibrasDataCollector:
         self.data_dir = data_dir
         self.dataset_size = dataset_size
         self.number_of_classes = 26
-        self.alphabet_dict = {i: chr(65 + i) for i in range(self.number_of_classes) 
-                             if chr(65 + i) not in ['J', 'Z']}
+        self.alphabet_dict = {i: chr(65 + i) for i in range(self.number_of_classes)}
         self.hands = ['Right', 'Left']
         
         # Criar diretório de dados se não existir

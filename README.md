@@ -211,20 +211,21 @@ python main.py infer
 
 ## 🎯 Alfabeto Suportado
 
-O sistema reconhece 24 letras do alfabeto em Libras:
+O sistema reconhece todas as 26 letras do alfabeto em Libras:
 
 | Letra | Classe | Letra | Classe | Letra | Classe |
 |-------|--------|-------|--------|-------|--------|
 | A | 0 | I | 8 | R | 17 |
-| B | 1 | K | 9 | S | 18 |
-| C | 2 | L | 10 | T | 19 |
-| D | 3 | M | 11 | U | 20 |
-| E | 4 | N | 12 | V | 21 |
-| F | 5 | O | 13 | W | 22 |
-| G | 6 | P | 14 | X | 23 |
-| H | 7 | Q | 15 | Y | 24 |
+| B | 1 | J | 9 | S | 18 |
+| C | 2 | K | 10 | T | 19 |
+| D | 3 | L | 11 | U | 20 |
+| E | 4 | M | 12 | V | 21 |
+| F | 5 | N | 13 | W | 22 |
+| G | 6 | O | 14 | X | 23 |
+| H | 7 | P | 15 | Y | 24 |
+|   |   | Q | 16 | Z | 25 |
 
-**Nota**: As letras J e Z não são suportadas devido à complexidade dos gestos.
+**Nota**: Agora incluindo suporte completo para as letras J e Z.
 
 ## 🔬 Arquitetura Técnica
 

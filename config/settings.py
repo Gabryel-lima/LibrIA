@@ -18,7 +18,7 @@ OUTPUT_DIR = './output'
 # Configurações de Coleta de Dados
 DATASET_SIZE = 150  # Imagens por classe
 NUMBER_OF_CLASSES = 26
-ALPHABET_DICT = {i: chr(65 + i) for i in range(NUMBER_OF_CLASSES) if chr(65 + i) not in ['J', 'Z']}
+ALPHABET_DICT = {i: chr(65 + i) for i in range(NUMBER_OF_CLASSES)}
 HANDS = ['Right', 'Left']
 
 # Configurações do MediaPipe
@@ -114,7 +114,7 @@ def validate_config():
     if FEATURE_DIMENSION != 42:
         errors.append("FEATURE_DIMENSION deve ser 42 (21 landmarks × 2 coordenadas)")
     
-    if len(ALPHABET_DICT) != 24:
-        errors.append("ALPHABET_DICT deve conter 24 letras (excluindo J e Z)")
+    if len(ALPHABET_DICT) != 26:
+        errors.append("ALPHABET_DICT deve conter 26 letras do alfabeto completo")
     
     return errors
