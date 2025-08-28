@@ -139,6 +139,67 @@ def run_inference():
         print(f"❌ Erro durante a inferência: {e}")
         return False
 
+def train_temporal_cnn():
+    """Treina a CNN temporal com contexto histórico."""
+    print("=== Iniciando Treinamento da CNN Temporal ===")
+    
+    # Verificar se dataset existe
+    if not os.path.exists('./dataset/data.pickle'):
+        print("❌ Dataset processado não encontrado. Execute o processamento primeiro.")
+        return False
+    
+    # Verificar TensorFlow
+    try:
+        import tensorflow as tf
+        print(f"🧠 TensorFlow {tf.__version__} detectado")
+    except ImportError:
+        print("❌ TensorFlow não instalado!")
+        print("💡 Instale com: pip install tensorflow")
+        return False
+    
+    # Executar treinamento
+    try:
+        from src.model_training.libras_temporal_cnn_trainer import LibrasTemporalCNNTrainer
+        
+        trainer = LibrasTemporalCNNTrainer()
+        trainer.train_model(model_type='landmark_only')
+        
+        print("✅ CNN Temporal treinada com sucesso!")
+        return True
+    except Exception as e:
+        print(f"❌ Erro durante o treinamento da CNN: {e}")
+        return False
+
+def run_temporal_inference():
+    """Executa a inferência em tempo real usando CNN temporal."""
+    print("=== Iniciando Inferência CNN Temporal ===")
+    
+    # Verificar se existe modelo CNN temporal
+    if not os.path.exists('./model/temporal_cnn_model.h5'):
+        print("❌ Modelo CNN temporal não encontrado. Execute o treinamento primeiro.")
+        print("💡 Use: python main.py train-cnn")
+        return False
+    
+    # Verificar TensorFlow
+    try:
+        import tensorflow as tf
+    except ImportError:
+        print("❌ TensorFlow não instalado!")
+        print("💡 Instale com: pip install tensorflow")
+        return False
+    
+    # Executar inferência temporal
+    try:
+        from src.inference.libras_temporal_classifier import LibrasTemporalClassifier
+        
+        classifier = LibrasTemporalClassifier()
+        classifier.run_realtime_classification()
+        print("✅ Inferência temporal concluída!")
+        return True
+    except Exception as e:
+        print(f"❌ Erro durante a inferência temporal: {e}")
+        return False
+
 def run_pipeline():
     """Executa o pipeline completo."""
     print("🚀 Executando Pipeline Completo do LibrIA")
@@ -178,8 +239,10 @@ def show_help():
 
         collect     Coletar dados via webcam para treinar o modelo
         process     Processar dataset coletado (extrair landmarks)
-        train       Treinar modelo de machine learning
-        infer       Executar reconhecimento em tempo real
+        train       Treinar modelo Random Forest (clássico)
+        train-cnn   Treinar CNN temporal com contexto histórico
+        infer       Executar reconhecimento em tempo real (Random Forest)
+        infer-cnn   Executar reconhecimento com CNN temporal
         all         Executar pipeline completo (collect → process → train → infer)
         help        Mostrar esta ajuda
 
@@ -191,11 +254,17 @@ def show_help():
         # Apenas coletar dados
         python main.py collect
 
-        # Apenas treinar modelo (se já tiver dados)
+        # Treinar modelo Random Forest (clássico)
         python main.py train
 
-        # Apenas inferência (se já tiver modelo treinado)
+        # Treinar CNN temporal (melhor performance)
+        python main.py train-cnn
+
+        # Inferência com Random Forest
         python main.py infer
+
+        # Inferência com CNN temporal
+        python main.py infer-cnn
 
         ESTRUTURA DO PROJETO:
 
@@ -232,7 +301,7 @@ def main():
         add_help=False
     )
     parser.add_argument('command', nargs='?', default='help',
-                       choices=['collect', 'process', 'train', 'infer', 'all', 'help'],
+                       choices=['collect', 'process', 'train', 'train-cnn', 'infer', 'infer-cnn', 'all', 'help'],
                        help='Comando a ser executado')
     
     # Parse argumentos
@@ -245,8 +314,12 @@ def main():
         process_dataset()
     elif args.command == 'train':
         train_model()
+    elif args.command == 'train-cnn':
+        train_temporal_cnn()
     elif args.command == 'infer':
         run_inference()
+    elif args.command == 'infer-cnn':
+        run_temporal_inference()
     elif args.command == 'all':
         run_pipeline()
     else:
