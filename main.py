@@ -136,7 +136,11 @@ def train_model():
             print(f"\n🤖 Modelo treinado:")
             print(f"   Tipo: {model_info['model_type']}")
             print(f"   Estimadores: {model_info['n_estimators']}")
-            print(f"   Acurácia: {model_info['training_history'].get('accuracy', 'N/A'):.2%}")
+            accuracy = model_info['training_history'].get('accuracy', 'N/A')
+            if isinstance(accuracy, (int, float)):
+                print(f"   Acurácia: {accuracy:.2%}")
+            else:
+                print(f"   Acurácia: {accuracy}")
         
         print("✅ Treinamento do modelo concluído com sucesso!")
         return True
