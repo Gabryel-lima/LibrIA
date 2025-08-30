@@ -76,6 +76,7 @@ LibrIA/
 ├── 📁 output/                       # Saídas (vídeos, screenshots)
 ├── 📁 backup_old_files/             # Arquivos antigos (backup)
 ├── 📄 main.py                       # Script principal unificado
+├── 📄 collect_j_z.py               # Script específico para J e Z
 ├── 📄 README.md                     # Documentação
 ├── 📄 requirements.txt              # Dependências
 └── 📄 .gitignore                    # Arquivos ignorados pelo Git
@@ -144,6 +145,7 @@ python main.py infer       # Inferência em tempo real
 | `train` | Treinar modelo | Dataset processado |
 | `infer` | Inferência em tempo real | Modelo treinado |
 | `all` | Pipeline completo | Webcam funcional |
+| `collect_jz` | Coletar apenas J e Z | Webcam funcional |
 | `help` | Mostrar ajuda | Nenhum |
 
 ### 🔄 Pipeline Completo
@@ -174,6 +176,30 @@ python main.py collect
 - Pressione **'m'** para iniciar a captura de cada mão
 - O sistema captura 150 imagens por mão (300 total por letra)
 - Pressione **'q'** para sair a qualquer momento
+
+#### 1.1. Coleta Específica de J e Z (`collect_jz`)
+
+```bash
+python main.py collect_jz
+# ou diretamente:
+python collect_j_z.py
+```
+
+**Quando usar:**
+- Quando você já tem dados de A-Y e precisa apenas completar com J e Z
+- Para adicionar as letras faltantes ao dataset existente
+
+**Instruções específicas:**
+- **Letra J**: Faça o sinal de J em Libras (mão em forma de gancho, movendo em círculo)
+- **Letra Z**: Faça o sinal de Z em Libras (dedo indicador traçando a forma de Z)
+- Pressione **'m'** para iniciar a captura de cada mão
+- Serão capturadas 150 imagens por mão (300 total por letra)
+- Pressione **'q'** para sair a qualquer momento
+
+**Dicas importantes:**
+- Certifique-se de fazer variações do sinal (ângulos diferentes)
+- Mantenha boa iluminação para melhor detecção
+- Centralize a mão na câmera durante a captura
 
 #### 2. Processamento do Dataset (`process`)
 
@@ -225,7 +251,7 @@ O sistema reconhece todas as 26 letras do alfabeto em Libras:
 | H | 7 | P | 15 | Y | 24 |
 |   |   | Q | 16 | Z | 25 |
 
-**Nota**: Agora incluindo suporte completo para as letras J e Z.
+**Nota**: O sistema agora inclui suporte completo para todas as 26 letras do alfabeto. Use `python collect_j_z.py` para capturar especificamente as letras J e Z se elas estiverem faltando no seu dataset.
 
 ## 🔬 Arquitetura Técnica
 

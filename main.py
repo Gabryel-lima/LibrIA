@@ -31,7 +31,7 @@ project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
 # Importações do projeto
-from src.data_collection.libras_data_collector import LibrasDataCollector
+from src.data_collection.libras_data_collector import LibrasDataCollector, collect_specific_letters
 from src.data_processing.libras_dataset_processor import LibrasDatasetProcessor
 from src.model_training.libras_model_trainer import LibrasModelTrainer
 from src.inference.libras_realtime_classifier import LibrasRealtimeClassifier
@@ -61,6 +61,30 @@ def collect_data():
         return True
     except Exception as e:
         print(f"❌ Erro durante a coleta de dados: {e}")
+        return False
+
+def collect_jz_data():
+    """Executa a coleta específica de dados para J e Z."""
+    print("=== Iniciando Coleta de Dados para J e Z ===")
+
+    # Validar configurações
+    errors = validate_config()
+    if errors:
+        print("Erros de configuração encontrados:")
+        for error in errors:
+            print(f"  - {error}")
+        return False
+
+    # Criar diretórios necessários
+    create_directories()
+
+    # Executar coleta específica
+    try:
+        collect_specific_letters()
+        print("✅ Coleta de dados para J e Z concluída com sucesso!")
+        return True
+    except Exception as e:
+        print(f"❌ Erro durante a coleta de dados para J e Z: {e}")
         return False
 
 def process_dataset():
@@ -181,6 +205,7 @@ def show_help():
         COMANDOS DISPONÍVEIS:
 
         collect     Coletar dados via webcam para treinar o modelo
+        collect_jz  Coletar apenas dados de J e Z (complementar dataset)
         process     Processar dataset coletado (extrair landmarks)
         train       Treinar modelo Random Forest
         infer       Executar reconhecimento em tempo real
@@ -194,6 +219,9 @@ def show_help():
 
         # Apenas coletar dados
         python main.py collect
+
+        # Coletar apenas J e Z (complementar dataset existente)
+        python main.py collect_jz
 
         # Treinar modelo Random Forest
         python main.py train
@@ -236,7 +264,7 @@ def main():
         add_help=False
     )
     parser.add_argument('command', nargs='?', default='help',
-                       choices=['collect', 'process', 'train', 'infer', 'all', 'help'],
+                       choices=['collect', 'collect_jz', 'process', 'train', 'infer', 'all', 'help'],
                        help='Comando a ser executado')
     
     # Parse argumentos
@@ -245,6 +273,8 @@ def main():
     # Executar comando
     if args.command == 'collect':
         collect_data()
+    elif args.command == 'collect_jz':
+        collect_jz_data()
     elif args.command == 'process':
         process_dataset()
     elif args.command == 'train':
