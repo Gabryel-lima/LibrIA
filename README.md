@@ -12,7 +12,7 @@
 
 ## 📖 Sobre o Projeto
 
-O **LibrIA** é um sistema completo de reconhecimento de linguagem de sinais (Libras) utilizando técnicas de visão computacional e machine learning. O projeto implementa todo o pipeline, desde a coleta de dados até a inferência em tempo real, desenvolvido do zero.
+O **LibrIA** é um sistema completo de reconhecimento de linguagem de sinais (Libras) utilizando técnicas de visão computacional e machine learning com modelo Random Forest. O projeto implementa todo o pipeline, desde a coleta de dados até a inferência em tempo real, desenvolvido do zero.
 
 ### 🎯 Objetivos
 
@@ -37,7 +37,7 @@ O **LibrIA** é um sistema completo de reconhecimento de linguagem de sinais (Li
 | **Python** | 3.8+ | Linguagem principal |
 | **OpenCV** | 4.5+ | Captura e processamento de vídeo |
 | **MediaPipe** | 0.8+ | Detecção de landmarks da mão |
-| **Scikit-learn** | 1.0+ | Modelo de machine learning |
+| **Scikit-learn** | 1.0+ | Modelo Random Forest |
 | **NumPy** | 1.21+ | Computação numérica |
 | **Pickle** | - | Serialização de dados |
 
@@ -237,12 +237,13 @@ O sistema reconhece todas as 26 letras do alfabeto em Libras:
 4. **Treinamento**: Random Forest Classifier
 5. **Inferência**: Classificação em tempo real
 
-### Características do Modelo
+### Características do Modelo Random Forest
 
-- **Algoritmo**: Random Forest
+- **Algoritmo**: Random Forest Classifier
 - **Features**: 42 coordenadas normalizadas (21 landmarks × 2 coordenadas)
 - **Acurácia**: 99%
 - **Tempo de resposta**: ~50ms por frame
+- **Número de estimadores**: 100 (padrão)
 
 ### Processamento de Imagens
 
