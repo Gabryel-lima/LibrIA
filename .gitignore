@@ -258,3 +258,10 @@ dvc.lock
 
 # Model versioning
 model_registry/
+
+# zip files
+aslamerican-sign-language-aplhabet-dataset.zip
+SignLanguageDetectionLetters.zip
+
+# ASL Alphabet Dataset
+ASL_Alphabet_Dataset/

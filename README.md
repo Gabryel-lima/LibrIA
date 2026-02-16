@@ -30,7 +30,13 @@ O **LibrIA** é um sistema completo de reconhecimento de linguagem de sinais (Li
 - 📱 **Interface intuitiva** com overlay de informações
 - 🏗️ **Arquitetura modular** e bem organizada
 
-## 🛠️ Tecnologias Utilizadas
+## � Documentação Completa
+
+Veja a documentação detalhada nos arquivos:
+- 📥 **[Datasets e Downloads](docs/DATASETS.md)** - Guia sobre como obter dados e modelos
+- 🎬 **[Mudança de Formatos de Vídeo](docs/video_format_changes.md)** - Informações sobre processamento de vídeo
+
+## �🛠️ Tecnologias Utilizadas
 
 | Tecnologia | Versão | Propósito |
 |------------|--------|-----------|
@@ -234,6 +240,47 @@ python main.py infer
 - **'s'**: Capturar screenshot
 - **Detecção automática**: A cada 20 frames
 - **Feedback visual**: Retângulo verde + letra prevista
+
+## 📥 Datasets e Downloads
+
+### Opção 1: Coletar seus próprios dados
+Se você deseja coletar seus próprios dados de Libras, basta executar:
+```bash
+python main.py collect
+```
+
+### Opção 2: Usar datasets pré-coletados
+
+#### ASL Alphabet Dataset (Kaggle)
+Para usar o dataset ASL Alphabet Dataset (alfabeto em linguagem de sinais americana):
+- 📊 **Dataset**: [ASL Alphabet Dataset - Kaggle](https://www.kaggle.com/datasets/grassknoted/asl-alphabet)
+- **Estrutura**: 87.000 imagens das 26 letras
+- **Instruções de download**:
+  1. Crie conta no [Kaggle](https://www.kaggle.com)
+  2. Baixe o dataset
+  3. Descompacte em `data/archive/ASL_Alphabet_Dataset/`
+  4. Execute `python main.py process`
+
+#### Libras Alphabet Dataset (Coletado localmente)
+Se você já coletou dados de Libras e quer compartilhar:
+- 📁 **Pasta de dados**: `ASL_Alphabet_Dataset/`
+- Para usar: Copie os dados coletados para `data/`
+
+### Opção 3: Modelos pré-treinados
+Se deseja usar modelos já treinados sem treinar do zero:
+- 🤖 **Random Forest Model**: 
+  - Localização: `model/model.pickle`
+  - Para usar: `python main.py infer`
+
+### Opção 4: Baixar dados processados (ZIP)
+Para desenvolvimento rápido, você pode baixar os dados já processados em formato ZIP.
+
+**Recursos com links de download** (quando disponíveis):
+- 💾 **Google Drive**: Para compartilhamento fácil de arquivos
+- ☁️ **Amazon S3**: Para distribuição em larga escala  
+- 📦 **GitHub Releases**: Para pequenos arquivos (< 100MB)
+
+Para mais detalhes, consulte a [documentação de datasets](docs/DATASETS.md).
 
 ## 🎯 Alfabeto Suportado
 

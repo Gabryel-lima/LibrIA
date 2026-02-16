@@ -8,9 +8,12 @@
     <li><strong>Suportar entrada em tempo real</strong> de vídeo, permitindo uma tradução dinâmica e interativa.</li>
     <li><strong>Fornecer explicabilidade</strong> ao modelo, utilizando técnicas como Grad-CAM para destacar as regiões mais relevantes na decisão da rede.</li>
     <li><strong>Implementar processamento temporal</strong> para melhorar a tradução de sequências gestuais complexas.</li>
-    <li><strong>Conjunto de dados</strong>
-    
-    (https://www.kaggle.com/code/scratchpad/notebook0d0495f523/edit)</li> # TODO: Me ajuda?
+    <li><strong>Conjunto de dados</strong>: 
+        <ul>
+            <li><a href="https://www.kaggle.com/datasets/grassknoted/asl-alphabet">ASL Alphabet Dataset (Kaggle)</a> - 87.000 imagens das 26 letras do alfabeto de sinais americano</li>
+            <li>Dados coletados localmente via webcam (pasta <code>ASL_Alphabet_Dataset/</code>)</li>
+        </ul>
+    </li>
 
 </ul>
 
