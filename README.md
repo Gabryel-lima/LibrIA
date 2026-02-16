@@ -2,11 +2,12 @@
 
 <div align="center">
 
-![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
-![OpenCV](https://img.shields.io/badge/OpenCV-4.5+-green.svg)
-![MediaPipe](https://img.shields.io/badge/MediaPipe-0.8+-orange.svg)
-![Scikit-learn](https://img.shields.io/badge/Scikit--learn-1.0+-red.svg)
-![License](https://img.shields.io/badge/License-MIT-yellow.svg)
+![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)
+![OpenCV](https://img.shields.io/badge/OpenCV-4.11+-green.svg)
+![MediaPipe](https://img.shields.io/badge/MediaPipe-0.10+-orange.svg)
+![Scikit-learn](https://img.shields.io/badge/Scikit--learn-1.6+-red.svg)
+![TensorFlow](https://img.shields.io/badge/TensorFlow-2.18+-yellow.svg)
+![License](https://img.shields.io/badge/License-MIT-brightgreen.svg)
 
 </div>
 
@@ -34,18 +35,22 @@ O **LibrIA** é um sistema completo de reconhecimento de linguagem de sinais (Li
 
 Veja a documentação detalhada nos arquivos:
 - 📥 **[Datasets e Downloads](docs/DATASETS.md)** - Guia sobre como obter dados e modelos
-- 🎬 **[Mudança de Formatos de Vídeo](docs/video_format_changes.md)** - Informações sobre processamento de vídeo
-
+- 🎬 **[Mudança de Formatos de Vídeo](docs/video_format_changes.md)** - Informações sobre processamento de vídeo- ⚠️ **[Compatibilidade com CPU AVX](docs/AVX_COMPATIBILITY.md)** - Guia para CPUs sem suporte AVX (Celeron, Pentium, etc)
 ## �🛠️ Tecnologias Utilizadas
 
 | Tecnologia | Versão | Propósito |
 |------------|--------|-----------|
-| **Python** | 3.8+ | Linguagem principal |
-| **OpenCV** | 4.5+ | Captura e processamento de vídeo |
-| **MediaPipe** | 0.8+ | Detecção de landmarks da mão |
-| **Scikit-learn** | 1.0+ | Modelo Random Forest |
-| **NumPy** | 1.21+ | Computação numérica |
-| **Pickle** | - | Serialização de dados |
+| **Python** | 3.11+ | Linguagem principal |
+| **TensorFlow** | 2.18.0 | Deep Learning (opcional) |
+| **Keras** | 3.8.0 | API de alto nível |
+| **PyTorch** | 2.5.1 | Alternativa de Deep Learning |
+| **OpenCV** | 4.11+ | Captura e processamento de vídeo |
+| **MediaPipe** | 0.10+ | Detecção de landmarks da mão |
+| **Scikit-learn** | 1.6+ | Random Forest (modelo principal) |
+| **NumPy** | 2.0+ | Computação numérica |
+| **Pandas** | 2.2+ | Manipulação de dados |
+| **Matplotlib** | 3.10+ | Visualização |
+| **Serialização** | pickle | Salvar modelos e dados |
 
 ## 📁 Nova Estrutura do Projeto
 
@@ -81,52 +86,136 @@ LibrIA/
 │   └── model.pickle                # Modelo Random Forest
 ├── 📁 output/                       # Saídas (vídeos, screenshots)
 ├── 📁 backup_old_files/             # Arquivos antigos (backup)
+├── � .deprecated-files/            # Files: Pipfile, setup scripts (obsoletos)
+├── 📄 Makefile                      # Automação de tarefas (★ NOVO!)
 ├── 📄 main.py                       # Script principal unificado
 ├── 📄 collect_j_z.py               # Script específico para J e Z
+├── 📄 requirements.txt              # Dependências principais
+├── 📄 requirements-dev.txt          # Dependências de desenvolvimento
+├── 📄 requirements-gpu.txt          # Suporte GPU (CUDA 12.4)
+├── 📄 requirements.lock             # Lock file (versões exatas)
 ├── 📄 README.md                     # Documentação
-├── 📄 requirements.txt              # Dependências
-└── 📄 .gitignore                    # Arquivos ignorados pelo Git
+├── 📄 test_setup.py                 # Testes de instalação
+├── 📄 .gitignore                    # Arquivos ignorados pelo Git
+└── 📄 .env.example                  # Variáveis de ambiente (exemplo)
 ```
 
 ## 🚀 Instalação e Configuração
 
+### ⚡ Quick Start (Recomendado)
+
+A forma mais rápida de começar é usando o **Makefile**:
+
+```bash
+# 1. Clone o repositório
+git clone https://github.com/Gabryel-lima/LibrIA.git
+cd LibrIA
+
+# 2. Setup inicial (cria venv e instala dependências)
+make setup
+
+# 3. Verifique se tudo está funcionando
+make verify-setup
+
+# 4. Veja todos os comandos disponíveis
+make help
+```
+
 ### Pré-requisitos
 
-- Python 3.8 ou superior
-- Webcam funcional
-- Git
+- **Python 3.11** ou superior
+- **Webcam funcional**
+- **Git**
+- **CPU com suporte AVX** (recomendado para funcionalidades completas)
+  - ℹ️ Sem suporte AVX? Veja [Compatibilidade AVX](docs/AVX_COMPATIBILITY.md)
+- **CUDA/cuDNN** (opcional, para GPU)
 
-### Passo a Passo
+### Setup Manual (Alternativa)
 
-1. **Clone o repositório**
-   ```bash
-   git clone https://github.com/Gabryel-lima/LibrIA.git
-   cd LibrIA
-   ```
+Se preferir configurar manualmente sem o Makefile:
 
-2. **Crie um ambiente virtual (recomendado)**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # Linux/Mac
-   # ou
-   venv\Scripts\activate     # Windows
-   ```
+```bash
+# Clone o repositório
+git clone https://github.com/Gabryel-lima/LibrIA.git
+cd LibrIA
 
-3. **Instale as dependências**
-   ```bash
-   pip install -r requirements.txt
-   ```
+# Crie um ambiente virtual
+python3.11 -m venv .venv
+source .venv/bin/activate  # Linux/Mac
+# ou
+.venv\Scripts\activate     # Windows
 
-4. **Verifique a instalação**
-   ```bash
-   python -c "import cv2, mediapipe, sklearn; print('Todas as dependências instaladas!')"
-   ```
+# Instale as dependências (CPU)
+pip install -r requirements.txt
+
+# Ou para GPU (requer CUDA 12.4):
+pip install -r requirements.txt -r requirements-gpu.txt
+
+# Verifique a instalação
+python -c "import cv2, mediapipe, sklearn; print('✓ Dependências instaladas!')"
+```
+
+### Verificação de Setup
+
+Use o comando para validar todo o ambiente:
+
+```bash
+make verify-setup
+```
+
+Ou manualmente:
+```bash
+python test_setup.py
+```
 
 ## 📊 Como Usar
 
-### 🎯 Interface Unificada
+### 🎯 Makefile - Comandos Disponíveis
 
-O projeto agora possui uma interface unificada através do script `main.py`:
+O projeto agora utiliza **Makefile** para automatizar todas as operações:
+
+```bash
+# Ver todos os comandos e status do sistema
+make help
+
+# Setup inicial
+make setup                  # Cria venv + instala dependências
+make verify-setup          # Valida o ambiente
+make environment           # Mostra informações do sistema
+
+# Pipeline de ML
+make dirs                  # Cria estrutura de diretórios
+make collect              # Coleta dados com webcam (A-Z)
+make collect-jz           # Coleta apenas J e Z
+make process              # Processa dataset (extrai landmarks)
+make train                # Treina modelo Random Forest
+make infer                # Inferência em tempo real
+make run                  # Executa pipeline completo (collect→process→train→infer)
+
+# Desenvolvimento
+make test                 # Executa testes
+make lint                 # Verifica código (requer dev dependencies)
+make format               # Formata código (requer dev dependencies)
+make install-dev          # Instala dependências de desenvolvimento
+
+# Utilitários
+make clean                # Remove __pycache__, arquivos temporários
+make clean-all            # Remove tudo (venv, dados, modelos) - CUIDADO!
+make freeze               # Gera requirements.lock com versões exatas
+make update               # Atualiza dependências
+make status               # Alias para 'environment'
+```
+
+### ⚙️ Detecção Automática
+
+O Makefile detecta automaticamente:
+- ✅ **CUDA/GPU**: Se disponível, instala com suporte GPU (CUDA 12.4)
+- ✅ **CPU**: Fallback automático para CPU-only
+- ✅ **Python**: Usa Python 3.11+
+
+### 🎯 Interface Unificada (main.py)
+
+Você também pode usar o script `main.py` diretamente:
 
 ```bash
 # Mostrar ajuda
@@ -141,18 +230,6 @@ python main.py process     # Processar dataset
 python main.py train       # Treinar modelo
 python main.py infer       # Inferência em tempo real
 ```
-
-### 📋 Comandos Disponíveis
-
-| Comando | Descrição | Pré-requisitos |
-|---------|-----------|----------------|
-| `collect` | Coletar dados via webcam | Webcam funcional |
-| `process` | Processar dataset coletado | Dados coletados |
-| `train` | Treinar modelo | Dataset processado |
-| `infer` | Inferência em tempo real | Modelo treinado |
-| `all` | Pipeline completo | Webcam funcional |
-| `collect_jz` | Coletar apenas J e Z | Webcam funcional |
-| `help` | Mostrar ajuda | Nenhum |
 
 ### 🔄 Pipeline Completo
 
@@ -288,15 +365,15 @@ O sistema reconhece todas as 26 letras do alfabeto em Libras:
 
 | Letra | Classe | Letra | Classe | Letra | Classe |
 |-------|--------|-------|--------|-------|--------|
-| A | 0 | I | 8 | R | 17 |
-| B | 1 | J | 9 | S | 18 |
-| C | 2 | K | 10 | T | 19 |
-| D | 3 | L | 11 | U | 20 |
-| E | 4 | M | 12 | V | 21 |
-| F | 5 | N | 13 | W | 22 |
-| G | 6 | O | 14 | X | 23 |
-| H | 7 | P | 15 | Y | 24 |
-|   |   | Q | 16 | Z | 25 |
+| A | 0 | I | 8  |R | 17 |
+| B | 1 | J | 9  |S | 18 |
+| C | 2 | K | 10 | T| 19 |
+| D | 3 | L | 11 | U| 20 |
+| E | 4 | M | 12 | V| 21 |
+| F | 5 | N | 13 | W| 22 |
+| G | 6 | O | 14 | X| 23 |
+| H | 7 | P | 15 | Y| 24 |
+|   |   | Q | 16 | Z| 25 |
 
 **Nota**: O sistema agora inclui suporte completo para todas as 26 letras do alfabeto. Use `python collect_j_z.py` para capturar especificamente as letras J e Z se elas estiverem faltando no seu dataset.
 
@@ -392,6 +469,7 @@ MODEL_CONFIG = {
 | **Detecção instável** | Ajuste `min_detection_confidence` |
 | **Erro de importação** | Instale as dependências corretamente |
 | **Módulo não encontrado** | Execute `python main.py` a partir da raiz do projeto |
+| **`illegal hardware instruction (core dumped)`** | CPU sem suporte AVX - veja [Compatibilidade AVX](docs/AVX_COMPATIBILITY.md) |
 
 ### Logs e Debug
 
@@ -405,18 +483,28 @@ tail -f libras.log
 
 ### ✅ O que foi melhorado:
 
-1. **Estrutura Modular**: Código organizado em módulos específicos
-2. **Configurações Centralizadas**: Todas as configurações em `config/settings.py`
-3. **Utilitários Reutilizáveis**: Funções auxiliares em `utils/helpers.py`
-4. **Interface Unificada**: Script principal `main.py` com comandos claros
-5. **Documentação Melhorada**: Docstrings e comentários detalhados
-6. **Tratamento de Erros**: Melhor gestão de exceções
-7. **Logging**: Sistema de logs para debug
-8. **Validação**: Verificação de pré-requisitos antes da execução
+1. **Makefile Profissional**: Automação de todas as tarefas (setup, run, test, clean)
+2. **Dependências Consolidadas**: requirements.txt com versões exatas e suporte a GPU
+3. **Estrutura Modular**: Código organizado em módulos específicos
+4. **Configurações Centralizadas**: Todas as configurações em `config/settings.py`
+5. **Utilitários Reutilizáveis**: Funções auxiliares em `utils/helpers.py`
+6. **Interface Unificada**: Script principal `main.py` com comandos claros
+7. **Documentação Melhorada**: Docstrings e comentários detalhados
+8. **Tratamento de Erros**: Melhor gestão de exceções
+9. **Logging**: Sistema de logs para debug
+10. **Validação**: Verificação de pré-requisitos antes da execução
+11. **Reproduzibilidade**: Lock files e CI/CD-ready
+12. **Sem Pipenv**: Substituído por venv padrão do Python + Makefile
 
 ### 🔄 Migração dos Arquivos Antigos
 
-Os arquivos antigos foram movidos para `backup_old_files/`:
+Os arquivos e configurações obsoletas foram movidos para `.deprecated-files/`:
+- `Pipfile` → `.deprecated-files/Pipfile` (pipenv descontinuado)
+- `Pipfile.lock` → `.deprecated-files/Pipfile.lock` 
+- `setup-pipenv.sh` → `.deprecated-files/setup-pipenv.sh` (obsoleto)
+- `setup-venv.sh` → `.deprecated-files/setup-venv.sh` (substituído por Makefile)
+
+Os arquivos de código antigos ainda estão em `backup_old_files/` para referência:
 - `collect_data.py` → `src/data_collection/libras_data_collector.py`
 - `create_dataset.py` → `src/data_processing/libras_dataset_processor.py`
 - `model.py` → `src/model_training/libras_model_trainer.py`

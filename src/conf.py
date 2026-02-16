@@ -3,13 +3,28 @@ import string
 import torch
 import random
 import numpy as np
-import tensorflow as tf
 
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-
-import absl.logging
-absl.logging.set_verbosity(absl.logging.ERROR)
+# Tentar importar TensorFlow (requer suporte AVX)
+try:
+    import tensorflow as tf
+    TENSORFLOW_AVAILABLE = True
+    os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+    
+    import absl.logging
+    absl.logging.set_verbosity(absl.logging.ERROR)
+except (ImportError, RuntimeError) as e:
+    TENSORFLOW_AVAILABLE = False
+    print(f"⚠️  TensorFlow não disponível: {type(e).__name__}")
+    print("   Motivo provável: CPU não suporta AVX (necessário para TensorFlow)")
+    print("   Algumas funcionalidades podem estar limitadas.")
+    # Criar um stub do TensorFlow para evitar erros
+    class TensorFlowStub:
+        class random:
+            @staticmethod
+            def set_seed(*args, **kwargs):
+                pass
+    tf = TensorFlowStub()
 
 # Dispositivo (usa CUDA se disponível)
 __DEVICE__ = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -46,7 +61,14 @@ class Config_Img_Classifier:
         random.seed(Config_Img_Classifier.SEED)
         os.environ["PYTHONHASHSEED"] = str(Config_Img_Classifier.SEED)
         np.random.seed(Config_Img_Classifier.SEED)
-        tf.random.set_seed(Config_Img_Classifier.SEED)
+        
+        # Apenas usar TensorFlow se disponível
+        if TENSORFLOW_AVAILABLE:
+            try:
+                tf.random.set_seed(Config_Img_Classifier.SEED)
+            except Exception as e:
+                print(f"⚠️  Não foi possível configurar seed do TensorFlow: {e}")
+        
         torch.manual_seed(Config_Img_Classifier.SEED)
         if torch.cuda.is_available():
             torch.cuda.manual_seed_all(Config_Img_Classifier.SEED)

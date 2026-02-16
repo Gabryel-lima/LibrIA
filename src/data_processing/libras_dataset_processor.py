@@ -10,14 +10,26 @@ Funcionalidades:
 - Normalização de coordenadas
 - Preparação de features para machine learning
 - Serialização do dataset processado
+
+⚠️  NOTA: MediaPipe requer suporte AVX na CPU.
 """
 
 import os
 import pickle
-import mediapipe as mp
 import cv2 as cv
 import numpy as np
 from typing import Dict, List, Tuple
+
+# Tentar importar MediaPipe (requer suporte AVX)
+try:
+    import mediapipe as mp
+    MEDIAPIPE_AVAILABLE = True
+except (ImportError, RuntimeError) as e:
+    MEDIAPIPE_AVAILABLE = False
+    print(f"⚠️  MediaPipe não disponível: {type(e).__name__}")
+    print("   → CPU não suporta AVX (necessário para MediaPipe)")
+    print("   → Processamento de dataset será desabilitado")
+    mp = None
 
 class LibrasDatasetProcessor:
     """Classe para processamento do dataset de Libras."""
@@ -30,6 +42,13 @@ class LibrasDatasetProcessor:
             data_dir: Diretório com as imagens coletadas
             output_dir: Diretório para salvar o dataset processado
         """
+        if not MEDIAPIPE_AVAILABLE:
+            raise RuntimeError(
+                "MediaPipe não disponível.\n"
+                "Motivo: CPU não suporta instruções AVX (necessário para MediaPipe).\n"
+                "Solução: Use uma máquina com suporte AVX ou uma CPU mais recente."
+            )
+        
         self.data_dir = data_dir
         self.output_dir = output_dir
         

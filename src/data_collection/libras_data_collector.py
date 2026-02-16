@@ -10,6 +10,9 @@ Funcionalidades:
 - Organização automática por classe (letra do alfabeto)
 - Interface visual para orientação do usuário
 - Suporte para coleta de ambas as mãos
+
+⚠️  NOTA: Esta funcionalidade é principalmente para prototipagem.
+A coleta real de dados deve usar MediaPipe se disponível.
 """
 
 import os
@@ -40,8 +43,20 @@ class LibrasDataCollector:
             os.makedirs(data_dir)
     
     def collect_data(self):
-        """Executa a coleta de dados para as classes especificadas."""
-        cap = cv.VideoCapture(0)
+        """
+        Executa a coleta de dados para as classes especificadas.
+        
+        ⚠️  Requer abertura de webcam. Falha graciosamente se webcam não estiver disponível.
+        """
+        try:
+            cap = cv.VideoCapture(0)
+            if not cap.isOpened():
+                print("❌ Não foi possível abrir a webcam")
+                print("   Verifique se a webcam está conectada e disponível")
+                return
+        except Exception as e:
+            print(f"❌ Erro ao acessar webcam: {type(e).__name__}: {e}")
+            return
 
         try:
             for class_id in self.specific_classes:
@@ -72,39 +87,67 @@ class LibrasDataCollector:
             cv.destroyAllWindows()
     
     def _wait_for_capture_command(self, cap, hand: str):
-        """Aguarda o usuário pressionar 'm' para iniciar a captura."""
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                continue
+        """
+        Aguarda o usuário pressionar 'm' para iniciar a captura.
+        
+        Requer webcam disponível.
+        """
+        try:
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    print(f"⚠️  Erro ao ler frame da webcam")
+                    continue
+                    
+                cv.putText(frame, f'Pressione "m" para capturar mão {hand}', 
+                          (50, 50), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv.LINE_AA)
+                cv.imshow('Coleta de Dados - LibrIA', frame)
                 
-            cv.putText(frame, f'Pressione "m" para capturar mão {hand}', 
-                      (50, 50), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv.LINE_AA)
-            cv.imshow('Coleta de Dados - LibrIA', frame)
-            
-            if cv.waitKey(25) & 0xFF == ord('m'):
-                break
+                if cv.waitKey(25) & 0xFF == ord('m'):
+                    break
+        except Exception as e:
+            print(f"⚠️  Erro ao aguardar comando: {type(e).__name__}: {e}")
     
     def _capture_images(self, cap, class_id: int, counter: int, hand_index: int) -> int:
-        """Captura as imagens para uma mão específica."""
-        while counter < self.dataset_size * (hand_index + 1):
-            ret, frame = cap.read()
-            if not ret:
-                continue
-                
-            cv.imshow('Coleta de Dados - LibrIA', frame)
-            cv.waitKey(25)
-            
-            # Salvar imagem
-            img_path = os.path.join(self.data_dir, str(class_id), f'{counter}.jpg')
-            cv.imwrite(img_path, frame)
-            counter += 1
-            
-            # Mostrar progresso
-            if counter % 10 == 0:
-                print(f'  Capturadas {counter} imagens...')
+        """
+        Captura as imagens para uma mão específica.
         
-        return counter
+        Args:
+            cap: VideoCapture object
+            class_id: ID da classe
+            counter: Contador de imagens
+            hand_index: Índice da mão
+            
+        Returns:
+            Novo contador de imagens
+        """
+        try:
+            while counter < self.dataset_size * (hand_index + 1):
+                ret, frame = cap.read()
+                if not ret:
+                    print(f"⚠️  Erro ao ler frame")
+                    continue
+                    
+                cv.imshow('Coleta de Dados - LibrIA', frame)
+                cv.waitKey(25)
+                
+                try:
+                    # Salvar imagem
+                    img_path = os.path.join(self.data_dir, str(class_id), f'{counter}.jpg')
+                    cv.imwrite(img_path, frame)
+                    counter += 1
+                    
+                    # Mostrar progresso
+                    if counter % 10 == 0:
+                        print(f'  Capturadas {counter} imagens...')
+                except Exception as e:
+                    print(f"⚠️  Erro ao salvar imagem: {type(e).__name__}: {e}")
+                    continue
+            
+            return counter
+        except Exception as e:
+            print(f"⚠️  Erro durante captura: {type(e).__name__}: {e}")
+            return counter
 
 def main():
     """Função principal para execução do coletor de dados."""
