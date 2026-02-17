@@ -20,7 +20,7 @@ scikit-learn==1.6.1
 opencv-python==4.11.0.86
 opencv-contrib-python==4.11.0.86
 # mediapipe==0.10.14  # ⚠️ Requires AVX support - use on machine with AVX
-Pillow==11.1.0
+Pillow==12.1.1
 
 # Numerical & Scientific
 numpy==1.26.4
