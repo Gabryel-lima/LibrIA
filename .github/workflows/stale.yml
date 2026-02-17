@@ -1,0 +1,31 @@
+name: Stale Issues and PRs
+
+on:
+  schedule:
+    - cron: "0 0 * * 0"  # Weekly on Sunday
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+
+    steps:
+    - uses: actions/stale@v9
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+        stale-issue-message: |
+          Essa issue está inativa por 90 dias. Se você ainda está interessado, 
+          por favor atualize ou comente. Caso contrário, será fechada em uma semana.
+        stale-pr-message: |
+          Esse PR está inativo por 60 dias. Se você ainda está trabalhando nele,
+          por favor atualize. Caso contrário, será fechado em uma semana.
+        stale-issue-label: stale
+        stale-pr-label: stale
+        days-before-issue-stale: 90
+        days-before-pr-stale: 60
+        days-before-issue-close: 7
+        days-before-pr-close: 7
+        exempt-issue-labels: 'pinned,rfc,blocked'
+        exempt-pr-labels: 'pinned,wip'
