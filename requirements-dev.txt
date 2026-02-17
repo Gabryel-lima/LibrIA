@@ -8,7 +8,7 @@ pytest-cov==4.1.0
 pytest-xdist==3.5.0
 
 # Code Quality
-black==23.12.1
+black==24.3.0
 flake8==6.1.0
 isort==5.13.2
 mypy==1.7.1
@@ -21,13 +21,13 @@ sphinx-rtd-theme==2.0.0
 # Development Tools
 ipython==8.18.1
 jupyter==1.0.0
-notebook==7.0.6
+notebook==7.2.2
 ipykernel==6.28.0
 
 # Pre-commit hooks
 pre-commit==3.6.0
 
 # Build tools
-wheel==0.42.0
+wheel==0.46.2
 twine==4.0.2
 build==1.0.3
