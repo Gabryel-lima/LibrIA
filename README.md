@@ -31,11 +31,29 @@ O **LibrIA** é um sistema completo de reconhecimento de linguagem de sinais (Li
 - 📱 **Interface intuitiva** com overlay de informações
 - 🏗️ **Arquitetura modular** e bem organizada
 
-## � Documentação Completa
+## 📚 Documentação Completa
 
-Veja a documentação detalhada nos arquivos:
-- 📥 **[Datasets e Downloads](docs/DATASETS.md)** - Guia sobre como obter dados e modelos
-- 🎬 **[Mudança de Formatos de Vídeo](docs/video_format_changes.md)** - Informações sobre processamento de vídeo- ⚠️ **[Compatibilidade com CPU AVX](docs/AVX_COMPATIBILITY.md)** - Guia para CPUs sem suporte AVX (Celeron, Pentium, etc)
+**👉 [Índice Completo de Documentação](DOCUMENTATION_INDEX.md)** - Referência rápida para encontrar o que você precisa
+
+### 🚀 Comece Aqui
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** - Como contribuir para o projeto
+- **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** - Setup de desenvolvimento local
+- **[docs/PULL_REQUEST_GUIDE.md](docs/PULL_REQUEST_GUIDE.md)** - Guia de Pull Requests
+
+### 📖 Documentação do Projeto
+- **[docs/DATASETS.md](docs/DATASETS.md)** - Datasets disponíveis e como obter dados
+- **[docs/AVX_COMPATIBILITY.md](docs/AVX_COMPATIBILITY.md)** - Guia para CPUs sem suporte AVX
+- **[docs/video_format_changes.md](docs/video_format_changes.md)** - Mudanças de formatos de vídeo
+
+### 🏛️ Governança e Comunidade
+- **[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)** - Código de conduta
+- **[GOVERNANCE.md](GOVERNANCE.md)** - Estrutura de governança e decisões
+- **[CONTRIBUTORS.md](CONTRIBUTORS.md)** - Lista de contribuidores
+- **[ROADMAP.md](ROADMAP.md)** - Visão futura do projeto
+- **[CHANGELOG.md](CHANGELOG.md)** - Histórico de mudanças
+
+### 📋 Outros
+- **[LICENSE](LICENSE)** - Licença MIT
 ## �🛠️ Tecnologias Utilizadas
 
 | Tecnologia | Versão | Propósito |
@@ -365,15 +383,15 @@ O sistema reconhece todas as 26 letras do alfabeto em Libras:
 
 | Letra | Classe | Letra | Classe | Letra | Classe |
 |-------|--------|-------|--------|-------|--------|
-| A | 0 | I | 8  |R | 17 |
-| B | 1 | J | 9  |S | 18 |
-| C | 2 | K | 10 | T| 19 |
-| D | 3 | L | 11 | U| 20 |
-| E | 4 | M | 12 | V| 21 |
-| F | 5 | N | 13 | W| 22 |
-| G | 6 | O | 14 | X| 23 |
-| H | 7 | P | 15 | Y| 24 |
-|   |   | Q | 16 | Z| 25 |
+| A | 0 | I | 8  | R | 17|
+| B | 1 | J | 9  | S | 18|
+| C | 2 | K | 10 | T | 19|
+| D | 3 | L | 11 | U | 20|
+| E | 4 | M | 12 | V | 21|
+| F | 5 | N | 13 | W | 22|
+| G | 6 | O | 14 | X | 23|
+| H | 7 | P | 15 | Y | 24|
+|   |   | Q | 16 | Z | 25|
 
 **Nota**: O sistema agora inclui suporte completo para todas as 26 letras do alfabeto. Use `python collect_j_z.py` para capturar especificamente as letras J e Z se elas estiverem faltando no seu dataset.
 

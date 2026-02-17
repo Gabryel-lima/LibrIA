@@ -1,54 +1,104 @@
-<h1>Libria</h1>
-<p>O Libria é um projeto de inteligência artificial desenvolvido para traduzir sinais de mão da Língua Brasileira de Sinais (Libras) para texto ou outras formas de comunicação. Utilizando redes neurais baseadas em ResNet e Transformers, o sistema reconhece gestos e interpreta sinais em tempo real, fornecendo feedback visual e textual sobre o processo.</p>
+# 📚 Documentação - LibrIA
 
-<h2>Objetivos Principais</h2>
-<ul>
-    <li><strong>Reconhecer gestos</strong> de Libras e classificá-los com alta precisão.</li>
-    <li><strong>Identificar landmarks</strong> das mãos e utilizá-los para melhorar a compreensão da estrutura dos sinais.</li>
-    <li><strong>Suportar entrada em tempo real</strong> de vídeo, permitindo uma tradução dinâmica e interativa.</li>
-    <li><strong>Fornecer explicabilidade</strong> ao modelo, utilizando técnicas como Grad-CAM para destacar as regiões mais relevantes na decisão da rede.</li>
-    <li><strong>Implementar processamento temporal</strong> para melhorar a tradução de sequências gestuais complexas.</li>
-    <li><strong>Conjunto de dados</strong>: 
-        <ul>
-            <li><a href="https://www.kaggle.com/datasets/grassknoted/asl-alphabet">ASL Alphabet Dataset (Kaggle)</a> - 87.000 imagens das 26 letras do alfabeto de sinais americano</li>
-            <li>Dados coletados localmente via webcam (pasta <code>ASL_Alphabet_Dataset/</code>)</li>
-        </ul>
-    </li>
+Guia completo de documentação e referências do projeto.
 
-</ul>
+## 🚀 Comece Aqui
 
-<h2>Diferenciais</h2>
-<ul>
-    <li>Suporte para <strong>múltiplos tipos de entradas</strong> (imagens, landmarks e vídeo).</li>
-    <li>Uso de técnicas avançadas de <strong>balanceamento de classes</strong> e aumento de dados para lidar com datasets desbalanceados.</li>
-    <li>Interface para <strong>testes ao vivo</strong> com webcams ou dispositivos móveis.</li>
-    <li>Desenvolvimento em <strong>Python</strong> com portabilidade planejada para <strong>C++</strong> para execução em diferentes hardwares.</li>
-</ul>
+| Objetivo | Documento |
+|----------|-----------|
+| **Quer contribuir?** | [PULL_REQUEST_GUIDE.md](PULL_REQUEST_GUIDE.md) |
+| **Setup local?** | [DEVELOPMENT.md](DEVELOPMENT.md) |
+| **Como fazer git/commits?** | [PULL_REQUEST_GUIDE.md](PULL_REQUEST_GUIDE.md#🔄-processo-passo-a-passo) |
+| **Não sabe por onde começar?** | [DEVELOPMENT.md](DEVELOPMENT.md) |
 
-<h2>Status Atual</h2>
-<ul>
-    <li>Modelos baseados em <strong>ResNet e Transformer</strong> parcialmente treinados e testados.</li>
-    <li>Implementação de <strong>inferência em tempo real</strong> utilizando MediaPipe para landmarks.</li>
-    <li>Ajustes contínuos para melhorar <strong>precisão e tempo de resposta</strong>.</li>
-</ul>
+## 📖 Documentação Principal
 
-<h2>Próximos Passos</h2>
-<ul>
-    <li><strong>Otimizar o pipeline</strong> de treinamento e inferência.</li>
-    <li><strong>Melhorar a representatividade</strong> do dataset com novos exemplos de sinais e landmarks.</li>
-    <li><strong>Integrar o modelo a dispositivos embarcados</strong> utilizando C++.</li>
-    <li><strong>Desenvolver uma interface gráfica</strong> acessível para usuários finais.</li>
-</ul>
+### Para Desenvolvedores
+- **[DEVELOPMENT.md](DEVELOPMENT.md)** - Setup local, testes, debugging
+- **[PULL_REQUEST_GUIDE.md](PULL_REQUEST_GUIDE.md)** - Como fazer PRs de qualidade
 
-<h2>Tecnologias Utilizadas</h2>
-<ul>
-    <li><strong>Python</strong> (TensorFlow, Keras, MediaPipe)</li>
-    <li><strong>C++</strong> (para portabilidade e otimização de hardware)</li>
-    <li><strong>Linux</strong> (Ambiente de desenvolvimento)</li>
-</ul>
+### Para Usuários
+- **[DATASETS.md](DATASETS.md)** - Datasets disponíveis e downloads
+- **[AVX_COMPATIBILITY.md](AVX_COMPATIBILITY.md)** - Problemas com CPU sem AVX
+- **[video_format_changes.md](video_format_changes.md)** - Processamento de vídeo
 
-<h2>Fluxograma #TODO</h2>
-<img></img>
+### Estrutura de Pastas
+```
+docs/
+├── README.md (você está aqui)
+├── DEVELOPMENT.md           # Setup para devs
+├── PULL_REQUEST_GUIDE.md   # Como fazer PRs
+├── DATASETS.md              # Dados
+├── AVX_COMPATIBILITY.md     # CPU
+├── video_format_changes.md  # Vídeo
+└── guides/                  # Guias adicionais
+    └── README.md
+```
 
-![](\\docs\\Libria_Fluxograma_para_Educação_e_Acessibilidade_em_Libras_com_IA.jpg) ## TODO
+## 🔗 Links Importantes
 
+- **[README Principal](../README.md)** - Overview do projeto
+- **[CONTRIBUTING.md](../CONTRIBUTING.md)** - Diretrizes gerais
+- **[CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md)** - Código de conduta
+- **[GOVERNANCE.md](../GOVERNANCE.md)** - Estrutura de decisões
+- **[ROADMAP.md](../ROADMAP.md)** - Futuro do projeto
+
+## 💡 Dicas Rápidas
+
+### Instalação Rápida
+```bash
+git clone https://github.com/Gabryel-lima/LibrIA.git
+cd LibrIA
+make setup
+```
+
+### Executar Pipeline
+```bash
+make collect    # Coletar dados
+make process    # Processar
+make train      # Treinar
+make infer      # Inferência
+```
+
+### Contribuir
+```
+1. Leia: PULL_REQUEST_GUIDE.md
+2. Fork: https://github.com/Gabryel-lima/LibrIA
+3. Clone: seu fork
+4. Branch: git checkout -b feat/seu-feature
+5. Commit: Siga Conventional Commits
+6. PR: Para develop branch
+```
+
+## 🗂️ Organização de Documentos
+
+### Na Raiz (/)
+- `README.md` - Overview principal
+- `CONTRIBUTING.md` - Como contribuir
+- `CODE_OF_CONDUCT.md` - Código de conduta
+- `GOVERNANCE.md` - Estrutura
+- `ROADMAP.md` - Futuro
+- `CHANGELOG.md` - Histórico
+- `LICENSE` - MIT
+
+### Em docs/
+- `DEVELOPMENT.md` - Setup local
+- `PULL_REQUEST_GUIDE.md` - Guia de PRs
+- `DATASETS.md` - Dados
+- `AVX_COMPATIBILITY.md` - CPU
+- `video_format_changes.md` - Vídeo
+
+### Em .github/
+- `pull_request_template.md` - Template de PR
+- `ISSUE_TEMPLATE/` - Templates de issues
+- `workflows/` - GitHub Actions
+- `archive/` - Documentação antiga (referência)
+
+## 📞 Dúvidas?
+
+- 📖 Leia a documentação relevante acima
+- 💬 Abra uma [issue](https://github.com/Gabryel-lima/LibrIA/issues) com label `question`
+
+---
+
+Última atualização: 2026-02-17
