@@ -413,6 +413,23 @@ O sistema reconhece todas as 26 letras do alfabeto em Libras:
 - **Tempo de resposta**: ~50ms por frame
 - **Número de estimadores**: 100 (padrão)
 
+### 🚀 Modelos Alternativos em Desenvolvimento
+
+O projeto também possui uma implementação de **Transformer-based models** para reconhecimento mais avançado. Para explorar modelos experimenrais e futuras arquiteturas de deep learning, confira:
+
+📁 **[src/models/transformer-gpt/](src/models/transformer-gpt/)** - Modelos Transformer e GPT em desenvolvimento
+
+Estes modelos são uma alternativa em desenvolvimento ao Random Forest padrão, oferecendo potencial para:
+- Reconhecimento temporal de sequências de gestos
+- Melhor captura de nuances nos sinais
+- Suporte a contexto e dependências de longo alcance
+
+**📖 Documentação Completa**: [Leia o README detalhado](src/models/transformer-gpt/README.md) com instruções sobre:
+- Dados para treinamento (interno e externo)
+- Uso independente ou integrado ao projeto
+- Exemplos de código prontos para usar
+- Estratégias de integração com LibrIA
+
 ### Processamento de Imagens
 
 ```python
