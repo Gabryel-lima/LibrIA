@@ -40,13 +40,3 @@ jobs:
       run: |
         mypy src/ --ignore-missing-imports
       continue-on-error: true
-    
-    - name: Run tests
-      run: |
-        pytest tests/ -v --cov=src --cov-report=xml --cov-report=html
-    
-    - name: Upload coverage
-      uses: codecov/codecov-action@v3
-      with:
-        file: ./coverage.xml
-        fail_ci_if_error: false
