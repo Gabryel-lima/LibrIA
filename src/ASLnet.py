@@ -11,6 +11,9 @@ from pathlib import Path
 import cv2
 from conf import Config_Img_Classifier, __DEVICE__
 
+# --- Importação do modelo de backup para GradCAM ---
+from src.backup_tests.camBackup import camASLNet
+
 config = Config_Img_Classifier()
 
 # --- Dataset ---
@@ -184,5 +187,5 @@ def train_model():
 if __name__ == "__main__":
     train_model()
     print("Treinamento concluído. Melhor modelo salvo em:", config.BEST_MODEL)
-    # camASLNet()
+    # camASLNet() # <- Descomente para rodar o teste de GradCAM após o treinamento.
     
