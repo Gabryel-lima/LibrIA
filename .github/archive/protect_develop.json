@@ -1,0 +1,21 @@
+{
+  "branch": "develop",
+  "protection": {
+    "required_pull_request_reviews": {
+      "required_approving_review_count": 1,
+      "dismiss_stale_reviews": false,
+      "require_code_owner_reviews": false
+    },
+    "enforce_admins": true,
+    "required_status_checks": {
+      "strict": false,
+      "contexts": []
+    },
+    "restrictions": null,
+    "allow_force_pushes": false,
+    "allow_deletions": false,
+    "block_creations": false,
+    "required_linear_history": true,
+    "allow_fork_syncing": true
+  }
+}
