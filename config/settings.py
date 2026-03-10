@@ -29,7 +29,33 @@ MEDIAPIPE_CONFIG = {
 }
 
 # Configurações de Processamento
-FEATURE_DIMENSION = 42  # 21 landmarks × 2 coordenadas (x, y)
+FEATURE_DIMENSIONS = {
+    'bounding_box': 42,
+    'wrist_relative': 63,
+}
+FEATURE_MODE = 'wrist_relative'
+FEATURE_DIMENSION = FEATURE_DIMENSIONS[FEATURE_MODE]
+FEATURE_SIZE = FEATURE_DIMENSION
+
+# Configurações de calibração de câmera
+CAMERA_CONFIG = {
+    'enabled': True,
+    'camera_matrix_path': './config/camera_matrix.npy',
+    'dist_coeffs_path': './config/dist_coeffs.npy',
+}
+
+# Configurações do modelo temporal
+SEQUENCES_DIR = './dataset/sequences'
+LSTM_CONFIG = {
+    'sequence_length': 30,
+    'feature_size': FEATURE_DIMENSION,
+    'num_classes': NUMBER_OF_CLASSES,
+    'epochs': 50,
+    'batch_size': 16,
+    'validation_split': 0.2,
+    'model_path': './model/libras_lstm.keras',
+    'label_map_path': './model/libras_lstm_labels.pickle',
+}
 
 # Configurações do Modelo
 MODEL_CONFIG = {
@@ -80,7 +106,7 @@ PERFORMANCE_CONFIG = {
 
 def create_directories():
     """Cria todos os diretórios necessários para o projeto."""
-    directories = [DATA_DIR, DATASET_DIR, MODEL_DIR, OUTPUT_DIR]
+    directories = [DATA_DIR, DATASET_DIR, MODEL_DIR, OUTPUT_DIR, SEQUENCES_DIR]
     
     for directory in directories:
         if not os.path.exists(directory):
@@ -111,8 +137,12 @@ def validate_config():
     if DATASET_SIZE <= 0:
         errors.append("DATASET_SIZE deve ser maior que zero")
     
-    if FEATURE_DIMENSION != 42:
-        errors.append("FEATURE_DIMENSION deve ser 42 (21 landmarks × 2 coordenadas)")
+    if FEATURE_MODE not in FEATURE_DIMENSIONS:
+        errors.append(f"FEATURE_MODE inválido: {FEATURE_MODE}")
+    elif FEATURE_DIMENSION != FEATURE_DIMENSIONS[FEATURE_MODE]:
+        errors.append(
+            "FEATURE_DIMENSION deve corresponder ao FEATURE_MODE configurado"
+        )
     
     if len(ALPHABET_DICT) != 26:
         errors.append("ALPHABET_DICT deve conter 26 letras do alfabeto completo")

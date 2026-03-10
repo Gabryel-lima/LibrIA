@@ -20,6 +20,8 @@ from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 from typing import Dict, Tuple, Any
 
+from config.settings import FEATURE_DIMENSION, FEATURE_MODE, MODEL_CONFIG, TRAINING_CONFIG
+
 class LibrasModelTrainer:
     """Classe para treinamento do modelo de Libras."""
     
@@ -54,13 +56,14 @@ class LibrasModelTrainer:
             data_dict = pickle.load(f)
         
         print(f"Dataset carregado com {len(data_dict['data'])} amostras")
+        print(f"Modo de features do treinamento: {FEATURE_MODE} ({FEATURE_DIMENSION} features)")
         
-        # Filtrar dados válidos (42 features = 21 landmarks × 2 coordenadas)
+        # Filtrar dados válidos conforme a dimensionalidade configurada
         filtered_data = []
         filtered_labels = []
         
         for x, y in zip(data_dict['data'], data_dict['labels']):
-            if isinstance(x, (list, np.ndarray)) and len(x) == 42:
+            if isinstance(x, (list, np.ndarray)) and len(x) == FEATURE_DIMENSION:
                 filtered_data.append(x)
                 filtered_labels.append(y)
         
@@ -101,10 +104,19 @@ class LibrasModelTrainer:
         
         # Inicializar modelo
         self.model = RandomForestClassifier(
-            n_estimators=100,
+            n_estimators=MODEL_CONFIG['n_estimators'],
             random_state=random_state,
-            n_jobs=-1  # Usar todos os cores disponíveis
+            n_jobs=MODEL_CONFIG['n_jobs']
         )
+
+        self.training_history = {
+            'train_samples': X_train.shape[0],
+            'test_samples': X_test.shape[0],
+            'num_features': X_train.shape[1],
+            'num_classes': len(np.unique(labels)),
+            'classes': sorted(np.unique(labels).tolist()),
+            'feature_mode': FEATURE_MODE,
+        }
         
         # Treinar modelo
         print("Treinando modelo Random Forest...")
@@ -115,15 +127,6 @@ class LibrasModelTrainer:
         
         # Salvar modelo
         self._save_model()
-        
-        # Salvar histórico de treinamento
-        self.training_history = {
-            'train_samples': X_train.shape[0],
-            'test_samples': X_test.shape[0],
-            'num_features': X_train.shape[1],
-            'num_classes': len(np.unique(labels)),
-            'classes': sorted(np.unique(labels).tolist())
-        }
     
     def _evaluate_model(self, X_test: np.ndarray, y_test: np.ndarray):
         """
@@ -143,8 +146,9 @@ class LibrasModelTrainer:
         print(f"Acurácia: {accuracy:.4f} ({accuracy*100:.2f}%)")
         
         # Validação cruzada
-        cv_scores = cross_val_score(self.model, X_test, y_test, cv=5)
-        print(f"Acurácia CV (5-fold): {cv_scores.mean():.4f} (+/- {cv_scores.std() * 2:.4f})")
+        cv_folds = min(TRAINING_CONFIG['cv_folds'], len(y_test))
+        cv_scores = cross_val_score(self.model, X_test, y_test, cv=cv_folds)
+        print(f"Acurácia CV ({cv_folds}-fold): {cv_scores.mean():.4f} (+/- {cv_scores.std() * 2:.4f})")
         
         # Relatório detalhado
         print("\nRelatório de Classificação:")
@@ -172,7 +176,9 @@ class LibrasModelTrainer:
         with open(model_path, 'wb') as f:
             pickle.dump({
                 'model': self.model,
-                'training_history': self.training_history
+                'training_history': self.training_history,
+                'feature_mode': FEATURE_MODE,
+                'num_features': self.training_history.get('num_features', FEATURE_DIMENSION),
             }, f)
         
         print(f"\nModelo salvo em: {model_path}")
@@ -191,6 +197,7 @@ class LibrasModelTrainer:
             'model_type': type(self.model).__name__,
             'feature_importance': self.model.feature_importances_.tolist(),
             'n_estimators': self.model.n_estimators,
+            'feature_mode': self.training_history.get('feature_mode', FEATURE_MODE),
             'training_history': self.training_history
         }
 

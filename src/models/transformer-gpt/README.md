@@ -8,32 +8,49 @@ Ainda é necessário aprofundar o estudo sobre a arquitetura Transformer GPT par
 
 ## 🎯 Dados para Treinamento
 
-### Opção 1: Dados de Libras (Recomendado para projeto LibrIA)
+### Opção 1: Dados do pipeline atual do LibrIA
 
-#### Landmarks Processados
-O modelo Transformer pode ser treinado com os dados já processados do projeto LibrIA:
+#### Dataset processado estático
+
+O projeto gera um dataset processado em:
 
 ```
-dataset/data.pickle  # Dataset com landmarks normalizados (21 landmarks × 2 coordenadas por frame)
+dataset/data.pickle
+```
+
+Esse arquivo contém:
+
+- `data`: vetores por amostra
+- `labels`: classes
+- `feature_mode`: modo de extração usado
+
+**Dimensionalidade**:
+
+- `bounding_box`: 42 features
+- `wrist_relative`: 63 features
+
+O padrão atual do projeto é `wrist_relative`, então a expectativa principal para novos experimentos é trabalhar com 63 features por frame.
+
+#### Dataset temporal recomendado
+
+Para modelos sequenciais, o formato mais alinhado ao código atual está em:
+
+```
+dataset/sequences/<label>/seq_XXX.npy
 ```
 
 **Formato dos dados:**
-- **Input**: Sequências de landmarks (frames) da mão em movimento
-- **Shape esperado**: `(num_amostras, num_frames, 42)`
-  - 42 = 21 landmarks × 2 coordenadas (x, y)
-  - Numero de frames: 10-30 (janelas temporais)
-- **Labels**: Classes (0-25 para A-Z)
+- **Input**: sequências de landmarks por frame
+- **Shape esperado no padrão atual**: `(num_amostras, 30, 63)`
+- **Labels**: classes como `J`, `Z` ou outras classes coletadas
 
 **Como preparar:**
 ```bash
-# 1. Colete dados normalmente
-python main.py collect
+# 1. Coleta temporal
+make collect-sequences SEQUENCE_LABELS=J\ Z SEQUENCE_COUNT=30 SEQUENCE_LENGTH=30
 
-# 2. Processe para obter landmarks
-python main.py process
-
-# 3. Adapte os dados para formato de sequências temporais
-# Os dados em data.pickle podem ser convertidos para sequências
+# 2. Se necessário, adapte os .npy para o formato consumido pelo experimento Transformer
+# 3. Use o mesmo FEATURE_MODE do restante do projeto para evitar incompatibilidade
 ```
 
 #### Imagens Brutas
@@ -114,12 +131,12 @@ import numpy as np
 from src.models.transformer_gpt import TransformerGPTModel
 
 # 1. Carregar dados
-landmarks_data = np.load('dataset/landmarks.npy')  # Shape: (n_samples, n_frames, 42)
+landmarks_data = np.load('dataset/landmarks.npy')  # Ex.: (n_samples, n_frames, 63)
 labels = np.load('dataset/labels.npy')              # Shape: (n_samples,)
 
 # 2. Criar e configurar modelo
 model = TransformerGPTModel(
-    input_dim=42,           # 21 landmarks × 2 coordenadas
+    input_dim=63,           # Padrão atual: wrist_relative
     sequence_length=20,     # Número de frames por sequência
     num_classes=26,         # A-Z
     d_model=256,            # Dimensão interna

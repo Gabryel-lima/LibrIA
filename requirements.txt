@@ -7,11 +7,14 @@
 # - JAX with CPU backend: jax[cpu]
 # - Or use a machine with AVX support
 
-# Core ML/DL (COMMENTED OUT - requires AVX)
-# tensorflow==2.16.1
-# keras==3.4.1
-# torch==2.5.1
-# torchvision==0.20.1
+# Core ML/DL (COMMENTED OUT IF - requires AVX)
+tensorflow==2.16.1
+keras==3.4.1
+torch==2.5.1
+torchvision==0.20.1
+
+# Landmark Detection (if using MediaPipe)
+mediapipe==0.10.14  # ⚠️ Requires AVX support
 
 # Pure Python ML (works on any CPU)
 scikit-learn==1.6.1

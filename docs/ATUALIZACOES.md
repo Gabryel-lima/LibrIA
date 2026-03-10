@@ -1,153 +1,47 @@
-# ✅ Resumo de Atualizações de Documentação
+# Atualizações Recentes - LibrIA
 
-## 📅 Data: 15 de fevereiro de 2026
+## Data
 
-### 🎯 Objetivo
-Verificar e adicionar links para datasets e zips do projeto LibrIA na documentação.
+2026-03-10
 
----
+## Escopo desta atualização
 
-## ✨ Alterações Realizadas
+Sincronização da documentação com as mudanças já presentes no código e no Makefile.
 
-### 1. **README.md Principal** (Raiz do Projeto)
+## Principais mudanças documentadas
 
-#### Adições:
-- ✅ Nova seção **"📚 Documentação Completa"** com links para:
-  - [Datasets e Downloads](docs/DATASETS.md)
-  - [Mudança de Formatos de Vídeo](docs/video_format_changes.md)
+### Pipeline temporal
+- Inclusão do fluxo de coleta de sequências em `dataset/sequences/`
+- Documentação de `make collect-sequences`, `make train-lstm`, `make infer-lstm` e `make run-lstm`
+- Registro do artefato `model/libras_lstm.keras` e do mapa `model/libras_lstm_labels.pickle`
 
-- ✅ Nova seção **"📥 Datasets e Downloads"** com 4 opções:
-  1. Coletar seus próprios dados de Libras
-  2. Usar dataset ASL Alphabet Dataset (Kaggle) com instruções
-  3. Usar modelos pré-treinados (Random Forest)
-  4. Baixar dados processados em ZIP
-  
-- ✅ Links adicionados:
-  - [ASL Alphabet Dataset - Kaggle](https://www.kaggle.com/datasets/grassknoted/asl-alphabet)
-  - [Kaggle](https://www.kaggle.com)
+### Extração de features configurável
+- Atualização para o uso de `FEATURE_MODE`
+- Documentação dos modos `bounding_box` e `wrist_relative`
+- Ajuste da documentação de dimensionalidade: 42 ou 63 features, dependendo da configuração
 
-#### Modificações:
-- Reorganização da seção de tecnologias (movida para melhor posição)
-- Remoção de placeholders "TODO"
+### Calibração de câmera
+- Inclusão do fluxo com tabuleiro 9x6
+- Documentação dos comandos `make generate-checkerboard`, `make show-checkerboard`, `make capture-calibration` e `make calibrate-camera`
+- Registro dos arquivos `config/camera_matrix.npy` e `config/dist_coeffs.npy`
 
----
+### Dependências e compatibilidade
+- Atualização das versões e do status de TensorFlow, Keras, PyTorch e MediaPipe
+- Revisão da documentação para máquinas sem AVX
 
-### 2. **docs/README.md**
+## Arquivos atualizados nesta rodada
 
-#### Alterações:
-- ✅ Removido comentário TODO sobre conjunto de dados
-- ✅ Substituído link quebrado por referência adequada para:
-  - [ASL Alphabet Dataset (Kaggle)](https://www.kaggle.com/datasets/grassknoted/asl-alphabet) com descrição
-  - Dados coletados localmente via webcam
+- `README.md`
+- `DOCUMENTATION_INDEX.md`
+- `docs/README.md`
+- `docs/DEVELOPMENT.md`
+- `docs/DATASETS.md`
+- `docs/AVX_COMPATIBILITY.md`
+- `CHANGELOG.md`
+- `src/models/transformer-gpt/README.md`
 
----
+## Resultado esperado
 
-### 3. **docs/DATASETS.md** (Novo Arquivo)
-
-#### Conteúdo Completo:
-- 📥 **Opções de Datasets**:
-  1. Coletar dados próprios (comandos completos)
-  2. ASL Alphabet Dataset com:
-     - Informações sobre o dataset
-     - Instruções de download via CLI Kaggle
-     - Download manual
-     - Estrutura de arquivos esperada
-     - Como usar
-
-  3. Libras Alphabet Dataset local
-  
-- 🤖 **Modelos Pré-Treinados**:
-  - Random Forest (principal)
-  - Modelos Deep Learning (experimental)
-
-- 📦 **Zips e Arquivos Compactados**:
-  - informações sobre data.pickle
-  - Como obter dados processados
-
-- 🌐 **Opções de Compartilhamento**:
-  - Google Drive
-  - GitHub Releases
-  - AWS S3 / Google Cloud Storage
-
-- 📋 **Checklist de Setup**
-- 🔗 **Links Importantes**
-- ❓ **FAQ com respostas**
-
----
-
-## 📊 Resumo das Mudanças
-
-| Arquivo | Tipo | Descrição |
-|---------|------|-----------|
-| `README.md` | Atualizado | +2 seções, +3 links principais |
-| `docs/README.md` | Corrigido | TODO resolvido com links reais |
-| `docs/DATASETS.md` | Criado | Guia completo de datasets (7 seções) |
-
----
-
-## 🔗 Links Adicionados
-
-### Principais:
-- 🔗 [ASL Alphabet Dataset - Kaggle](https://www.kaggle.com/datasets/grassknoted/asl-alphabet)
-- 🔗 [Documentação de Datasets](docs/DATASETS.md)
-
-### Na Documentação:
-- GitHub do Projeto
-- MediaPipe
-- OpenCV
-- Kaggle
-- Google Drive (via DATASETS.md)
-- AWS S3 (via DATASETS.md)
-
----
-
-## ✅ Verificação
-
-- [x] README.md principal tem seção de datasets
-- [x] ASL Alphabet Dataset linkado corretamente
-- [x] docs/README.md corrigido
-- [x] Documento DATASETS.md criado
-- [x] Instruções de download incluídas
-- [x] Modelos pré-treinados documentados
-- [x] Checklist de setup incluído
-- [x] FAQ respondido
-
----
-
-## 📝 Próximos Passos (Opcionais)
-
-Para melhorar ainda mais a documentação:
-
-1. **Adicionar links de download reais**:
-   - Google Drive com dataset processado
-   - GitHub Releases com zips de dados coletados
-   - Links S3 se usar AWS
-
-2. **Criar script de automação**:
-   - `scripts/download_datasets.py` para download automático
-   - `requirements-datasets.txt` para dependências (kaggle, google-drive-downloader)
-
-3. **Adicionar exemplos de uso**:
-   - Screenshots do processo
-   - Vídeo tutorial de download e setup
-
-4. **Criar arquivo CONTRIBUTING.md**:
-   - Como contribuir com novos datasets
-   - Como compartilhar dados coletados
-
----
-
-## 🎯 Resultado Final
-
-A documentação agora contém:
-
-✅ **Links para datasets públicos** (ASL Alphabet Dataset)
-✅ **Instruções de download** (manual e via CLI)
-✅ **Guia de modelos pré-treinados** (Random Forest)
-✅ **Opções de compartilhamento** (Google Drive, S3, GitHub)
-✅ **Documentação completa** (docs/DATASETS.md)
-✅ **FAQ e checklist** para facilitar o setup
-
----
-
-**Documentação completa e links adicionados com sucesso! 🎉**
+- O README principal passa a refletir os dois pipelines suportados pelo projeto
+- Os guias de setup e datasets deixam de depender de comandos e arquivos obsoletos
+- A documentação interna deixa de assumir que toda feature extraction usa 42 coordenadas fixas

@@ -6,14 +6,14 @@
 ![OpenCV](https://img.shields.io/badge/OpenCV-4.11+-green.svg)
 ![MediaPipe](https://img.shields.io/badge/MediaPipe-0.10+-orange.svg)
 ![Scikit-learn](https://img.shields.io/badge/Scikit--learn-1.6+-red.svg)
-![TensorFlow](https://img.shields.io/badge/TensorFlow-2.18+-yellow.svg)
+![TensorFlow](https://img.shields.io/badge/TensorFlow-2.16+-yellow.svg)
 ![License](https://img.shields.io/badge/License-MIT-brightgreen.svg)
 
 </div>
 
 ## 📖 Sobre o Projeto
 
-O **LibrIA** é um sistema completo de reconhecimento de linguagem de sinais (Libras) utilizando técnicas de visão computacional e machine learning com modelo Random Forest. O projeto implementa todo o pipeline, desde a coleta de dados até a inferência em tempo real, desenvolvido do zero.
+O **LibrIA** é um sistema de reconhecimento de Libras baseado em visão computacional, com dois fluxos principais já integrados ao código: um pipeline estático com **Random Forest** e um pipeline temporal com **LSTM**. O repositório cobre coleta, processamento, treino, inferência em tempo real e calibração opcional de câmera.
 
 ### 🎯 Objetivos
 
@@ -25,11 +25,11 @@ O **LibrIA** é um sistema completo de reconhecimento de linguagem de sinais (Li
 ### ✨ Características
 
 - 🎥 **Captura em tempo real** via webcam
-- 🤖 **Modelo de IA** com 99% de acurácia
-- 📊 **Pipeline completo** de dados
-- 🔄 **Inferência contínua** com feedback visual
-- 📱 **Interface intuitiva** com overlay de informações
-- 🏗️ **Arquitetura modular** e bem organizada
+- 🤖 **Dois fluxos de modelagem**: Random Forest e LSTM temporal
+- 📊 **Pipeline completo** de dados estáticos e temporais
+- 🎯 **Inferência contínua** com feedback visual
+- 📷 **Calibração opcional de câmera** com tabuleiro 9x6
+- 🏗️ **Arquitetura modular** e configurável por `FEATURE_MODE`
 
 ## 📚 Documentação Completa
 
@@ -54,68 +54,50 @@ O **LibrIA** é um sistema completo de reconhecimento de linguagem de sinais (Li
 
 ### 📋 Outros
 - **[LICENSE](LICENSE)** - Licença MIT
-## �🛠️ Tecnologias Utilizadas
+## 🛠️ Tecnologias Utilizadas
 
 | Tecnologia | Versão | Propósito |
 |------------|--------|-----------|
 | **Python** | 3.11+ | Linguagem principal |
-| **TensorFlow** | 2.18.0 | Deep Learning (opcional) |
-| **Keras** | 3.8.0 | API de alto nível |
+| **TensorFlow** | 2.16.1 | Deep Learning para o pipeline temporal |
+| **Keras** | 3.4.1 | API de alto nível |
 | **PyTorch** | 2.5.1 | Alternativa de Deep Learning |
 | **OpenCV** | 4.11+ | Captura e processamento de vídeo |
 | **MediaPipe** | 0.10+ | Detecção de landmarks da mão |
 | **Scikit-learn** | 1.6+ | Random Forest (modelo principal) |
-| **NumPy** | 2.0+ | Computação numérica |
+| **NumPy** | 1.26+ | Computação numérica |
 | **Pandas** | 2.2+ | Manipulação de dados |
 | **Matplotlib** | 3.10+ | Visualização |
 | **Serialização** | pickle | Salvar modelos e dados |
 
-## 📁 Nova Estrutura do Projeto
+## 📁 Estrutura Atual do Projeto
 
 ```
 LibrIA/
-├── 📁 src/                          # Código fonte principal
-│   ├── 📁 data_collection/          # Coleta de dados via webcam
-│   │   ├── __init__.py
-│   │   └── libras_data_collector.py
-│   ├── 📁 data_processing/          # Processamento de imagens
-│   │   ├── __init__.py
-│   │   └── libras_dataset_processor.py
-│   ├── 📁 model_training/           # Treinamento de modelos
-│   │   ├── __init__.py
-│   │   └── libras_model_trainer.py
-│   ├── 📁 inference/                # Inferência em tempo real
-│   │   ├── __init__.py
-│   │   └── libras_realtime_classifier.py
-│   └── __init__.py
-├── 📁 config/                       # Configurações centralizadas
-│   ├── __init__.py
-│   └── settings.py
-├── 📁 utils/                        # Utilitários e funções auxiliares
-│   ├── __init__.py
-│   └── helpers.py
-├── 📁 data/                         # Dataset de imagens coletadas
-│   ├── 0/                          # Classe A (0-299 imagens)
-│   ├── 1/                          # Classe B (0-299 imagens)
-│   └── ...                         # Outras classes (2-25)
-├── 📁 dataset/                      # Dados processados
-│   └── data.pickle                 # Dataset com landmarks
-├── 📁 model/                        # Modelos treinados
-│   └── model.pickle                # Modelo Random Forest
-├── 📁 output/                       # Saídas (vídeos, screenshots)
-├── 📁 backup_old_files/             # Arquivos antigos (backup)
-├── � .deprecated-files/            # Files: Pipfile, setup scripts (obsoletos)
-├── 📄 Makefile                      # Automação de tarefas (★ NOVO!)
-├── 📄 main.py                       # Script principal unificado
-├── 📄 collect_j_z.py               # Script específico para J e Z
+├── 📁 src/                          # Código principal
+│   ├── 📁 data_collection/          # Coleta estática de imagens
+│   ├── 📁 data_processing/          # Processamento com MediaPipe
+│   ├── 📁 model_training/           # Treino Random Forest e LSTM
+│   ├── 📁 inference/                # Inferência estática e temporal
+│   └── 📁 models/                   # Modelos/experimentos adicionais
+├── 📁 scripts/                      # Utilitários de calibração e coleta temporal
+├── 📁 config/                       # Configurações centrais e arquivos de calibração
+├── 📁 utils/                        # Helpers compartilhados
+├── 📁 data/                         # Imagens por classe
+├── 📁 dataset/                      # Dataset processado e sequências temporais
+│   ├── data.pickle
+│   └── sequences/
+├── 📁 model/                        # Artefatos treinados
+│   ├── model.pickle
+│   ├── libras_lstm.keras
+│   └── libras_lstm_labels.pickle
+├── 📁 docs/                         # Documentação detalhada
+├── 📄 Makefile                      # Automação de setup e execução
+├── 📄 main.py                       # Interface principal por comandos
 ├── 📄 requirements.txt              # Dependências principais
 ├── 📄 requirements-dev.txt          # Dependências de desenvolvimento
-├── 📄 requirements-gpu.txt          # Suporte GPU (CUDA 12.4)
-├── 📄 requirements.lock             # Lock file (versões exatas)
-├── 📄 README.md                     # Documentação
-├── 📄 test_setup.py                 # Testes de instalação
-├── 📄 .gitignore                    # Arquivos ignorados pelo Git
-└── 📄 .env.example                  # Variáveis de ambiente (exemplo)
+├── 📄 test_setup.py                 # Verificação de ambiente
+└── 📄 README.md                     # Visão geral do projeto
 ```
 
 ## 🚀 Instalação e Configuração
@@ -204,11 +186,14 @@ make environment           # Mostra informações do sistema
 # Pipeline de ML
 make dirs                  # Cria estrutura de diretórios
 make collect              # Coleta dados com webcam (A-Z)
-make collect-jz           # Coleta apenas J e Z
+make collect-sequences    # Coleta sequências temporais
 make process              # Processa dataset (extrai landmarks)
 make train                # Treina modelo Random Forest
+make train-lstm           # Treina modelo temporal LSTM
 make infer                # Inferência em tempo real
+make infer-lstm           # Inferência temporal em tempo real
 make run                  # Executa pipeline completo (collect→process→train→infer)
+make run-lstm             # Executa pipeline temporal completo
 
 # Desenvolvimento
 make test                 # Executa testes
@@ -218,11 +203,29 @@ make install-dev          # Instala dependências de desenvolvimento
 
 # Utilitários
 make clean                # Remove __pycache__, arquivos temporários
+
+# Calibração de câmera
+make generate-checkerboard  # Gera a imagem do tabuleiro 9x6
+make show-checkerboard      # Exibe o tabuleiro gerado em tela cheia
+make capture-calibration  # Abre a webcam, salva imagens do tabuleiro e calibra
+make calibrate-camera CALIBRATION_IMAGES='calibration/*.jpg'
+
 make clean-all            # Remove tudo (venv, dados, modelos) - CUIDADO!
 make freeze               # Gera requirements.lock com versões exatas
 make update               # Atualiza dependências
 make status               # Alias para 'environment'
 ```
+
+Para calibrar a câmera, use um tabuleiro de xadrez com 9x6 cantos internos.
+O fluxo recomendado e:
+1. Rodar make generate-checkerboard.
+2. Imprimir a imagem gerada ou exibi-la em outra tela com make show-checkerboard.
+3. Rodar make capture-calibration.
+4. Mover o tabuleiro em distâncias e ângulos diferentes.
+5. Pressionar espaco quando o status mostrar que o tabuleiro foi detectado.
+6. A calibração sera salva em config/camera_matrix.npy e config/dist_coeffs.npy.
+
+Importante: a janela da webcam não desenha o tabuleiro automaticamente. A câmera precisa ver fisicamente a imagem impressa ou a tela com o tabuleiro aberto.
 
 ### ⚙️ Detecção Automática
 
@@ -265,117 +268,75 @@ Este comando irá:
 
 ### 📝 Instruções Detalhadas
 
-#### 1. Coleta de Dados (`collect`)
+#### 1. Fluxo estático
 
 ```bash
-python main.py collect
+make collect
+make process
+make train
+make infer
 ```
 
-**Instruções durante a coleta:**
-- O sistema irá percorrer todas as letras do alfabeto (A-Y, excluindo J e Z)
-- Para cada letra, você deve fazer o sinal correspondente
-- Pressione **'m'** para iniciar a captura de cada mão
-- O sistema captura 150 imagens por mão (300 total por letra)
-- Pressione **'q'** para sair a qualquer momento
+O fluxo estático usa imagens por classe, extrai landmarks com MediaPipe e treina um Random Forest salvo em `model/model.pickle`.
 
-#### 1.1. Coleta Específica de J e Z (`collect_jz`)
+#### 1.1. Coleta complementar de J e Z
+
+O comando legado ainda existe para complementar um dataset já existente:
 
 ```bash
 python main.py collect_jz
-# ou diretamente:
-python collect_j_z.py
 ```
 
-**Quando usar:**
-- Quando você já tem dados de A-Y e precisa apenas completar com J e Z
-- Para adicionar as letras faltantes ao dataset existente
+Use esse fluxo apenas quando fizer sentido completar um dataset estático antigo. Para sinais dinâmicos, o caminho preferido agora é a coleta temporal.
 
-**Instruções específicas:**
-- **Letra J**: Faça o sinal de J em Libras (mão em forma de gancho, movendo em círculo)
-- **Letra Z**: Faça o sinal de Z em Libras (dedo indicador traçando a forma de Z)
-- Pressione **'m'** para iniciar a captura de cada mão
-- Serão capturadas 150 imagens por mão (300 total por letra)
-- Pressione **'q'** para sair a qualquer momento
-
-**Dicas importantes:**
-- Certifique-se de fazer variações do sinal (ângulos diferentes)
-- Mantenha boa iluminação para melhor detecção
-- Centralize a mão na câmera durante a captura
-
-#### 2. Processamento do Dataset (`process`)
+#### 2. Fluxo temporal
 
 ```bash
-python main.py process
+make collect-sequences SEQUENCE_LABELS=J\ Z SEQUENCE_COUNT=30 SEQUENCE_LENGTH=30
+make train-lstm
+make infer-lstm
 ```
 
-Este script:
-- Extrai landmarks das mãos usando MediaPipe
-- Normaliza as coordenadas
-- Salva o dataset processado em `dataset/data.pickle`
+Esse fluxo grava sequências em `dataset/sequences/`, treina o modelo `model/libras_lstm.keras` e usa uma janela deslizante para inferência em tempo real.
 
-#### 3. Treinamento do Modelo (`train`)
+#### 3. Calibração de câmera
 
 ```bash
-python main.py train
+make generate-checkerboard
+make show-checkerboard
+make capture-calibration
 ```
 
-**Resultados esperados:**
-- Acurácia: ~99%
-- Modelo salvo em `model/model.pickle`
+Arquivos gerados:
 
-#### 4. Inferência em Tempo Real (`infer`)
+- `config/camera_matrix.npy`
+- `config/dist_coeffs.npy`
 
-```bash
-python main.py infer
-```
+Esses parâmetros são usados de forma opcional no pré-processamento dos frames antes da extração dos landmarks.
 
-**Controles:**
-- **'q'**: Sair do programa
-- **'r'**: Alternar gravação de vídeo
-- **'s'**: Capturar screenshot
-- **Detecção automática**: A cada 20 frames
-- **Feedback visual**: Retângulo verde + letra prevista
+#### 4. Extração de features
+
+O modo de features é configurado em `config/settings.py`:
+
+- `bounding_box`: 42 features
+- `wrist_relative`: 63 features
+
+O padrão atual é `wrist_relative`.
 
 ## 📥 Datasets e Downloads
 
-### Opção 1: Coletar seus próprios dados
-Se você deseja coletar seus próprios dados de Libras, basta executar:
-```bash
-python main.py collect
-```
+O projeto trabalha com dois formatos principais de dados:
 
-### Opção 2: Usar datasets pré-coletados
+- **Imagens por classe** em `data/` para o fluxo estático
+- **Sequências `.npy`** em `dataset/sequences/` para o fluxo temporal
 
-#### ASL Alphabet Dataset (Kaggle)
-Para usar o dataset ASL Alphabet Dataset (alfabeto em linguagem de sinais americana):
-- 📊 **Dataset**: [ASL Alphabet Dataset - Kaggle](https://www.kaggle.com/datasets/grassknoted/asl-alphabet)
-- **Estrutura**: 87.000 imagens das 26 letras
-- **Instruções de download**:
-  1. Crie conta no [Kaggle](https://www.kaggle.com)
-  2. Baixe o dataset
-  3. Descompacte em `data/archive/ASL_Alphabet_Dataset/`
-  4. Execute `python main.py process`
+Recursos úteis:
 
-#### Libras Alphabet Dataset (Coletado localmente)
-Se você já coletou dados de Libras e quer compartilhar:
-- 📁 **Pasta de dados**: `ASL_Alphabet_Dataset/`
-- Para usar: Copie os dados coletados para `data/`
+- Dataset de apoio em `data/archives/`
+- Dataset processado em `dataset/data.pickle`
+- Modelos treinados em `model/`
 
-### Opção 3: Modelos pré-treinados
-Se deseja usar modelos já treinados sem treinar do zero:
-- 🤖 **Random Forest Model**: 
-  - Localização: `model/model.pickle`
-  - Para usar: `python main.py infer`
-
-### Opção 4: Baixar dados processados (ZIP)
-Para desenvolvimento rápido, você pode baixar os dados já processados em formato ZIP.
-
-**Recursos com links de download** (quando disponíveis):
-- 💾 **Google Drive**: Para compartilhamento fácil de arquivos
-- ☁️ **Amazon S3**: Para distribuição em larga escala  
-- 📦 **GitHub Releases**: Para pequenos arquivos (< 100MB)
-
-Para mais detalhes, consulte a [documentação de datasets](docs/DATASETS.md).
+Para detalhes de estrutura, formatos e artefatos, consulte [docs/DATASETS.md](docs/DATASETS.md).
 
 ## 🎯 Alfabeto Suportado
 
@@ -393,29 +354,47 @@ O sistema reconhece todas as 26 letras do alfabeto em Libras:
 | H | 7 | P | 15 | Y | 24|
 |   |   | Q | 16 | Z | 25|
 
-**Nota**: O sistema agora inclui suporte completo para todas as 26 letras do alfabeto. Use `python collect_j_z.py` para capturar especificamente as letras J e Z se elas estiverem faltando no seu dataset.
+**Nota**: o alfabeto completo segue disponível no fluxo estático. Para sinais dinâmicos como J e Z, o pipeline temporal tende a representar melhor o movimento.
 
 ## 🔬 Arquitetura Técnica
 
 ### Pipeline de Dados
 
-1. **Captura**: Webcam → OpenCV
-2. **Detecção**: MediaPipe → Landmarks da mão
-3. **Processamento**: Normalização de coordenadas
-4. **Treinamento**: Random Forest Classifier
-5. **Inferência**: Classificação em tempo real
+#### Pipeline estático
 
-### Características do Modelo Random Forest
+1. **Captura**: webcam → OpenCV
+2. **Detecção**: MediaPipe → landmarks da mão
+3. **Features**: `bounding_box` ou `wrist_relative`
+4. **Treinamento**: Random Forest
+5. **Inferência**: classificação por frame
 
-- **Algoritmo**: Random Forest Classifier
-- **Features**: 42 coordenadas normalizadas (21 landmarks × 2 coordenadas)
-- **Acurácia**: 99%
-- **Tempo de resposta**: ~50ms por frame
-- **Número de estimadores**: 100 (padrão)
+#### Pipeline temporal
+
+1. **Captura**: webcam → OpenCV
+2. **Pré-processamento**: calibração opcional da câmera
+3. **Features**: sequência de vetores por frame
+4. **Treinamento**: LSTM sobre janelas de 30 frames
+5. **Inferência**: classificação com buffer deslizante
+
+### Características dos Modelos
+
+#### Random Forest
+
+- **Algoritmo**: `RandomForestClassifier`
+- **Features**: configuráveis por `FEATURE_MODE`
+- **Persistência**: `model/model.pickle`
+- **Metadados**: `feature_mode` e `num_features` salvos junto ao modelo
+
+#### LSTM temporal
+
+- **Sequência padrão**: 30 frames
+- **Feature size padrão**: 63
+- **Persistência**: `model/libras_lstm.keras`
+- **Mapa de labels**: `model/libras_lstm_labels.pickle`
 
 ### 🚀 Modelos Alternativos em Desenvolvimento
 
-O projeto também possui uma implementação de **Transformer-based models** para reconhecimento mais avançado. Para explorar modelos experimenrais e futuras arquiteturas de deep learning, confira:
+O projeto também possui uma implementação de **Transformer-based models** para reconhecimento mais avançado. Para explorar modelos experimentais e futuras arquiteturas de deep learning, confira:
 
 📁 **[src/models/transformer-gpt/](src/models/transformer-gpt/)** - Modelos Transformer e GPT em desenvolvimento
 
@@ -433,31 +412,27 @@ Estes modelos são uma alternativa em desenvolvimento ao Random Forest padrão, 
 ### Processamento de Imagens
 
 ```python
-# Extração de landmarks
+from utils.helpers import extract_landmarks_by_mode
+
 results = hands.process(img_rgb)
 if results.multi_hand_landmarks:
-    for hand_landmarks in results.multi_hand_landmarks:
-        # Normalização das coordenadas
-        for landmark in hand_landmarks.landmark:
-            x = landmark.x - min(x_coords)
-            y = landmark.y - min(y_coords)
+  features = extract_landmarks_by_mode(
+    results.multi_hand_landmarks[0].landmark,
+    FEATURE_MODE,
+  )
 ```
 
-## 📈 Resultados e Performance
+## 📈 Artefatos e Saídas
 
-### Métricas de Avaliação
+Arquivos mais importantes gerados pelo pipeline:
 
-- **Acurácia**: 99%
-- **Precisão**: 98.5%
-- **Recall**: 99.2%
-- **F1-Score**: 98.8%
-
-### Performance em Tempo Real
-
-- **FPS**: ~20-30 frames/segundo
-- **Latência**: <50ms
-- **Uso de CPU**: ~15-25%
-- **Uso de RAM**: ~200-300MB
+- `dataset/data.pickle`
+- `dataset/sequences/<label>/seq_XXX.npy`
+- `model/model.pickle`
+- `model/libras_lstm.keras`
+- `model/libras_lstm_labels.pickle`
+- `config/camera_matrix.npy`
+- `config/dist_coeffs.npy`
 
 ## 🎥 Demonstração
 

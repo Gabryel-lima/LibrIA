@@ -22,6 +22,15 @@ import numpy as np
 from typing import Dict, List, Tuple, Optional
 import time
 
+from config.settings import CAMERA_CONFIG, FEATURE_MODE as DEFAULT_FEATURE_MODE
+from utils.helpers import (
+    extract_landmarks_by_mode,
+    get_feature_dimension,
+    infer_feature_mode_from_dimension,
+    load_camera_calibration,
+    preprocess_frame,
+)
+
 # Tentar importar MediaPipe (requer suporte AVX)
 try:
     import mediapipe as mp
@@ -48,9 +57,13 @@ class LibrasRealtimeClassifier:
         self.model_path = model_path
         self.min_detection_confidence = min_detection_confidence
         self.prediction_interval = prediction_interval
+        self.model_metadata = {}
         
         # Carregar modelo
         self.model = self._load_model()
+        self.feature_mode = self._resolve_feature_mode()
+        self.feature_dimension = get_feature_dimension(self.feature_mode)
+        self.camera_calibration = self._load_camera_calibration()
         
         # Configurar MediaPipe (se disponível)
         if MEDIAPIPE_AVAILABLE:
@@ -88,6 +101,9 @@ class LibrasRealtimeClassifier:
         try:
             with open(self.model_path, 'rb') as f:
                 model_dict = pickle.load(f)
+                self.model_metadata = {
+                    key: value for key, value in model_dict.items() if key != 'model'
+                }
                 print(f"✓ Modelo carregado com sucesso: {self.model_path}")
                 return model_dict.get('model', None)
         except FileNotFoundError:
@@ -98,6 +114,33 @@ class LibrasRealtimeClassifier:
             print(f"⚠️  Erro ao carregar modelo: {type(e).__name__}: {e}")
             print("   → Será usado modo de teste/demo")
             return None
+
+    def _resolve_feature_mode(self) -> str:
+        """Resolve o modo de features com base na configuração e nos metadados do modelo."""
+        metadata_mode = self.model_metadata.get('feature_mode')
+        if metadata_mode:
+            return metadata_mode
+
+        if self.model is not None and hasattr(self.model, 'n_features_in_'):
+            try:
+                return infer_feature_mode_from_dimension(int(self.model.n_features_in_))
+            except ValueError:
+                pass
+
+        return DEFAULT_FEATURE_MODE
+
+    def _load_camera_calibration(self) -> Optional[Dict[str, np.ndarray]]:
+        """Carrega parâmetros de calibração, se estiverem habilitados."""
+        if not CAMERA_CONFIG['enabled']:
+            return None
+
+        calibration = load_camera_calibration(
+            CAMERA_CONFIG['camera_matrix_path'],
+            CAMERA_CONFIG['dist_coeffs_path'],
+        )
+        if calibration:
+            print("✓ Calibração de câmera carregada")
+        return calibration
     
     def start_classification(self, record_video: bool = False, output_path: str = 'output.mp4'):
         """
@@ -214,8 +257,7 @@ class LibrasRealtimeClassifier:
                 iteration += 1
                 print(f"\n--- Iteração {iteration} ---")
                 
-                # Gerar landmarks sintéticos (21 pontos * 2 coordenadas = 42 features)
-                synthetic_landmarks = np.random.rand(42).astype(np.float32)
+                synthetic_landmarks = np.random.rand(self.feature_dimension).astype(np.float32)
                 
                 # Fazer predição
                 if self.model is not None:
@@ -261,6 +303,8 @@ class LibrasRealtimeClassifier:
             Frame processado com overlay de informações
         """
         try:
+            frame = preprocess_frame(frame, self.camera_calibration)
+
             # Converter para RGB
             frame_rgb = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
             
@@ -318,24 +362,8 @@ class LibrasRealtimeClassifier:
             Lista de coordenadas normalizadas
         """
         try:
-            x_coords = []
-            y_coords = []
-            
-            # Extrair coordenadas
-            for landmark in hand_landmarks.landmark:
-                x_coords.append(landmark.x)
-                y_coords.append(landmark.y)
-            
-            # Normalizar coordenadas
-            normalized_landmarks = []
-            min_x, min_y = min(x_coords), min(y_coords)
-            
-            for i in range(len(hand_landmarks.landmark)):
-                x = hand_landmarks.landmark[i].x - min_x
-                y = hand_landmarks.landmark[i].y - min_y
-                normalized_landmarks.extend([x, y])
-            
-            return normalized_landmarks
+            features = extract_landmarks_by_mode(hand_landmarks.landmark, self.feature_mode)
+            return features.tolist()
             
         except Exception as e:
             print(f"⚠️  Erro ao extrair landmarks: {type(e).__name__}: {e}")

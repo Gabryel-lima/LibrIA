@@ -1,323 +1,148 @@
-# 📚 Documentação de Desenvolvimento
+# Documentação de Desenvolvimento
 
-Guia para desenvolvedores que desejam configurar o ambiente de desenvolvimento local.
+Guia de setup e rotina de trabalho para quem vai mexer no código do LibrIA.
 
-## 🛠️ Pré-requisitos
+## Pré-requisitos
 
-- Python 3.11+ instalado
-- Git configurado
-- Acesso a terminal/CMD
-- ~5GB de espaço em disco (para dados + modelos)
+- Python 3.11+
+- Git
+- Webcam para fluxos de coleta e inferência
+- CPU com suporte AVX para MediaPipe, TensorFlow e boa parte do stack temporal
 
-## 🚀 Setup Rápido (5 minutos)
+## Setup recomendado
 
-### MacOS/Linux
+### Com Makefile
 
 ```bash
-# 1. Clone o repositório
 git clone https://github.com/Gabryel-lima/LibrIA.git
 cd LibrIA
-
-# 2. Crie ambifiente virtual
-python -m venv venv
-source venv/bin/activate
-
-# 3. Instale dependências
-pip install -r requirements-dev.txt
-
-# 4. Teste a instalação
-python test_setup.py
-
-# 5. Execute testes
-pytest tests/ -v
+make setup
+source .venv/bin/activate
+make verify-setup
 ```
 
-### Windows
+### Manual
 
 ```bash
-# 1. Clone o repositório
 git clone https://github.com/Gabryel-lima/LibrIA.git
 cd LibrIA
-
-# 2. Crie ambiente virtual
-python -m venv venv
-venv\Scripts\activate
-
-# 3. Instale dependências
+python3.11 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements-dev.txt
-
-# 4. Teste a instalação
 python test_setup.py
+```
 
-# 5. Execute testes
+## Dependências de desenvolvimento
+
+`requirements-dev.txt` inclui:
+
+- `pytest`, `pytest-cov`, `pytest-xdist`
+- `black`, `flake8`, `isort`, `mypy`, `pylint`
+- `pre-commit`
+- `sphinx`
+- `ipython`, `jupyter`, `notebook`
+
+## Comandos de rotina
+
+```bash
+make test
+make lint
+make format
+make environment
+```
+
+Ou diretamente:
+
+```bash
+python test_setup.py
 pytest tests/ -v
+black src/ main.py
+flake8 src/ main.py --max-line-length=119 --exclude=__pycache__
 ```
 
-## 📦 Dependências de Desenvolvimento
+## Fluxos do projeto para desenvolvimento
 
-Arquivo: `requirements-dev.txt`
-
-```
-# Dependências base
--r requirements.txt
-
-# Testing
-pytest==7.4.3
-pytest-cov==4.1.0
-pytest-mock==3.12.0
-
-# Code Quality
-pylint==3.0.3
-black==23.12.1
-isort==5.13.2
-mypy==1.7.1
-
-# Documentation
-sphinx==7.2.6
-sphinx-rtd-theme==2.0.0
-
-# Development
-ipython==8.18.1
-jupyter==1.0.0
-```
-
-## 🔧 Configuração Recomendada do VS Code
-
-### Extensions Recomendadas
-
-```json
-{
-  "recommendations": [
-    "ms-python.python",
-    "ms-python.vscode-pylance",
-    "ms-python.debugpy",
-    "ms-liveShare.liveShare",
-    "eamodio.gitlens",
-    "GitHub.copilot",
-    "ms-vscode.makefile-tools"
-  ]
-}
-```
-
-### Settings (settings.json)
-
-```json
-{
-  "[python]": {
-    "editor.defaultFormatter": "ms-python.python",
-    "editor.formatOnSave": true,
-    "editor.codeActionsOnSave": {
-      "source.fixAll.pylint": "explicit",
-      "source.fixAll.isort": "explicit"
-    }
-  },
-  "python.linting.enabled": true,
-  "python.linting.pylintEnabled": true,
-  "python.testing.pytestEnabled": true,
-  "python.testing.pytestArgs": ["tests"],
-  "python.formatting.provider": "black",
-  "python.linting.pylintArgs": [
-    "--disable=too-few-public-methods"
-  ]
-}
-```
-
-## 🧪 Executando Testes
-
-### Todos os testes
+### Pipeline estático
 
 ```bash
-pytest tests/ -v
+make collect
+make process
+make train
+make infer
 ```
 
-### Com cobertura
+### Pipeline temporal
 
 ```bash
-pytest tests/ --cov=src --cov-report=html
-# Abrir: htmlcov/index.html
+make collect-sequences SEQUENCE_LABELS=J\ Z SEQUENCE_COUNT=30 SEQUENCE_LENGTH=30
+make train-lstm
+make infer-lstm
 ```
 
-### Teste específico
+### Calibração de câmera
 
 ```bash
-pytest tests/test_data_processing.py::test_normalize -v
+make generate-checkerboard
+make show-checkerboard
+make capture-calibration
 ```
 
-### Apenas testes rápidos
+## Estrutura relevante para desenvolvimento
+
+```text
+src/
+├── data_collection/
+├── data_processing/
+├── inference/
+└── model_training/
+
+scripts/
+├── calibrate_camera.py
+├── collect_sequences.py
+├── generate_checkerboard.py
+└── show_checkerboard.py
+
+config/
+└── settings.py
+```
+
+## Configurações importantes
+
+As principais chaves ficam em `config/settings.py`:
+
+- `FEATURE_MODE`: `bounding_box` ou `wrist_relative`
+- `FEATURE_DIMENSIONS`: dimensionalidade por modo
+- `CAMERA_CONFIG`: calibração opcional
+- `LSTM_CONFIG`: sequência, batch size, épocas e caminhos dos artefatos
+
+## Convenções úteis
+
+- Use `main.py` ou o Makefile para manter o mesmo fluxo documentado
+- O dataset processado do fluxo estático vai para `dataset/data.pickle`
+- O dataset temporal fica em `dataset/sequences/<label>/seq_XXX.npy`
+- O modelo clássico fica em `model/model.pickle`
+- O modelo temporal fica em `model/libras_lstm.keras`
+
+## Problemas comuns
+
+### `illegal hardware instruction`
+
+Consulte [AVX_COMPATIBILITY.md](AVX_COMPATIBILITY.md). Em CPUs sem AVX, MediaPipe, TensorFlow e algumas partes do PyTorch podem falhar já no import.
+
+### `Modelo LSTM não encontrado`
+
+Rode primeiro:
 
 ```bash
-pytest -m "not slow" -v
+make collect-sequences
+make train-lstm
 ```
 
-## 🎨 Code Formatting
+### `Nenhuma sequência válida encontrada`
 
-### Black - Formatação
+Verifique se os `.npy` em `dataset/sequences/` têm shape compatível com `LSTM_CONFIG['sequence_length']` e `FEATURE_DIMENSION`.
 
-```bash
-# Formatar código
-black src/ --line-length 100
-
-# Verificar sem mudar
-black --check src/
-```
-
-### isort - Organizar imports
-
-```bash
-# Organizar imports
-isort src/
-
-# Verificar sem mudar
-isort --check-only src/
-```
-
-### Pylint - Linting
-
-```bash
-# Verificar qualidade
-pylint src/ --disable=too-few-public-methods
-
-# Gerar relatório
-pylint src/ > lint-report.txt
-```
-
-### mypy - Type checking
-
-```bash
-# Verificar tipos
-mypy src/ --ignore-missing-imports
-
-# Strict mode
-mypy src/ --strict
-```
-
-## 🔄 Git Workflow Desenvolvimento
-
-### 1. Crie branch para feature
-
-```bash
-git checkout develop
-git pull origin develop
-git checkout -b feat/my-feature
-```
-
-### 2. Trabalhe e commit
-
-```bash
-# Edite arquivos...
-git add .
-git commit -m "feat(module): add my feature"
-```
-
-### 3. Antes do Push
-
-```bash
-# Formatar código
-black src/
-isort src/
-
-# Verificar qualidade
-pylint src/
-mypy src/
-
-# Rodar testes
-pytest tests/ -v
-
-# Commit qualquer mudança de formatação
-git add .
-git commit -m "style: format code with black/isort"
-```
-
-### 4. Push e PR
-
-```bash
-git push origin feat/my-feature
-# Vá ao GitHub e crie PR para develop
-```
-
-## 🔍 Debugging
-
-### VS Code Debugger
-
-Criar `.vscode/launch.json`:
-
-```json
-{
-  "version": "0.2.0",
-  "configurations": [
-    {
-      "name": "Python: Run Script",
-      "type": "python",
-      "request": "launch",
-      "program": "${file}",
-      "console": "integratedTerminal",
-      "justMyCode": true
-    },
-    {
-      "name": "Python: Run Tests",
-      "type": "python",
-      "request": "launch",
-      "module": "pytest",
-      "args": ["${file}", "-v"],
-      "console": "integratedTerminal"
-    }
-  ]
-}
-```
-
-### IPython REPL
-
-```bash
-# Iniciar IPython (melhor que python shell)
-ipython
-
-# No código, para no ponto:
-from IPython import embed; embed()
-```
-
-### Print Debugging
-
-```python
-import logging
-
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
-
-logger.debug("Variable value: %s", my_var)
-```
-
-## 📊 Estrutura de Diretórios
-
-```
-LibrIA/
-├── src/                    # Código principal
-│   ├── data_collection/    # Coleta de dados
-│   ├── data_processing/    # Processamento
-│   ├── model_training/     # Treinamento
-│   └── inference/          # Inferência
-├── tests/                  # Testes
-├── docs/                   # Documentação
-├── model/                  # Modelos treinados
-├── data/                   # Dados brutos
-└── venv/                   # Ambiente virtual (não commitar)
-```
-
-## 🚨 Problemas Comuns
-
-### "ModuleNotFoundError: No module named 'src'"
-
-**Solução:**
-```bash
-# Instale em modo desenvolvimento
-pip install -e .
-
-# Ou adicione ao PYTHONPATH
-export PYTHONPATH="${PYTHONPATH}:/path/to/LibrIA"
-```
-
-### "pip install" muito lento
-
-**Solução:**
+Última atualização: 2026-03-10
 ```bash
 # Use cache aggressivo
 pip install --cache-dir /tmp/pip-cache -r requirements.txt

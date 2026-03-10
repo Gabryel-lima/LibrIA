@@ -20,6 +20,9 @@ import cv2 as cv
 import numpy as np
 from typing import Dict, List, Tuple
 
+from config.settings import FEATURE_DIMENSION, FEATURE_MODE
+from utils.helpers import extract_landmarks_by_mode
+
 # Tentar importar MediaPipe (requer suporte AVX)
 try:
     import mediapipe as mp
@@ -67,6 +70,7 @@ class LibrasDatasetProcessor:
         """Processa todo o dataset e salva os dados processados."""
         print("=== LibrIA - Processamento de Dataset ===")
         print("Extraindo landmarks das imagens coletadas...")
+        print(f"Modo de features: {FEATURE_MODE} ({FEATURE_DIMENSION} features)")
         
         data = []
         labels = []
@@ -122,25 +126,8 @@ class LibrasDatasetProcessor:
             if results.multi_hand_landmarks:
                 # Pegar apenas a primeira mão detectada
                 hand_landmarks = results.multi_hand_landmarks[0]
-                
-                # Extrair coordenadas
-                x_coords = []
-                y_coords = []
-                
-                for landmark in hand_landmarks.landmark:
-                    x_coords.append(landmark.x)
-                    y_coords.append(landmark.y)
-                
-                # Normalizar coordenadas
-                normalized_landmarks = []
-                min_x, min_y = min(x_coords), min(y_coords)
-                
-                for i in range(len(hand_landmarks.landmark)):
-                    x = hand_landmarks.landmark[i].x - min_x
-                    y = hand_landmarks.landmark[i].y - min_y
-                    normalized_landmarks.extend([x, y])
-                
-                return normalized_landmarks
+                features = extract_landmarks_by_mode(hand_landmarks.landmark, FEATURE_MODE)
+                return features.tolist()
             
             return None
             
@@ -165,7 +152,8 @@ class LibrasDatasetProcessor:
             'data': data,
             'labels': labels,
             'num_features': len(data[0]) if data else 0,
-            'num_classes': len(set(labels)) if labels else 0
+            'num_classes': len(set(labels)) if labels else 0,
+            'feature_mode': FEATURE_MODE,
         }
         
         # Salvar arquivo
@@ -194,6 +182,7 @@ class LibrasDatasetProcessor:
             'num_samples': len(dataset['data']),
             'num_features': dataset['num_features'],
             'num_classes': dataset['num_classes'],
+            'feature_mode': dataset.get('feature_mode', 'bounding_box'),
             'classes': sorted(set(dataset['labels']))
         }
 
@@ -208,6 +197,7 @@ def main():
         print("\n=== Informações do Dataset ===")
         print(f"Número de amostras: {info['num_samples']}")
         print(f"Número de features: {info['num_features']}")
+        print(f"Modo de features: {info['feature_mode']}")
         print(f"Número de classes: {info['num_classes']}")
         print(f"Classes: {info['classes']}")
 

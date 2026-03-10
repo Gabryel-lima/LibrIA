@@ -8,14 +8,20 @@ e esse projeto adere ao [Semantic Versioning](https://semver.org/lang/pt_BR/).
 ## [Não Lançado]
 
 ### Added
-- Suporte para video em diferentes formatos
-- Melhorias na documentação
+- Pipeline temporal com coleta de sequências em `dataset/sequences/`
+- Treinamento LSTM via `main.py train_lstm` e inferência temporal via `main.py infer_lstm`
+- Scripts de calibração de câmera e geração/exibição de tabuleiro
+- Metadados de `feature_mode` persistidos no dataset processado e nos modelos
 
 ### Changed
-- Refatoração do pipeline de dados
+- Extração de landmarks agora é configurável por `FEATURE_MODE`
+- Pipeline estático usa helpers compartilhados para extração e pré-processamento
+- Makefile ganhou comandos para fluxo temporal e calibração
+- Documentação central sincronizada com os fluxos atuais do projeto
 
 ### Fixed
-- Bug em frame capture
+- Fluxo de coleta temporal agora mantém a janela OpenCV responsiva durante espera e gravação
+- Inferência estática passou a respeitar dimensionalidade do modelo e calibração opcional
 
 ---
 

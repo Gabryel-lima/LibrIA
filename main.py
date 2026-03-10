@@ -34,7 +34,9 @@ sys.path.insert(0, str(project_root))
 from src.data_collection.libras_data_collector import LibrasDataCollector, collect_specific_letters
 from src.data_processing.libras_dataset_processor import LibrasDatasetProcessor
 from src.model_training.libras_model_trainer import LibrasModelTrainer
+from src.model_training.libras_lstm_trainer import LibrasLSTMTrainer
 from src.inference.libras_realtime_classifier import LibrasRealtimeClassifier
+from src.inference.libras_lstm_realtime_classifier import LibrasLSTMRealtimeClassifier
 from config.settings import create_directories, validate_config
 from utils.helpers import setup_logging
 
@@ -148,6 +150,28 @@ def train_model():
         print(f"❌ Erro durante o treinamento: {e}")
         return False
 
+def train_lstm_model():
+    """Executa o treinamento do modelo LSTM temporal."""
+    print("=== Iniciando Treinamento LSTM ===")
+
+    if not os.path.exists('./dataset/sequences'):
+        print("❌ Diretório de sequências não encontrado. Execute a coleta temporal primeiro.")
+        return False
+
+    try:
+        trainer = LibrasLSTMTrainer()
+        data, labels, label_map = trainer.load_sequence_dataset()
+        trainer.train_model(data, labels)
+
+        print(f"\n🧠 Modelo temporal treinado:")
+        print(f"   Sequências: {len(data)}")
+        print(f"   Classes: {list(label_map.values())}")
+        print("✅ Treinamento LSTM concluído com sucesso!")
+        return True
+    except Exception as e:
+        print(f"❌ Erro durante o treinamento LSTM: {e}")
+        return False
+
 def run_inference():
     """Executa a inferência em tempo real."""
     print("=== Iniciando Inferência em Tempo Real ===")
@@ -165,6 +189,23 @@ def run_inference():
         return True
     except Exception as e:
         print(f"❌ Erro durante a inferência: {e}")
+        return False
+
+def run_lstm_inference():
+    """Executa a inferência temporal em tempo real."""
+    print("=== Iniciando Inferência Temporal LSTM ===")
+
+    if not os.path.exists('./model/libras_lstm.keras'):
+        print("❌ Modelo LSTM não encontrado. Execute o treinamento LSTM primeiro.")
+        return False
+
+    try:
+        classifier = LibrasLSTMRealtimeClassifier()
+        classifier.start_classification()
+        print("✅ Inferência temporal concluída!")
+        return True
+    except Exception as e:
+        print(f"❌ Erro durante a inferência temporal: {e}")
         return False
 
 
@@ -212,7 +253,9 @@ def show_help():
         collect_jz  Coletar apenas dados de J e Z (complementar dataset)
         process     Processar dataset coletado (extrair landmarks)
         train       Treinar modelo Random Forest
+        train_lstm  Treinar modelo temporal LSTM com dataset/sequences
         infer       Executar reconhecimento em tempo real
+        infer_lstm  Executar reconhecimento temporal com janela deslizante
         all         Executar pipeline completo (collect → process → train → infer)
         help        Mostrar esta ajuda
 
@@ -230,8 +273,14 @@ def show_help():
         # Treinar modelo Random Forest
         python main.py train
 
+        # Treinar modelo temporal LSTM
+        python main.py train_lstm
+
         # Executar reconhecimento em tempo real
         python main.py infer
+
+        # Executar reconhecimento temporal
+        python main.py infer_lstm
 
         ESTRUTURA DO PROJETO:
 
@@ -268,7 +317,7 @@ def main():
         add_help=False
     )
     parser.add_argument('command', nargs='?', default='help',
-                       choices=['collect', 'collect_jz', 'process', 'train', 'infer', 'all', 'help'],
+                       choices=['collect', 'collect_jz', 'process', 'train', 'train_lstm', 'infer', 'infer_lstm', 'all', 'help'],
                        help='Comando a ser executado')
     
     # Parse argumentos
@@ -283,8 +332,12 @@ def main():
         process_dataset()
     elif args.command == 'train':
         train_model()
+    elif args.command == 'train_lstm':
+        train_lstm_model()
     elif args.command == 'infer':
         run_inference()
+    elif args.command == 'infer_lstm':
+        run_lstm_inference()
     elif args.command == 'all':
         run_pipeline()
     else:

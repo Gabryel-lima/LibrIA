@@ -8,4 +8,9 @@ de machine learning para reconhecimento de Libras.
 
 from .libras_model_trainer import LibrasModelTrainer
 
-__all__ = ['LibrasModelTrainer']
+try:
+    from .libras_lstm_trainer import LibrasLSTMTrainer
+except (ImportError, RuntimeError):
+    LibrasLSTMTrainer = None
+
+__all__ = ['LibrasModelTrainer', 'LibrasLSTMTrainer']

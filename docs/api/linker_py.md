@@ -1,86 +1,83 @@
-Para fazer sua IDE identificar e trabalhar com um pacote C++ integrado ao Python, você pode seguir os passos abaixo:
+# Binding C++/Python com pybind11 no repositorio
 
----
+Este repositorio ja possui um exemplo minimo de extensao Python em C++ usando `pybind11`.
 
-### 1. **Certifique-se de que o pacote C++ está integrado ao Python**
-   Você deve criar uma ponte entre o Python e o C++. Geralmente, isso é feito por meio de bibliotecas como:
-   - **`pybind11`**: Uma biblioteca moderna para criar bindings entre Python e C++.
-   - **`SWIG`**: Ferramenta que pode gerar bindings automáticos para várias linguagens, incluindo Python.
-   - **`ctypes` ou `cffi`**: Para chamadas diretas a bibliotecas C/C++ compiladas.
+## Arquivos envolvidos
 
----
+- `main_test.cpp`
+- `setup.py`
 
-### 2. **Compile o pacote C++ em um módulo Python**
-   - Crie um arquivo de interface para expor as funções do seu código C++ ao Python.
-   - Use uma ferramenta como `pybind11` ou crie um arquivo `setup.py` que use a extensão `distutils` ou `setuptools`.
+## O que o exemplo faz
 
-   #### Exemplo de `setup.py` usando `pybind11`:
-   ```python
-   from setuptools import setup, Extension
-   from pybind11.setup_helpers import Pybind11Extension, build_ext
+`main_test.cpp` expoe duas funcoes simples:
 
-   ext_modules = [
-       Pybind11Extension(
-           "meu_pacote_cpp",  # Nome do módulo no Python
-           ["meu_codigo.cpp"],  # Lista de arquivos fonte C++
-       ),
-   ]
+- `soma(int a, int b)`
+- `subtrai(int a, int b)`
 
-   setup(
-       name="meu_pacote_cpp",
-       version="0.1",
-       ext_modules=ext_modules,
-       cmdclass={"build_ext": build_ext},
-   )
-   ```
+Elas sao publicadas como modulo Python chamado `main_test`:
 
-   - Compile o módulo com:
-     ```bash
-     python setup.py build_ext --inplace
-     ```
+```cpp
+PYBIND11_MODULE(main_test, m) {
+  m.def("soma", &soma, "Funcao para somar dois numeros");
+  m.def("subtrai", &subtrai, "Funcao para subtrair dois numeros");
+}
+```
 
----
+No `setup.py`, o nome do modulo tambem esta fixado como `main_test`, entao esses dois arquivos precisam continuar sincronizados.
 
-### 3. **Instale o módulo**
-   - Para instalá-lo localmente:
-     ```bash
-     python setup.py install
-     ```
+## Como compilar
 
-   - Certifique-se de que o módulo está no ambiente Python onde você está trabalhando.
+Com o ambiente virtual ativo:
 
----
+```bash
+pip install pybind11 setuptools wheel
+python setup.py build_ext --inplace
+```
 
-### 4. **Configuração da IDE**
-   Para que sua IDE identifique o pacote:
+Isso gera um binario de extensao Python na raiz do projeto, com nome semelhante a:
 
-   #### a) **Adicione o caminho do pacote ao ambiente de trabalho da IDE**
-   - Verifique onde o módulo foi instalado (geralmente na pasta `site-packages` do seu ambiente Python).
-   - Certifique-se de que a IDE está configurada para usar o mesmo interpretador Python.
+```text
+main_test.cpython-311-x86_64-linux-gnu.so
+```
 
-   #### b) **Adicione diretórios adicionais no IntelliSense ou no autocompletion**
-   Dependendo da IDE, você pode precisar adicionar os diretórios manualmente:
-   - **VS Code**:
-     - Configure o arquivo `.vscode/settings.json`:
-       ```json
-       {
-           "python.analysis.extraPaths": [
-               "caminho/do/pacote"
-           ]
-       }
-       ```
-   - **PyCharm**:
-     - Vá para `Settings > Project: [seu projeto] > Python Interpreter`.
-     - Clique no ícone de engrenagem e em `Show All > Add`.
+## Como testar
 
----
+```bash
+python -c "import main_test; print(main_test.soma(2, 3)); print(main_test.subtrai(7, 4))"
+```
 
-### 5. **Teste o módulo**
-   Importe o pacote no Python e teste as funções:
-   ```python
-   import meu_pacote_cpp
+Saida esperada:
 
-   meu_pacote_cpp.minha_funcao()
-   ```
+```text
+5
+3
+```
 
-Se ocorrerem erros, como o módulo não sendo encontrado, revise os caminhos de instalação ou possíveis dependências C++ que podem estar ausentes no sistema.
+## Papel desse exemplo no projeto
+
+Esse binding e apenas demonstrativo. Ele nao participa do pipeline principal de LibrIA, que permanece em Python e usa:
+
+- `main.py`
+- `src/data_processing/`
+- `src/model_training/`
+- `src/inference/`
+
+## Cuidados
+
+1. O nome em `PYBIND11_MODULE(...)` deve ser o mesmo de `module_name` em `setup.py`.
+2. O build deve acontecer no mesmo Python/venv em que voce vai importar o modulo.
+3. Se o Python da IDE estiver diferente do Python do build, o import vai falhar ou o autocomplete vai ficar inconsistente.
+
+## Uso em IDE
+
+No VS Code, o ponto principal nao e adicionar `extraPaths`, e sim garantir que o interpretador selecionado seja o mesmo da `.venv` onde o modulo foi compilado.
+
+## Possiveis proximos passos
+
+Se esse exemplo evoluir para algo util ao LibrIA, o caminho natural seria:
+
+1. mover o binding para uma pasta dedicada
+2. expor preprocessamento numerico ou partes de inferencia de alto custo
+3. adicionar um alvo especifico no Makefile para compilar a extensao
+
+Atualizado em 2026-03-10.

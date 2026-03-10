@@ -1,235 +1,193 @@
-# 📊 Datasets e Modelos - LibrIA
+# Datasets e Artefatos - LibrIA
 
-Este documento descreve todas as opções disponíveis para obter datasets e modelos pré-treinados para o projeto LibrIA.
+Este documento descreve os formatos de dados usados pelo LibrIA e onde cada artefato entra no pipeline.
 
-## 📥 Opções de Datasets
+## Visão geral
 
-### 1. Coletar Seus Próprios Dados (Recomendado para Libras)
+O projeto hoje suporta dois fluxos principais:
 
-**Quando usar**: Para coletar dados de Libras com sua própria câmera.
+1. Fluxo estático: imagens por classe, processamento com MediaPipe e treino de Random Forest.
+2. Fluxo temporal: sequências de landmarks por classe, treino de LSTM e inferência com janela deslizante.
+
+## 1. Dados brutos para o fluxo estático
+
+### Coleta local
 
 ```bash
-# Coletar alfabeto completo (A-Z)
-python main.py collect
+make collect
+```
 
-# Coletar apenas J e Z (complementar dataset)
+Ou:
+
+```bash
+python main.py collect
 python main.py collect_jz
 ```
 
-**Características**:
-- ✅ Dados frescos e personalizados
-- ✅ Sincronizado com seu ambiente de iluminação
-- ✅ Possibilidade de coletar variações
-- ⏱️ Tempo: ~2-3 horas para alfabeto completo
+Estrutura gerada:
 
-**Estrutura gerada**:
-```
+```text
 data/
-├── 0/  (Letra A)
-├── 1/  (Letra B)
-├── ... (Letras C-Y)
-└── 25/ (Letra Z)
+├── 0/
+├── 1/
+├── ...
+└── 25/
 ```
 
----
+Cada pasta representa uma classe do alfabeto (`0 = A`, `25 = Z`).
 
-### 2. ASL Alphabet Dataset (Kaggle)
+### Dataset externo de apoio
 
-**Dataset Público**: [ASL Alphabet - Kaggle](https://www.kaggle.com/datasets/grassknoted/asl-alphabet)
+O repositório mantém arquivos de apoio em `data/archives/`, incluindo o dataset ASL organizado em:
 
-**Informações**:
-- 📊 **Total**: 87.000+ imagens
-- 🎯 **Classes**: 26 letras do alfabeto
-- 📐 **Resolução**: Variada (150x150 a 300x300)
-- 👥 **Diversidade**: Múltiplas pessoas, ângulos, iluminações
-
-**Como baixar**:
-
-#### Opção A: Via Kaggle CLI
-```bash
-# 1. Instale kaggle CLI
-pip install kaggle
-
-# 2. Baixe suas credenciais de API em https://www.kaggle.com/account
-# 3. Coloque o arquivo em ~/.kaggle/kaggle.json
-
-# 4. Baixe o dataset
-kaggle datasets download -d grassknoted/asl-alphabet
-unzip asl-alphabet.zip -d data/archive/
-```
-
-#### Opção B: Download manual
-1. Visite [ASL Alphabet Dataset](https://www.kaggle.com/datasets/grassknoted/asl-alphabet)
-2. Clique em "Download"
-3. Descompacte em `data/archive/ASL_Alphabet_Dataset/`
-
-**Estrutura esperada**:
-```
-data/archive/ASL_Alphabet_Dataset/
+```text
+data/archives/
 ├── asl_alphabet_train/
-│   ├── A/
-│   ├── B/
-│   ├── ...
-│   └── Z/
 └── asl_alphabet_test/
-    ├── A/
-    ├── B/
-    ├── ...
-    └── Z/
 ```
 
-**Como usar**:
+Quando usar:
+
+- para testes rápidos de pipeline
+- para comparar distribuição de dados
+- para experimentos com modelos alternativos
+
+## 2. Dataset processado do fluxo estático
+
+Após o processamento:
+
 ```bash
-# Processar o dataset
-python main.py process
-
-# Treinar modelo
-python main.py train
+make process
 ```
 
----
+é gerado o arquivo:
 
-### 3. Libras Alphabet Dataset (Local)
-
-**Localização**: `ASL_Alphabet_Dataset/`
-
-Se você já coletou dados de Libras:
-
+```text
+dataset/data.pickle
 ```
-ASL_Alphabet_Dataset/
-├── asl_alphabet_train/
-│   ├── A/ (imagens de A)
-│   ├── B/ (imagens de B)
+
+Campos principais:
+
+- `data`: vetores de features por amostra
+- `labels`: classes associadas
+- `num_features`: dimensionalidade efetiva
+- `num_classes`: número de classes
+- `feature_mode`: modo usado na extração
+
+### Modos de feature
+
+O valor de `num_features` depende de `FEATURE_MODE` em `config/settings.py`:
+
+- `bounding_box`: 42 features
+- `wrist_relative`: 63 features
+
+O modo padrão atual é `wrist_relative`.
+
+## 3. Dados brutos do fluxo temporal
+
+Coleta recomendada:
+
+```bash
+make collect-sequences SEQUENCE_LABELS=J\ Z SEQUENCE_COUNT=30 SEQUENCE_LENGTH=30
+```
+
+Estrutura gerada:
+
+```text
+dataset/sequences/
+├── J/
+│   ├── seq_000.npy
+│   ├── seq_001.npy
 │   └── ...
-└── asl_alphabet_test/
-    ├── A/
-    ├── B/
+└── Z/
+    ├── seq_000.npy
+    ├── seq_001.npy
     └── ...
 ```
 
----
+Cada arquivo `.npy` contém uma sequência com shape:
 
-## 🤖 Modelos Pré-Treinados
+```text
+(sequence_length, feature_dimension)
+```
 
-### Random Forest Model
+No padrão atual isso significa:
 
-**Localização**: `model/model.pickle`
+```text
+(30, 63)
+```
 
-**Características**:
-- ✅ Acurácia: 99%
-- ✅ Tempo de inferência: ~50ms/frame
-- ✅ Leve: ~2MB
-- ✅ Sem dependências GPU
+## 4. Artefatos de modelos
 
-**Como usar**:
+### Modelo clássico
+
+```text
+model/model.pickle
+```
+
+Conteúdo esperado:
+
+- classificador Random Forest
+- histórico de treino
+- `feature_mode`
+- `num_features`
+
+Execução:
+
 ```bash
-python main.py infer
+make infer
 ```
 
-### Modelos Deep Learning (Experimental)
+### Modelo temporal
 
-**Localização**: `model/`
+```text
+model/libras_lstm.keras
+model/libras_lstm_labels.pickle
+```
 
-Modelos adicionais disponíveis:
-- `best_temporal_model.h5` - Modelo temporal com CNN
-- `temporal_cnn_model.h5` - CNN para processamento temporal
-- `asl_vgg16_best_weights.keras` - VGG16 pré-treinado (src/saved/)
+Execução:
 
----
-
-## 📦 Zips e Arquivos Compactados
-
-### Dados Processados (data.pickle)
-
-Já com landmarks extraídos e prontos para treino:
-
-**Localização**: `dataset/data.pickle`
-
-**Como obter**:
 ```bash
-# Opção 1: Processar dados você mesmo
-python main.py process
-
-# Opção 2: Baixar arquivo pré-processado (quando disponível)
-# [Link do Google Drive ou S3]
+make train-lstm
+make infer-lstm
 ```
 
-**Tamanho esperado**: ~50-100MB
+## 5. Calibração de câmera
 
----
+Arquivos gerados:
 
-## 🌐 Compartilhamento de Arquivos
-
-### Para distribuir seus ZIPs:
-
-#### Opção 1: Google Drive
-```
-1. Crie uma pasta no Google Drive
-2. Upload dos zips
-3. Compartilhe com permissão de leitura
-4. Copie o link de compartilhamento
+```text
+config/camera_matrix.npy
+config/dist_coeffs.npy
 ```
 
-**Exemplo de link**:
-```
-https://drive.google.com/file/d/FILE_ID/view?usp=sharing
-```
+Esses arquivos são opcionais, mas quando presentes podem ser usados para corrigir distorção antes da extração dos landmarks.
 
-#### Opção 2: GitHub Releases
+Fluxo recomendado:
+
 ```bash
-# Crie um release com os arquivos
-git tag v1.0-dataset
-git push origin v1.0-dataset
-# Upload manual dos arquivos no GitHub
+make generate-checkerboard
+make show-checkerboard
+make capture-calibration
 ```
 
-#### Opção 3: AWS S3 ou Google Cloud Storage
-```bash
-# Ideal para grandes volumes de dados
-# Consulte a documentação dos serviços
-```
+## 6. Modelos e pesos adicionais já versionados
 
----
+Na pasta `model/` e em áreas legadas do projeto existem artefatos de experimentos anteriores, incluindo:
 
-## 📋 Checklist de Setup
+- `best_temporal_model.h5`
+- `temporal_cnn_model.h5`
+- `libras_lstm.keras`
+- `asl_vgg16_best_weights.keras`
 
-- [ ] Escolhi uma fonte de dados
-- [ ] Download dos dados iniciado
-- [ ] Dados descompactados na pasta correta
-- [ ] Executei `python main.py process`
-- [ ] Modelo foi treinado com `python main.py train`
-- [ ] Teste de inferência executado com `python main.py infer`
+Esses arquivos não substituem automaticamente o fluxo principal documentado. Use-os apenas se o experimento correspondente estiver configurado no código.
 
----
+## 7. Checklist rápido
 
-## 🔗 Links Importantes
+- [ ] Escolhi o fluxo: estático ou temporal
+- [ ] Tenho dados em `data/` ou em `dataset/sequences/`
+- [ ] Sei qual `FEATURE_MODE` está ativo
+- [ ] Rodei `make verify-setup`
+- [ ] Treinei o modelo correspondente antes de inferir
 
-| Recurso | Link |
-|---------|------|
-| **Kaggle** | https://www.kaggle.com/datasets/grassknoted/asl-alphabet |
-| **GitHub do Projeto** | https://github.com/Gabryel-lima/LibrIA |
-| **MediaPipe** | https://mediapipe.dev |
-| **OpenCV** | https://opencv.org |
-
----
-
-## ❓ Dúvidas Frequentes
-
-### P: Posso usar o ASL Dataset para Libras?
-**R**: Sim, pois ambos são linguagens de sinais com gestos semelhantes. Use-o para pré-treinamento e ajuste fino com dados de Libras.
-
-### P: Qual é o tamanho total dos dados?
-**R**: 
-- ASL Dataset: ~2GB
-- Dados coletados manualmente: ~500MB-1GB
-- Dataset processado (pickle): ~100MB
-
-### P: Posso combinar múltiplos datasets?
-**R**: Sim! Coloque todas as imagens em `data/` e processe juntas com `python main.py process`.
-
-### P: O modelo funciona sem GPU?
-**R**: Sim! O Random Forest e MediaPipe funcionam bem em CPU. Para deep learning, recomenda-se GPU, mas CPU ainda é funcional.
-
----
-
-**Última atualização**: 15 de fevereiro de 2026
+Última atualização: 2026-03-10

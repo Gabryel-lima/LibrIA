@@ -12,8 +12,8 @@
 # CONFIGURAÇÕES INICIAIS
 # ============================================================================
 
-.PHONY: help setup install install-gpu install-cpu collect process train infer \
-        run test clean clean-all dirs verify-setup environment lint format
+.PHONY: help setup install install-gpu install-cpu collect-sequences generate-checkerboard show-checkerboard capture-calibration calibrate-camera process train train-lstm infer infer-lstm run-lstm \
+	run test clean clean-all dirs verify-setup environment lint format install-dev freeze update status
 
 # Variáveis de Configuração
 PYTHON := python3
@@ -23,6 +23,18 @@ VENV_PYTHON := $(VENV_DIR)/bin/python
 VENV_PIP := $(VENV_DIR)/bin/pip
 PROJECT_NAME := LibrIA
 PROJECT_VERSION := 1.0.0
+SEQUENCE_LABELS ?= J Z
+SEQUENCE_COUNT ?= 30
+SEQUENCE_LENGTH ?= 30
+SEQUENCE_CAMERA ?= 0
+CALIBRATION_IMAGES ?= calibration/*.jpg
+CALIBRATION_COLS ?= 9
+CALIBRATION_ROWS ?= 6
+CALIBRATION_CAMERA ?= 0
+CALIBRATION_CAPTURE_DIR ?= calibration
+CALIBRATION_TARGET_IMAGES ?= 15
+CHECKERBOARD_OUTPUT ?= output/checkerboard_9x6.png
+CHECKERBOARD_SQUARE_SIZE ?= 80
 
 # Cores para output (ANSI)
 BLUE := \033[0;34m
@@ -73,7 +85,7 @@ help: ## 📖 Mostra este menu de ajuda com todos os comandos
 	@awk 'BEGIN {FS = ":.*?## "} /^setup|^install|^verify/ && !/^$$/ {printf "  $(GREEN)%-20s$(NC) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@echo ""
 	@echo "$(BOLD)$(GREEN)● EXECUTE - Execução do Pipeline:$(NC)"
-	@awk 'BEGIN {FS = ":.*?## "} /^run|^collect|^process|^train|^infer/ && !/^setup/ && !/^$$/ {printf "  $(YELLOW)%-20s$(NC) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*?## "} /^run|^collect|^collect-sequences|^generate-checkerboard|^show-checkerboard|^capture-calibration|^process|^train|^train-lstm|^infer|^infer-lstm|^calibrate-camera/ && !/^setup/ && !/^$$/ {printf "  $(YELLOW)%-20s$(NC) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@echo ""
 	@echo "$(BOLD)$(YELLOW)● TESTING & DEBUG:$(NC)"
 	@awk 'BEGIN {FS = ":.*?## "} /^test|^environment|^lint|^format/ && !/^$$/ {printf "  $(MAGENTA)%-20s$(NC) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -88,8 +100,17 @@ help: ## 📖 Mostra este menu de ajuda com todos os comandos
 	@echo ""
 	@echo "$(BOLD)Exemplo de uso:$(NC)"
 	@echo "  $(CYAN)make setup          # Setup inicial"
+	@echo "  make collect-sequences # Coletar sequências temporais padrão (J e Z)"
+	@echo "  make collect-sequences SEQUENCE_LABELS=J\ Z SEQUENCE_COUNT=20"
+	@echo "  make generate-checkerboard # Gerar imagem do tabuleiro 9x6"
+	@echo "  make show-checkerboard # Exibir o tabuleiro em tela cheia"
+	@echo "  make capture-calibration # Abrir webcam, salvar fotos do tabuleiro e calibrar"
+	@echo "  make calibrate-camera CALIBRATION_IMAGES='calibration/*.jpg'"
+	@echo "  make train-lstm        # Treinar modelo temporal LSTM"
+	@echo "  make run-lstm          # Pipeline temporal completo"
 	@echo "  make run            # Executar pipeline completo"
-	@echo "  make infer          # Inferência em tempo real$(NC)"
+	@echo "  make infer          # Inferência em tempo real"
+	@echo "  make infer-lstm     # Inferência temporal em tempo real$(NC)"
 	@echo ""
 
 setup: $(VENV_DIR) ## 🔧 Setup inicial - cria venv e instala dependências
@@ -97,6 +118,7 @@ setup: $(VENV_DIR) ## 🔧 Setup inicial - cria venv e instala dependências
 	@echo "$(BLUE)→ Instalando dependências ($(DEFAULT_INSTALL))...$(NC)"
 	@$(MAKE) --no-print-directory $(DEFAULT_INSTALL)
 	@echo "$(GREEN)✓ Setup completo! Use 'make verify-setup' para validar.$(NC)"
+	@echo "$(YELLOW)→ Não esqueça de ativar o .venv$(NC)"
 
 $(VENV_DIR): ## Cria o ambiente virtual (dependência interna)
 	@echo "$(BLUE)→ Criando ambiente virtual com Python $(PYTHON_VERSION)...$(NC)"
@@ -132,7 +154,6 @@ verify-setup: ## ✓ Verifica se o ambiente está configurado corretamente
 	fi
 	@echo "$(GREEN)✓ PyTorch: $(shell $(VENV_PYTHON) -c 'import torch; print(torch.__version__)' 2>/dev/null)$(NC)"
 	@echo "$(GREEN)✓ OpenCV: $(shell $(VENV_PYTHON) -c 'import cv2; print(cv2.__version__)' 2>/dev/null)$(NC)"
-	@echo "$(GREEN)✓ MediaPipe: $(shell $(VENV_PYTHON) -c 'import mediapipe; print(mediapipe.__version__)' 2>/dev/null)$(NC)"
 	@echo "$(GREEN)✓ Scikit-learn: $(shell $(VENV_PYTHON) -c 'import sklearn; print(sklearn.__version__)' 2>/dev/null)$(NC)"
 	@if $(VENV_PYTHON) -c "import mediapipe" 2>/dev/null; then \
 		echo "$(GREEN)✓ MediaPipe: $(shell $(VENV_PYTHON) -c 'import mediapipe; print(mediapipe.__version__)' 2>/dev/null)$(NC)"; \
@@ -193,9 +214,30 @@ collect: verify-setup dirs ## 📷 Coleta dados com webcam (todas as classes)
 	@echo "$(MAGENTA)  Pressione 'q' para sair de cada classe$(NC)"
 	@$(VENV_PYTHON) main.py collect
 
-collect-jz: verify-setup dirs ## 📷 Coleta dados apenas para J e Z
+collect-sequences: verify-setup dirs ## 📷 Coleta sequências temporais
 	@echo "$(YELLOW)→ Coletando dados específicos (J e Z)...$(NC)"
-	@$(VENV_PYTHON) collect_j_z.py
+	@echo "$(CYAN)  Labels: $(SEQUENCE_LABELS) | Sequências: $(SEQUENCE_COUNT) | Frames: $(SEQUENCE_LENGTH) | Câmera: $(SEQUENCE_CAMERA)$(NC)"
+	@$(VENV_PYTHON) -m scripts.collect_sequences $(SEQUENCE_LABELS) --num-sequences $(SEQUENCE_COUNT) --seq-length $(SEQUENCE_LENGTH) --camera-index $(SEQUENCE_CAMERA)
+
+generate-checkerboard: verify-setup dirs ## 🧾 Gera uma imagem de tabuleiro para calibração de câmera
+	@echo "$(YELLOW)→ Gerando tabuleiro de calibração...$(NC)"
+	@echo "$(CYAN)  Saída: $(CHECKERBOARD_OUTPUT) | Padrão: $(CALIBRATION_COLS)x$(CALIBRATION_ROWS) | Quadrado: $(CHECKERBOARD_SQUARE_SIZE)px$(NC)"
+	@$(VENV_PYTHON) -m scripts.generate_checkerboard --cols $(CALIBRATION_COLS) --rows $(CALIBRATION_ROWS) --square-size $(CHECKERBOARD_SQUARE_SIZE) --output $(CHECKERBOARD_OUTPUT)
+
+show-checkerboard: verify-setup dirs ## 🖥️ Exibe o tabuleiro gerado em tela cheia
+	@echo "$(YELLOW)→ Exibindo tabuleiro em tela cheia...$(NC)"
+	@echo "$(CYAN)  Imagem: $(CHECKERBOARD_OUTPUT)$(NC)"
+	@$(VENV_PYTHON) -m scripts.show_checkerboard --image $(CHECKERBOARD_OUTPUT)
+
+capture-calibration: verify-setup dirs ## 📷 Abre a webcam, captura imagens do tabuleiro e calibra a câmera
+	@echo "$(YELLOW)→ Capturando imagens para calibração...$(NC)"
+	@echo "$(CYAN)  Câmera: $(CALIBRATION_CAMERA) | Saída: $(CALIBRATION_CAPTURE_DIR) | Alvo: $(CALIBRATION_TARGET_IMAGES) imagens$(NC)"
+	@$(VENV_PYTHON) -m scripts.calibrate_camera --capture --capture-dir $(CALIBRATION_CAPTURE_DIR) --target-images $(CALIBRATION_TARGET_IMAGES) --camera-index $(CALIBRATION_CAMERA) --cols $(CALIBRATION_COLS) --rows $(CALIBRATION_ROWS)
+
+calibrate-camera: verify-setup dirs ## 🎥 Calibra a câmera por imagens do tabuleiro
+	@echo "$(YELLOW)→ Iniciando calibração da câmera...$(NC)"
+	@echo "$(MAGENTA)  Imagens: $(CALIBRATION_IMAGES) | Padrão do tabuleiro: $(CALIBRATION_COLS)x$(CALIBRATION_ROWS)$(NC)"
+	@$(VENV_PYTHON) -m scripts.calibrate_camera $(CALIBRATION_IMAGES) --cols $(CALIBRATION_COLS) --rows $(CALIBRATION_ROWS)
 
 process: verify-setup ## ⚙️  Processa dados - extrai landmarks
 	@echo "$(MAGENTA)→ Processando dataset (extração de landmarks)...$(NC)"
@@ -207,10 +249,28 @@ train: verify-setup ## 🤖 Treina modelo Random Forest
 	@$(VENV_PYTHON) main.py train
 	@echo "$(GREEN)✓ Modelo treinado! Salvo em ./model/model.pickle$(NC)"
 
+train-lstm: verify-setup dirs ## 🧠 Treina modelo temporal LSTM com dataset/sequences
+	@echo "$(MAGENTA)→ Iniciando treinamento do modelo temporal...$(NC)"
+	@$(VENV_PYTHON) main.py train_lstm
+	@echo "$(GREEN)✓ Modelo temporal treinado! Salvo em ./model/libras_lstm.keras$(NC)"
+
 infer: verify-setup ## 🎯 Inferência em tempo real com webcam
 	@echo "$(GREEN)→ Iniciando inferência em tempo real...$(NC)"
 	@echo "$(MAGENTA)  Pressione 'q' para sair$(NC)"
 	@$(VENV_PYTHON) main.py infer
+
+infer-lstm: verify-setup ## 🎯 Inferência temporal LSTM em tempo real
+	@echo "$(GREEN)→ Iniciando inferência temporal em tempo real...$(NC)"
+	@echo "$(MAGENTA)  Pressione 'q' para sair$(NC)"
+	@$(VENV_PYTHON) main.py infer_lstm
+
+run-lstm: verify-setup dirs ## ▶️  Pipeline temporal: coletar, treinar, inferir
+	@echo "$(BOLD)$(GREEN)╔════════════════════════════════════════════════════════════════╗$(NC)"
+	@echo "$(BOLD)$(GREEN)║$(NC)         Executando Pipeline Temporal de LibrIA       $(BOLD)$(GREEN)║$(NC)"
+	@echo "$(BOLD)$(GREEN)╚════════════════════════════════════════════════════════════════╝$(NC)"
+	@$(MAKE) --no-print-directory collect-sequences
+	@$(MAKE) --no-print-directory train-lstm
+	@$(MAKE) --no-print-directory infer-lstm
 
 run: verify-setup dirs ## ▶️  Executa pipeline completo (collect→process→train→infer)
 	@echo "$(BOLD)$(GREEN)╔════════════════════════════════════════════════════════════════╗$(NC)"

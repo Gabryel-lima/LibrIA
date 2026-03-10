@@ -1,200 +1,88 @@
-# 🔧 Tratamento de Incompatibilidades de CPU (AVX)
+# Compatibilidade com CPUs sem AVX
 
 ## Resumo
 
-Este documento descreve as mudanças realizadas para tornar o projeto LibrIA compatível com CPUs que não suportam instruções AVX (como Intel Celeron 3865U).
+Parte do stack do LibrIA depende de bibliotecas que costumam exigir suporte AVX na CPU. Em máquinas antigas, isso pode gerar falhas no import ou erros como `illegal hardware instruction`.
 
-## 🚨 Problema Identificado
+## Bibliotecas mais sensíveis
 
-Seu CPU (Intel Celeron 3865U) não suporta instruções AVX, que são necessárias para:
-- **TensorFlow 2.16.1** - Framework de deep learning
-- **PyTorch 2.5.1** - Framework de machine learning
-- **MediaPipe 0.10.14** - Detecção de landmarks
+- TensorFlow 2.16.1
+- Keras 3.4.1
+- MediaPipe 0.10.14
+- Em alguns ambientes, builds específicas de PyTorch também podem exigir AVX
 
-Isso causava erros: `illegal hardware instruction (core dumped)`
+## Impacto prático no projeto
 
-## ✅ Soluções Implementadas
+### Fluxos que dependem fortemente de AVX
 
-### 1. **Modified requirements.txt**
-- ❌ Comentado: TensorFlow, PyTorch, MediaPipe
-- ✅ Mantido: Scikit-learn, OpenCV, NumPy, Pandas (compatível com qualquer CPU)
+- `make process` e `python main.py process`
+- `make infer` quando a extração de landmarks precisa do MediaPipe
+- `make collect-sequences`
+- `make train-lstm`
+- `make infer-lstm`
 
-### 2. **Added Try/Except Graceful Handling**
+### Fluxos que continuam úteis para diagnóstico
 
-#### [src/conf.py](src/conf.py)
-```python
-try:
-    import tensorflow as tf
-    TENSORFLOW_AVAILABLE = True
-except (ImportError, RuntimeError):
-    TENSORFLOW_AVAILABLE = False
-    # Criar stub do TensorFlow para evitar erros
+- `make environment`
+- `make verify-setup`
+- `python test_setup.py`
+- Operações em arquivos, documentação e revisão de código
+
+## Comportamento atual do projeto
+
+- `test_setup.py` detecta ausência de AVX e emite aviso
+- `Makefile` exibe avisos para TensorFlow, MediaPipe e Keras quando não disponíveis
+- Alguns módulos fazem import condicional e retornam erro explícito ao tentar usar funcionalidade indisponível
+
+## Como verificar AVX no Linux
+
+```bash
+grep -q avx /proc/cpuinfo && echo "AVX disponível" || echo "Sem AVX"
 ```
 
-#### [src/utils/imports.py](src/utils/imports.py)
-- Import condicional de TensorFlow e Keras
-- Cria stubs quando não disponível
-- Mantém compatibilidade com código existente
+## Verificação recomendada do ambiente
 
-#### [src/utils/gradients.py](src/utils/gradients.py)
-- Função `value_gradient()` com try/except
-- Mensagens claras sobre quando falha (requer TensorFlow)
-
-#### [src/data_processing/libras_dataset_processor.py](src/data_processing/libras_dataset_processor.py)
-- Constructor valida disponibilidade de MediaPipe
-- Falha com mensagem clara se MediaPipe não disponível
-
-#### [src/data_collection/libras_data_collector.py](src/data_collection/libras_data_collector.py)
-- Try/except em `collect_data()`
-- Tratamento de erros de webcam
-- Mensagens informativas em cada erro
-
-#### [src/inference/libras_realtime_classifier.py](src/inference/libras_realtime_classifier.py)
-- **Modo de teste com dados sintéticos** quando MediaPipe não disponível
-- Try/except em torno de operações de webcam
-- Carregamento gracioso de modelos
-- Suporta inferência com modelos existentes mesmo sem MediaPipe
-
-### 3. **Updated Makefile verify-setup**
-- ❌ Removido requisito obrigatório: TensorFlow, MediaPipe
-- ✅ Requisitos obrigatórios agora: PyTorch, Scikit-learn, OpenCV
-- ⚠️ Avisos para bibliotecas não disponíveis (em vez de falhas)
-
-### 4. **Updated test_setup.py**
-- Detecção de CPU sem AVX
-- Testes flexíveis que pulam funcionalidades indisponíveis
-- 5/5 testes agora passam
-
-## 📊 Teste de Inferência
-
-Executar teste de inferência:
 ```bash
-.venv/bin/python3 test_inference.py
-```
-
-**Resultado**: ✅ Funciona com modelo existente em modo teste
-
-## 🎯 O Que Funciona Agora
-
-### ✅ Disponível
-- Carregamento de modelos scikit-learn (`.pickle`)
-- Inferência com dados sintéticos/aleatórios
-- Interface de teste sem webcam
-- Coleta de dados via OpenCV (apenas captura, sem landmarks)
-- Processamento básico com NumPy/Pandas
-- Treinamento de modelos com scikit-learn
-
-### ❌ Indisponível (Requer AVX)
-- Detecção de landmarks com MediaPipe
-- Modelos TensorFlow/Keras
-- Modelos PyTorch com AVX
-- Deep learning com TensorFlow
-
-## 🚀 Como Usar em Máquina com AVX
-
-Se você tiver acesso a uma máquina com suporte AVX (CPU mais recente):
-
-1. Descomente as bibliotecas em `requirements.txt`:
-```bash
-# Descomente:
-# tensorflow==2.16.1
-# keras==3.4.1
-# torch==2.5.1
-# mediapipe==0.10.14
-```
-
-2. Reinstale dependências:
-```bash
-make install-cpu
-# ou
-make install-gpu  # Se tiver NVIDIA GPU
-```
-
-3. Execute setup:
-```bash
+make setup
+source .venv/bin/activate
 make verify-setup
+python test_setup.py
 ```
 
-## 📋 Arquivos Modificados
+## Estratégias recomendadas
 
-| Arquivo | Mudanças |
-|---------|----------|
-| `requirements.txt` | Comentado TF, PyTorch, MediaPipe |
-| `Makefile` | Ajustado verify-setup (avisos em vez de erros) |
-| `src/conf.py` | Try/except em torno do import TensorFlow |
-| `src/utils/imports.py` | Imports condicionais com stubs |
-| `src/utils/gradients.py` | Try/except na função de gradientes |
-| `src/data_collection/libras_data_collector.py` | Try/except em coleta de dados |
-| `src/data_processing/libras_dataset_processor.py` | Try/except no processamento |
-| `src/inference/libras_realtime_classifier.py` | Modo teste com dados sintéticos |
-| `test_setup.py` | Testes adaptativos |
+### Se você tem uma máquina com AVX
 
-## 🔍 Estrutura de Tratamento de Erros
+Use essa máquina para:
 
-Cada módulo que requer biblioteca com AVX segue este padrão:
+- coleta com MediaPipe
+- processamento do dataset
+- treino e inferência da LSTM
+- geração de artefatos finais
 
-```python
-try:
-    import biblioteca_com_avx as lib
-    AVAILABLE = True
-except (ImportError, RuntimeError) as e:
-    AVAILABLE = False
-    print(f"⚠️  {lib} não disponível: {e.__class__.__name__}")
-    print("   → CPU não suporta AVX")
-    # Criar stub ou handle de falha graciosa
-```
+### Se você não tem AVX
 
-## 💡 Exemplo de Uso
+Use a máquina sem AVX para:
 
-### Teste de Inferência (Funciona)
-```python
-from src.inference.libras_realtime_classifier import LibrasRealtimeClassifier
+- editar código
+- revisar documentação
+- trabalhar com os artefatos já gerados
+- validar partes do projeto que não dependem do stack de visão/deep learning
 
-classifier = LibrasRealtimeClassifier('./model/model.pickle')
-classifier.start_classification()  # Inicia em modo teste automaticamente
-```
+## Observação importante sobre `requirements.txt`
 
-### Processamento de Dataset (Falha Graciosamente)
-```python
-from src.data_processing.libras_dataset_processor import LibrasDatasetProcessor
+O arquivo de dependências atual já lista TensorFlow, Keras, PyTorch e MediaPipe. Em CPUs incompatíveis, a instalação ou o uso dessas bibliotecas pode falhar. A recomendação é usar uma máquina com AVX para o setup completo.
 
-try:
-    processor = LibrasDatasetProcessor('./data')
-    processor.process_dataset()
-except RuntimeError as e:
-    print(f"Processamento indisponível: {e}")
-    # Continuar com pipeline alternativo
-```
+## Artefatos portáveis
 
-## 🎓 Status do Setup
+Mesmo quando o treino é feito em outra máquina, faz sentido versionar ou transferir:
 
-```
-✓ Verificação de Setup: 5/5 testes passaram
-✓ Python 3.12 
-✓ PyTorch 2.5.1
-✓ OpenCV 4.11.0
-✓ Scikit-learn 1.6.1
-⚠️  TensorFlow: Não disponível (requer AVX)
-⚠️  MediaPipe: Não disponível (requer AVX)
-⚠️  Keras: Não disponível (dependência do TensorFlow)
-```
+- `model/model.pickle`
+- `model/libras_lstm.keras`
+- `model/libras_lstm_labels.pickle`
+- `config/camera_matrix.npy`
+- `config/dist_coeffs.npy`
 
-## 📝 Próximos Passos
+## Última atualização
 
-Para implementação completa, recomendações:
-
-1. **Usar máquina com AVX** para:
-   - Coleta de dados com MediaPipe
-   - Treinamento com TensorFlow
-   - Inferência em tempo real
-
-2. **Exportar modelos treinados** em formato `.pickle` (scikit-learn) para portabilidade
-
-3. **Manter pipeline em duas versões**:
-   - Versão com AVX: Coleta e treinamento
-   - Versão sem AVX: Inferência apenas
-
----
-
-**Data**: 16 de fevereiro de 2026  
-**Status**: ✅ Projeto pronto para uso com CPU limitada
+2026-03-10

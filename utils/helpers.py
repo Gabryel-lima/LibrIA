@@ -14,6 +14,8 @@ import logging
 from typing import Dict, List, Tuple, Optional, Any
 from datetime import datetime
 
+from config.settings import CAMERA_CONFIG, FEATURE_DIMENSIONS, FEATURE_MODE
+
 def setup_logging(log_file: str = 'libras.log', level: str = 'INFO'):
     """
     Configura o sistema de logging.
@@ -119,6 +121,85 @@ def save_dataset(data: List, labels: List, dataset_path: str, metadata: Dict = N
     except Exception as e:
         raise RuntimeError(f"Erro ao salvar dataset: {e}")
 
+def get_feature_dimension(feature_mode: str = FEATURE_MODE) -> int:
+    """Retorna a dimensionalidade esperada para o modo de features."""
+    if feature_mode not in FEATURE_DIMENSIONS:
+        raise ValueError(f"Modo de features inválido: {feature_mode}")
+    return FEATURE_DIMENSIONS[feature_mode]
+
+def infer_feature_mode_from_dimension(num_features: int) -> str:
+    """Infere o modo de features a partir da dimensionalidade do vetor."""
+    for feature_mode, dimension in FEATURE_DIMENSIONS.items():
+        if dimension == num_features:
+            return feature_mode
+    raise ValueError(f"Nenhum modo de features corresponde a {num_features} features")
+
+def landmarks_to_bounding_box(landmarks) -> np.ndarray:
+    """Normaliza landmarks usando a bounding box da mão."""
+    x_coords = [landmark.x for landmark in landmarks]
+    y_coords = [landmark.y for landmark in landmarks]
+
+    min_x, min_y = min(x_coords), min(y_coords)
+    normalized_landmarks = []
+
+    for landmark in landmarks:
+        normalized_landmarks.extend([
+            landmark.x - min_x,
+            landmark.y - min_y,
+        ])
+
+    return np.asarray(normalized_landmarks, dtype=np.float32)
+
+def landmarks_to_relative(landmarks) -> np.ndarray:
+    """Converte landmarks para coordenadas relativas ao pulso com escala normalizada."""
+    wrist = np.array([landmarks[0].x, landmarks[0].y, landmarks[0].z], dtype=np.float32)
+
+    relative = []
+    for landmark in landmarks:
+        point = np.array([landmark.x, landmark.y, landmark.z], dtype=np.float32)
+        relative.append(point - wrist)
+
+    relative = np.asarray(relative, dtype=np.float32)
+    distances = np.linalg.norm(relative, axis=1)
+    max_distance = float(np.max(distances))
+
+    if max_distance > 0:
+        relative = relative / max_distance
+
+    return relative.flatten().astype(np.float32)
+
+def extract_landmarks_by_mode(landmarks, feature_mode: str = FEATURE_MODE) -> np.ndarray:
+    """Extrai features de landmarks conforme o modo configurado."""
+    if feature_mode == 'bounding_box':
+        return landmarks_to_bounding_box(landmarks)
+    if feature_mode == 'wrist_relative':
+        return landmarks_to_relative(landmarks)
+    raise ValueError(f"Modo de features inválido: {feature_mode}")
+
+def load_camera_calibration(
+    camera_matrix_path: str = CAMERA_CONFIG['camera_matrix_path'],
+    dist_coeffs_path: str = CAMERA_CONFIG['dist_coeffs_path'],
+) -> Optional[Dict[str, np.ndarray]]:
+    """Carrega os parâmetros de calibração de câmera, se existirem."""
+    if not os.path.exists(camera_matrix_path) or not os.path.exists(dist_coeffs_path):
+        return None
+
+    return {
+        'camera_matrix': np.load(camera_matrix_path),
+        'dist_coeffs': np.load(dist_coeffs_path),
+    }
+
+def preprocess_frame(frame: np.ndarray, calibration_data: Optional[Dict[str, np.ndarray]]) -> np.ndarray:
+    """Corrige distorção de lente antes da extração de landmarks."""
+    if not calibration_data:
+        return frame
+
+    h, w = frame.shape[:2]
+    camera_matrix = calibration_data['camera_matrix']
+    dist_coeffs = calibration_data['dist_coeffs']
+    new_matrix, _ = cv.getOptimalNewCameraMatrix(camera_matrix, dist_coeffs, (w, h), 1, (w, h))
+    return cv.undistort(frame, camera_matrix, dist_coeffs, None, new_matrix)
+
 def extract_hand_landmarks(image: np.ndarray, hands_detector) -> Optional[List[float]]:
     """
     Extrai landmarks de uma mão de uma imagem.
@@ -135,25 +216,7 @@ def extract_hand_landmarks(image: np.ndarray, hands_detector) -> Optional[List[f
         
         if results.multi_hand_landmarks:
             hand_landmarks = results.multi_hand_landmarks[0]
-            
-            # Extrair coordenadas
-            x_coords = []
-            y_coords = []
-            
-            for landmark in hand_landmarks.landmark:
-                x_coords.append(landmark.x)
-                y_coords.append(landmark.y)
-            
-            # Normalizar coordenadas
-            normalized_landmarks = []
-            min_x, min_y = min(x_coords), min(y_coords)
-            
-            for i in range(len(hand_landmarks.landmark)):
-                x = hand_landmarks.landmark[i].x - min_x
-                y = hand_landmarks.landmark[i].y - min_y
-                normalized_landmarks.extend([x, y])
-            
-            return normalized_landmarks
+            return extract_landmarks_by_mode(hand_landmarks.landmark).tolist()
         
         return None
         

@@ -265,6 +265,13 @@ SignLanguageDetectionLetters.zip
 
 # ASL Alphabet Dataset
 ASL_Alphabet_Dataset/
+
 # LibrIA Specific
 requirements.lock
 .deprecated-files/
+
+# datasset sequences
+dataset/sequences
+
+# .npy
+config/*.npy

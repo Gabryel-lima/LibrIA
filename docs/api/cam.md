@@ -1,166 +1,91 @@
-Sim, é totalmente possível criar uma aplicação **completa e portátil** para capturar imagens e vídeos da câmera, além de integrá-la com modelos do **PyTorch para C++**. Aqui está um plano estruturado para alcançar isso:
+# API C++ de Camera e Inferencia
 
----
+Este documento descreve o que o repositorio ja possui em C++ para captura de camera e inferencia com LibTorch.
 
-## 🚀 **Estrutura da Aplicação**
-A aplicação deve ser:
-1. **Leve e portátil** – Apenas os módulos essenciais do OpenCV.
-2. **Compatível com qualquer dispositivo** – Funcione em **PCs, Raspberry Pi, celulares e embarcados**.
-3. **Integrada com um modelo de IA** – Use **LibTorch** (versão C++ do PyTorch) para inferência.
+## Arquivo existente
 
----
+Implementacao atual:
 
-## 🔹 **Passo 1: Criando a Aplicação Base da Câmera**
-Para garantir **portabilidade**, basta instalar **apenas** o OpenCV necessário para manipular a câmera e imagens.
+- `src/interfaces/cam.cpp`
 
-### **🔧 Compilação do OpenCV Mínimo**
-Se quiser evitar compilar tudo do OpenCV, você pode instalar **somente os pacotes essenciais**:
-```bash
-sudo apt install libopencv-dev
-```
+Esse arquivo:
 
-Caso queira **compilar uma versão enxuta do OpenCV**, basta desativar módulos extras no `cmake`:
-```bash
-cmake -D CMAKE_BUILD_TYPE=Release \
-      -D CMAKE_INSTALL_PREFIX=/usr/local \
-      -D WITH_TBB=ON \
-      -D WITH_V4L=ON \
-      -D WITH_OPENGL=ON \
-      -D BUILD_EXAMPLES=OFF \
-      -D BUILD_TESTS=OFF \
-      -D BUILD_PERF_TESTS=OFF \
-      -D BUILD_opencv_python=OFF \
-      -D BUILD_opencv_java=OFF ..
-```
-Isso gera uma versão **bem mais leve** da biblioteca.
+- abre a camera com OpenCV
+- carrega um modelo TorchScript de `src/saved/classification.pth`
+- converte frames para RGB
+- redimensiona para `224x224`
+- monta um tensor no formato `NCHW`
+- executa `model.forward()` em CPU
 
----
+## Fluxo atual em `cam.cpp`
 
-## 🔹 **Passo 2: Criando um Código C++ Portátil**
-Agora, um código que funcione em **qualquer dispositivo com câmera**:
+Resumo do que o codigo faz hoje:
 
-### `main.cpp`
 ```cpp
-#include <opencv2/opencv.hpp>
-#include <iostream>
+torch::jit::script::Module model = torch::jit::load("src/saved/classification.pth");
+cv::VideoCapture cap(0);
 
-int main() {
-    cv::VideoCapture cap(0); // 0 para webcam, ou "http://IP_CELULAR:PORTA/video" para câmera IP
+cap >> frame;
+cv::cvtColor(frame, frame, cv::COLOR_BGR2RGB);
+cv::resize(frame, frame, cv::Size(224, 224));
+frame.convertTo(frame, CV_32F, 1.0f / 255.0f);
 
-    if (!cap.isOpened()) {
-        std::cerr << "Erro ao abrir a câmera!" << std::endl;
-        return -1;
-    }
-
-    cv::Mat frame;
-    while (true) {
-        cap >> frame;  // Captura um frame da câmera
-
-        if (frame.empty()) break;
-
-        cv::imshow("Câmera ao Vivo", frame);
-
-        if (cv::waitKey(1) == 27) break; // Pressione ESC para sair
-    }
-
-    cap.release();
-    cv::destroyAllWindows();
-    return 0;
-}
+torch::Tensor input = torch::from_blob(frame.data, {1, 224, 224, 3}, torch::kFloat).clone();
+input = input.permute({0, 3, 1, 2}).contiguous();
+torch::Tensor output = model.forward({input}).toTensor();
 ```
 
-### **🔧 Compilação e Execução**
-Para compilar com um OpenCV instalado pelo `apt`:
-```bash
-g++ main.cpp -o camera `pkg-config --cflags --libs opencv4`
-./camera
-```
-Isso cria um binário portátil que pode ser executado em **qualquer Linux** que tenha OpenCV instalado.
+## Dependencias necessarias
 
----
+No Linux, voce precisa de:
 
-## 🔹 **Passo 3: Criando uma Versão Completamente Portátil**
-Agora, se você quiser criar um **binário independente**, sem depender de OpenCV instalado no sistema, você pode usar **static linking**.
+- OpenCV com headers e libs acessiveis
+- LibTorch compativel com sua toolchain
+- um modelo TorchScript valido em `src/saved/classification.pth`
 
-1️⃣ **Compile o OpenCV estaticamente**:
-```bash
-cmake -D CMAKE_BUILD_TYPE=Release \
-      -D CMAKE_INSTALL_PREFIX=/opt/opencv \
-      -D BUILD_SHARED_LIBS=OFF \
-      -D BUILD_opencv_python=OFF ..
-make -j$(nproc)
-sudo make install
-```
-Isso instalará o OpenCV em `/opt/opencv`.
+## Exemplo de compilacao manual
 
-2️⃣ **Compile o código C++ linkando diretamente ao OpenCV estático**:
-```bash
-g++ main.cpp -o camera -I/opt/opencv/include -L/opt/opencv/lib -lopencv_core -lopencv_videoio -lopencv_highgui -lopencv_imgcodecs
-```
-Agora você tem um **executável único**, que pode ser transferido para outro sistema sem precisar instalar OpenCV.
+O repositorio nao tem hoje um `CMakeLists.txt` ativo para esse binario, entao a forma mais simples de documentar o build e por linha de comando.
 
----
-
-## 🔹 **Passo 4: Integração com PyTorch para Inferência**
-A próxima etapa seria **rodar um modelo treinado do PyTorch diretamente no C++ usando LibTorch**.
-
-1️⃣ **Baixe a versão do LibTorch compatível com seu sistema**:
-```bash
-wget https://download.pytorch.org/libtorch/cpu/libtorch-shared-with-deps-latest.zip
-unzip libtorch-shared-with-deps-latest.zip
-```
-
-2️⃣ **Compile seu código com LibTorch**:
-Adicione ao `CMakeLists.txt`:
-```cmake
-find_package(Torch REQUIRED)
-target_link_libraries(main ${TORCH_LIBRARIES})
-```
-Agora, no código C++ você pode carregar um modelo PyTorch:
-```cpp
-#include <torch/script.h> // LibTorch
-#include <opencv2/opencv.hpp>
-#include <iostream>
-
-int main() {
-    torch::jit::script::Module model;
-    model = torch::jit::load("modelo.pt"); // Carrega o modelo treinado
-
-    cv::Mat frame;
-    cv::VideoCapture cap(0);
-
-    while (true) {
-        cap >> frame;
-        if (frame.empty()) break;
-
-        // Pré-processamento da imagem
-        cv::resize(frame, frame, cv::Size(224, 224));
-        torch::Tensor input = torch::from_blob(frame.data, {1, 224, 224, 3}, torch::kFloat);
-        input = input.permute({0, 3, 1, 2}); // Reordenar dimensões para PyTorch
-
-        // Inferência com o modelo
-        torch::Tensor output = model.forward({input}).toTensor();
-
-        cv::imshow("Câmera + Inferência", frame);
-        if (cv::waitKey(1) == 27) break; // ESC para sair
-    }
-
-    cap.release();
-    cv::destroyAllWindows();
-    return 0;
-}
-```
-Agora, **a câmera está conectada ao modelo de IA**, permitindo a inferência diretamente no C++ sem depender de Python!
-
-## Gabryel não esqueça do c_cpp_ propeties.json, caso queirar compilar um projeto simples
-### Passe o caminho correto do include
+Exemplo ilustrativo:
 
 ```bash
-find /usr/include -name "opencv2" --> "/usr/include/opencv4/"
+g++ src/interfaces/cam.cpp -o cam \
+  $(pkg-config --cflags --libs opencv4) \
+  -I/path/to/libtorch/include \
+  -I/path/to/libtorch/include/torch/csrc/api/include \
+  -L/path/to/libtorch/lib \
+  -ltorch -ltorch_cpu -lc10 \
+  -Wl,-rpath,/path/to/libtorch/lib
 ```
----
 
-## 🎯 **Conclusão**
-✅ **Para um aplicativo portátil de câmera**, só o OpenCV básico já resolve.  
-✅ **Para rodar inferência de IA** no C++, você pode usar **LibTorch**.  
-✅ **Para máxima portabilidade**, compilar OpenCV **estaticamente** permite rodar sem dependências.  
+Se o OpenCV estiver instalado pelo sistema, voce pode localizar os includes com:
+
+```bash
+find /usr/include -name opencv2 | head
+```
+
+## Limitacoes atuais
+
+- o caminho do modelo esta fixo no codigo
+- nao ha pos-processamento do `output`
+- o programa apenas imprime sucesso/erro da inferencia
+- nao ha integracao com a calibracao de camera do pipeline Python
+- nao ha sistema de build dedicado para esse executavel dentro do repo
+
+## Melhorias recomendadas
+
+1. Parametrizar camera e caminho do modelo por argumento de linha de comando.
+2. Interpretar `output` e exibir classe/confidencia no frame.
+3. Reaproveitar o mesmo protocolo de preprocessamento do pipeline Python.
+4. Adicionar um build reproducivel com CMake ou Make target especifico.
+
+## Relacao com o restante do projeto
+
+Essa interface C++ e experimental e paralela ao pipeline principal em Python. O fluxo mais completo e mantido hoje em:
+
+- `src/inference/libras_realtime_classifier.py`
+- `src/inference/libras_lstm_realtime_classifier.py`
+- `scripts/calibrate_camera.py`
+
+Atualizado em 2026-03-10.

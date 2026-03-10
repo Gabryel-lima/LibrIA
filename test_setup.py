@@ -77,12 +77,15 @@ def test_configuration():
     try:
         from config.settings import (
             DATA_DIR, DATASET_DIR, MODEL_DIR, ALPHABET_DICT,
-            DATASET_SIZE, FEATURE_DIMENSION, validate_config
+            DATASET_SIZE, FEATURE_DIMENSION, FEATURE_DIMENSIONS, FEATURE_MODE, validate_config
         )
         
         # Verificar configurações básicas
         assert DATASET_SIZE > 0, "DATASET_SIZE deve ser maior que zero"
-        assert FEATURE_DIMENSION == 42, "FEATURE_DIMENSION deve ser 42"
+        assert FEATURE_MODE in FEATURE_DIMENSIONS, "FEATURE_MODE deve ser válido"
+        assert FEATURE_DIMENSION == FEATURE_DIMENSIONS[FEATURE_MODE], (
+            "FEATURE_DIMENSION deve corresponder ao FEATURE_MODE"
+        )
         assert len(ALPHABET_DICT) >= 24, f"ALPHABET_DICT deve ter pelo menos 24 letras, mas tem {len(ALPHABET_DICT)}"
         
         print("✅ Configurações básicas: OK")
