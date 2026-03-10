@@ -9,8 +9,8 @@
 
 # Core ML/DL (COMMENTED OUT IF - requires AVX)
 tensorflow==2.16.1
-keras==3.4.1
-torch==2.5.1
+keras==3.13.2
+torch==2.8.0
 torchvision==0.20.1
 
 # Landmark Detection (if using MediaPipe)
