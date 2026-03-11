@@ -7,10 +7,10 @@ e reconhecimento de Libras via webcam.
 """
 
 from .libras_realtime_classifier import LibrasRealtimeClassifier
+from .prediction_merger import PredictionEvent, PredictionMerger
 
-try:
-	from .libras_lstm_realtime_classifier import LibrasLSTMRealtimeClassifier
-except (ImportError, RuntimeError):
-	LibrasLSTMRealtimeClassifier = None
-
-__all__ = ['LibrasRealtimeClassifier', 'LibrasLSTMRealtimeClassifier']
+__all__ = [
+	'LibrasRealtimeClassifier',
+	'PredictionEvent',
+	'PredictionMerger',
+]

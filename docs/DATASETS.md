@@ -1,40 +1,45 @@
 # Datasets e Artefatos - LibrIA
 
-Este documento descreve os formatos de dados usados pelo LibrIA e onde cada artefato entra no pipeline.
+Este documento descreve o dataset unificado usado pelo LibrIA e onde cada artefato entra no pipeline.
 
 ## Visão geral
 
-O projeto hoje suporta dois fluxos principais:
+O projeto hoje usa um dataset unificado com dois subconjuntos principais:
 
-1. Fluxo estático: imagens por classe, processamento com MediaPipe e treino de Random Forest.
-2. Fluxo temporal: sequências de landmarks por classe, treino de LSTM e inferência com janela deslizante.
+1. Fluxo estático: frames + landmarks em `NPY` por classe, treino de Random Forest.
+2. Fluxo temporal: sequências de landmarks em `NPY` por classe, treino de LSTM e inferência com janela deslizante.
 
-## 1. Dados brutos para o fluxo estático
+## 1. Dataset estático unificado
 
 ### Coleta local
 
 ```bash
-make collect
-```
-
-Ou:
-
-```bash
-python main.py collect
-python main.py collect_jz
+make collect-static
 ```
 
 Estrutura gerada:
 
 ```text
-data/
-├── 0/
-├── 1/
-├── ...
-└── 25/
+dataset/static/
+├── A/
+│   ├── frame_000.png
+│   ├── sample_000.npy
+│   └── ...
+├── B/
+└── ...
 ```
 
-Cada pasta representa uma classe do alfabeto (`0 = A`, `25 = Z`).
+Cada pasta representa uma classe estática. O conjunto mínimo recomendado é composto por 24 letras: `A-H`, `I` e `K-Y`.
+
+Os sinais `J` e `Z` ficam fora do fluxo estático mínimo e devem ser coletados no fluxo temporal.
+
+Cada `sample_XXX.npy` contém os landmarks normalizados da mão. No modo padrão `wrist_relative`, o arquivo é salvo com shape:
+
+```text
+(21, 3)
+```
+
+No treino estático, esse tensor é achatado para 63 features.
 
 ### Dataset externo de apoio
 
@@ -46,55 +51,20 @@ data/archives/
 └── asl_alphabet_test/
 ```
 
-Quando usar:
+Esses dados são auxiliares e não fazem parte do fluxo principal documentado.
 
-- para testes rápidos de pipeline
-- para comparar distribuição de dados
-- para experimentos com modelos alternativos
-
-## 2. Dataset processado do fluxo estático
-
-Após o processamento:
-
-```bash
-make process
-```
-
-é gerado o arquivo:
-
-```text
-dataset/data.pickle
-```
-
-Campos principais:
-
-- `data`: vetores de features por amostra
-- `labels`: classes associadas
-- `num_features`: dimensionalidade efetiva
-- `num_classes`: número de classes
-- `feature_mode`: modo usado na extração
-
-### Modos de feature
-
-O valor de `num_features` depende de `FEATURE_MODE` em `config/settings.py`:
-
-- `bounding_box`: 42 features
-- `wrist_relative`: 63 features
-
-O modo padrão atual é `wrist_relative`.
-
-## 3. Dados brutos do fluxo temporal
+## 2. Dataset temporal unificado
 
 Coleta recomendada:
 
 ```bash
-make collect-sequences SEQUENCE_LABELS=J\ Z SEQUENCE_COUNT=30 SEQUENCE_LENGTH=30
+make collect-temporal SEQUENCE_LABELS=J\ Z SEQUENCE_COUNT=30 SEQUENCE_LENGTH=30
 ```
 
 Estrutura gerada:
 
 ```text
-dataset/sequences/
+dataset/temporal/
 ├── J/
 │   ├── seq_000.npy
 │   ├── seq_001.npy
@@ -108,16 +78,41 @@ dataset/sequences/
 Cada arquivo `.npy` contém uma sequência com shape:
 
 ```text
-(sequence_length, feature_dimension)
+(sequence_length, 21, 3)
 ```
 
 No padrão atual isso significa:
 
 ```text
-(30, 63)
+(30, 21, 3)
 ```
 
-## 4. Artefatos de modelos
+O loader temporal faz o reshape interno quando necessário para o treino da LSTM.
+
+## 3. Modos de feature
+
+O valor de `num_features` depende de `FEATURE_MODE` em `config/settings.py`:
+
+- `bounding_box`: 42 features
+- `wrist_relative`: 63 features
+
+O modo padrão atual é `wrist_relative`.
+
+## 4. Manifestos e metadados
+
+Cada subconjunto pode manter um `manifest.json` com:
+
+- `mode`
+- `feature_mode`
+- `feature_dimension`
+- `sample_target`
+- `sequence_length`
+- `camera_calibrated`
+- `counts`
+
+Esse arquivo é auxiliar e não é a fonte principal de treino.
+
+## 5. Artefatos de modelos
 
 ### Modelo clássico
 
@@ -152,7 +147,7 @@ make train-lstm
 make infer-lstm
 ```
 
-## 5. Calibração de câmera
+## 6. Calibração de câmera
 
 Arquivos gerados:
 
@@ -171,7 +166,7 @@ make show-checkerboard
 make capture-calibration
 ```
 
-## 6. Modelos e pesos adicionais já versionados
+## 7. Modelos e pesos adicionais já versionados
 
 Na pasta `model/` e em áreas legadas do projeto existem artefatos de experimentos anteriores, incluindo:
 
@@ -182,10 +177,10 @@ Na pasta `model/` e em áreas legadas do projeto existem artefatos de experiment
 
 Esses arquivos não substituem automaticamente o fluxo principal documentado. Use-os apenas se o experimento correspondente estiver configurado no código.
 
-## 7. Checklist rápido
+## 8. Checklist rápido
 
 - [ ] Escolhi o fluxo: estático ou temporal
-- [ ] Tenho dados em `data/` ou em `dataset/sequences/`
+- [ ] Tenho dados em `dataset/static/` ou em `dataset/temporal/`
 - [ ] Sei qual `FEATURE_MODE` está ativo
 - [ ] Rodei `make verify-setup`
 - [ ] Treinei o modelo correspondente antes de inferir

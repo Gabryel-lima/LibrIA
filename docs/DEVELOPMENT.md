@@ -65,8 +65,7 @@ flake8 src/ main.py --max-line-length=119 --exclude=__pycache__
 ### Pipeline estático
 
 ```bash
-make collect
-make process
+make collect-static
 make train
 make infer
 ```
@@ -74,9 +73,17 @@ make infer
 ### Pipeline temporal
 
 ```bash
-make collect-sequences SEQUENCE_LABELS=J\ Z SEQUENCE_COUNT=30 SEQUENCE_LENGTH=30
+make collect-temporal SEQUENCE_LABELS=J\ Z SEQUENCE_COUNT=30 SEQUENCE_LENGTH=30
 make train-lstm
 make infer-lstm
+```
+
+### Pipeline mínimo recomendado
+
+```bash
+make collect-minimal-dataset
+make train-hybrid
+make infer-hybrid
 ```
 
 ### Calibração de câmera
@@ -91,14 +98,12 @@ make capture-calibration
 
 ```text
 src/
-├── data_collection/
-├── data_processing/
 ├── inference/
 └── model_training/
 
 scripts/
 ├── calibrate_camera.py
-├── collect_sequences.py
+├── collect_dataset.py
 ├── generate_checkerboard.py
 └── show_checkerboard.py
 
@@ -118,8 +123,8 @@ As principais chaves ficam em `config/settings.py`:
 ## Convenções úteis
 
 - Use `main.py` ou o Makefile para manter o mesmo fluxo documentado
-- O dataset processado do fluxo estático vai para `dataset/data.pickle`
-- O dataset temporal fica em `dataset/sequences/<label>/seq_XXX.npy`
+- O dataset estático fica em `dataset/static/<label>/sample_XXX.npy`
+- O dataset temporal fica em `dataset/temporal/<label>/seq_XXX.npy`
 - O modelo clássico fica em `model/model.pickle`
 - O modelo temporal fica em `model/libras_lstm.keras`
 
@@ -134,13 +139,13 @@ Consulte [AVX_COMPATIBILITY.md](AVX_COMPATIBILITY.md). Em CPUs sem AVX, MediaPip
 Rode primeiro:
 
 ```bash
-make collect-sequences
+make collect-temporal
 make train-lstm
 ```
 
 ### `Nenhuma sequência válida encontrada`
 
-Verifique se os `.npy` em `dataset/sequences/` têm shape compatível com `LSTM_CONFIG['sequence_length']` e `FEATURE_DIMENSION`.
+Verifique se os `.npy` em `dataset/temporal/` têm shape compatível com `LSTM_CONFIG['sequence_length']` e `FEATURE_DIMENSION`.
 
 Última atualização: 2026-03-10
 ```bash

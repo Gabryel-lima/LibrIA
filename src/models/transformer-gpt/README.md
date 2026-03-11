@@ -10,19 +10,15 @@ Ainda é necessário aprofundar o estudo sobre a arquitetura Transformer GPT par
 
 ### Opção 1: Dados do pipeline atual do LibrIA
 
-#### Dataset processado estático
+#### Dataset estático unificado
 
-O projeto gera um dataset processado em:
+O projeto gera amostras estáticas em:
 
 ```
-dataset/data.pickle
+dataset/static/<label>/sample_XXX.npy
 ```
 
-Esse arquivo contém:
-
-- `data`: vetores por amostra
-- `labels`: classes
-- `feature_mode`: modo de extração usado
+Cada arquivo contém landmarks normalizados por amostra. No modo padrão `wrist_relative`, o shape salvo é `(21, 3)`.
 
 **Dimensionalidade**:
 
@@ -36,18 +32,18 @@ O padrão atual do projeto é `wrist_relative`, então a expectativa principal p
 Para modelos sequenciais, o formato mais alinhado ao código atual está em:
 
 ```
-dataset/sequences/<label>/seq_XXX.npy
+dataset/temporal/<label>/seq_XXX.npy
 ```
 
 **Formato dos dados:**
 - **Input**: sequências de landmarks por frame
-- **Shape esperado no padrão atual**: `(num_amostras, 30, 63)`
+- **Shape esperado no padrão atual**: `(num_amostras, 30, 21, 3)`
 - **Labels**: classes como `J`, `Z` ou outras classes coletadas
 
 **Como preparar:**
 ```bash
 # 1. Coleta temporal
-make collect-sequences SEQUENCE_LABELS=J\ Z SEQUENCE_COUNT=30 SEQUENCE_LENGTH=30
+make collect-temporal SEQUENCE_LABELS=J\ Z SEQUENCE_COUNT=30 SEQUENCE_LENGTH=30
 
 # 2. Se necessário, adapte os .npy para o formato consumido pelo experimento Transformer
 # 3. Use o mesmo FEATURE_MODE do restante do projeto para evitar incompatibilidade
@@ -102,12 +98,8 @@ seu_dataset/
 
 **Processamento:**
 ```python
-# Extrair landmarks de vídeos ou imagens
-from src.data_processing.libras_dataset_processor import LibrasDatasetProcessor
-
-processor = LibrasDatasetProcessor()
-landmarks = processor.extract_from_videos('seu_dataset/')
-# Salvar como pickle ou NumPy arrays
+# Extrair landmarks com o mesmo formato do projeto
+# Use scripts/collect_dataset.py como referência para gravar amostras em NPY
 ```
 
 ## 🚀 Uso Independente

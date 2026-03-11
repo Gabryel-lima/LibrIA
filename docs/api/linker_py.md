@@ -58,7 +58,7 @@ Saida esperada:
 Esse binding e apenas demonstrativo. Ele nao participa do pipeline principal de LibrIA, que permanece em Python e usa:
 
 - `main.py`
-- `src/data_processing/`
+- `scripts/collect_dataset.py`
 - `src/model_training/`
 - `src/inference/`
 

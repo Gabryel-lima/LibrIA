@@ -12,7 +12,9 @@
 # CONFIGURAÇÕES INICIAIS
 # ============================================================================
 
-.PHONY: help setup install install-gpu install-cpu collect-sequences generate-checkerboard show-checkerboard capture-calibration calibrate-camera process train train-lstm infer infer-lstm run-lstm \
+
+
+.PHONY: help setup install install-gpu install-cpu collect-static collect-temporal collect-minimal-dataset generate-checkerboard show-checkerboard capture-calibration calibrate-camera train train-lstm train-hybrid infer infer-lstm infer-hybrid run-lstm \
 	run test clean clean-all dirs verify-setup environment lint format install-dev freeze update status
 
 # Variáveis de Configuração
@@ -23,6 +25,9 @@ VENV_PYTHON := $(VENV_DIR)/bin/python
 VENV_PIP := $(VENV_DIR)/bin/pip
 PROJECT_NAME := LibrIA
 PROJECT_VERSION := 1.0.0
+STATIC_DATASET_SIZE ?= 150
+STATIC_LABELS ?= A B C D E F G H I K L M N O P Q R S T U V W X Y
+STATIC_SAMPLE_COUNT ?= 30
 SEQUENCE_LABELS ?= J Z
 SEQUENCE_COUNT ?= 30
 SEQUENCE_LENGTH ?= 30
@@ -85,7 +90,7 @@ help: ## 📖 Mostra este menu de ajuda com todos os comandos
 	@awk 'BEGIN {FS = ":.*?## "} /^setup|^install|^verify/ && !/^$$/ {printf "  $(GREEN)%-20s$(NC) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@echo ""
 	@echo "$(BOLD)$(GREEN)● EXECUTE - Execução do Pipeline:$(NC)"
-	@awk 'BEGIN {FS = ":.*?## "} /^run|^collect|^collect-sequences|^generate-checkerboard|^show-checkerboard|^capture-calibration|^process|^train|^train-lstm|^infer|^infer-lstm|^calibrate-camera/ && !/^setup/ && !/^$$/ {printf "  $(YELLOW)%-20s$(NC) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*?## "} /^run|^collect-static|^collect-temporal|^collect-minimal-dataset|^generate-checkerboard|^show-checkerboard|^capture-calibration|^train|^train-lstm|^train-hybrid|^infer|^infer-lstm|^infer-hybrid|^calibrate-camera/ && !/^setup/ && !/^$$/ {printf "  $(YELLOW)%-20s$(NC) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@echo ""
 	@echo "$(BOLD)$(YELLOW)● TESTING & DEBUG:$(NC)"
 	@awk 'BEGIN {FS = ":.*?## "} /^test|^environment|^lint|^format/ && !/^$$/ {printf "  $(MAGENTA)%-20s$(NC) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -100,17 +105,21 @@ help: ## 📖 Mostra este menu de ajuda com todos os comandos
 	@echo ""
 	@echo "$(BOLD)Exemplo de uso:$(NC)"
 	@echo "  $(CYAN)make setup          # Setup inicial"
-	@echo "  make collect-sequences # Coletar sequências temporais padrão (J e Z)"
-	@echo "  make collect-sequences SEQUENCE_LABELS=J\ Z SEQUENCE_COUNT=20"
+	@echo "  make collect-static STATIC_SAMPLE_COUNT=30 # Coletar 30 amostras estáticas por classe"
+	@echo "  make collect-temporal # Coletar sequências temporais padrão (J e Z)"
+	@echo "  make collect-minimal-dataset # Coletar dataset mínimo completo em dataset/"
+	@echo "  make collect-temporal SEQUENCE_LABELS=J\ Z SEQUENCE_COUNT=20"
 	@echo "  make generate-checkerboard # Gerar imagem do tabuleiro 9x6"
 	@echo "  make show-checkerboard # Exibir o tabuleiro em tela cheia"
 	@echo "  make capture-calibration # Abrir webcam, salvar fotos do tabuleiro e calibrar"
 	@echo "  make calibrate-camera CALIBRATION_IMAGES='calibration/*.jpg'"
 	@echo "  make train-lstm        # Treinar modelo temporal LSTM"
+	@echo "  make train-hybrid      # Retreinar modelos estático + temporal"
 	@echo "  make run-lstm          # Pipeline temporal completo"
 	@echo "  make run            # Executar pipeline completo"
 	@echo "  make infer          # Inferência em tempo real"
-	@echo "  make infer-lstm     # Inferência temporal em tempo real$(NC)"
+	@echo "  make infer-lstm     # Inferência temporal em tempo real"
+	@echo "  make infer-hybrid   # Inferência híbrida com arbitragem"
 	@echo ""
 
 setup: $(VENV_DIR) ## 🔧 Setup inicial - cria venv e instala dependências
@@ -201,23 +210,28 @@ environment: ## 📊 Exibe informações do ambiente
 	@echo ""
 
 ################################################################################
-# PIPELINE - COLLECT, PROCESS, TRAIN, INFER
+# PIPELINE - COLLECT, TRAIN, INFER
 ################################################################################
 
 dirs: ## 📂 Cria a estrutura de diretórios do projeto
 	@echo "$(BLUE)→ Criando estrutura de diretórios...$(NC)"
-	@mkdir -p data dataset model output training_plots
-	@echo "$(GREEN)✓ Diretórios criados: data/, dataset/, model/, output/, training_plots/$(NC)"
+	@mkdir -p dataset dataset/static dataset/temporal model output training_plots
+	@echo "$(GREEN)✓ Diretórios criados: dataset/static, dataset/temporal, model/, output/, training_plots/$(NC)"
 
-collect: verify-setup dirs ## 📷 Coleta dados com webcam (todas as classes)
-	@echo "$(YELLOW)→ Iniciando coleta de dados para todas as classes...$(NC)"
-	@echo "$(MAGENTA)  Pressione 'q' para sair de cada classe$(NC)"
-	@$(VENV_PYTHON) main.py collect
+collect-static: verify-setup dirs ## 📷 Coleta dataset estático unificado em dataset/static
+	@echo "$(YELLOW)→ Coletando dataset estático unificado...$(NC)"
+	@echo "$(CYAN)  Labels: $(STATIC_LABELS) | Amostras por classe: $(STATIC_SAMPLE_COUNT) | Câmera: $(SEQUENCE_CAMERA)$(NC)"
+	@$(VENV_PYTHON) -m scripts.collect_dataset static --labels $(STATIC_LABELS) --samples-per-label $(STATIC_SAMPLE_COUNT) --camera-index $(SEQUENCE_CAMERA)
 
-collect-sequences: verify-setup dirs ## 📷 Coleta sequências temporais
-	@echo "$(YELLOW)→ Coletando dados específicos (J e Z)...$(NC)"
-	@echo "$(CYAN)  Labels: $(SEQUENCE_LABELS) | Sequências: $(SEQUENCE_COUNT) | Frames: $(SEQUENCE_LENGTH) | Câmera: $(SEQUENCE_CAMERA)$(NC)"
-	@$(VENV_PYTHON) -m scripts.collect_sequences $(SEQUENCE_LABELS) --num-sequences $(SEQUENCE_COUNT) --seq-length $(SEQUENCE_LENGTH) --camera-index $(SEQUENCE_CAMERA)
+collect-temporal: verify-setup dirs ## 📷 Coleta dataset temporal unificado em dataset/temporal
+	@echo "$(YELLOW)→ Coletando dataset temporal unificado...$(NC)"
+	@echo "$(CYAN)  Labels: $(SEQUENCE_LABELS) | Sequências: $(SEQUENCE_COUNT) | Frames válidos: $(SEQUENCE_LENGTH) | Câmera: $(SEQUENCE_CAMERA)$(NC)"
+	@$(VENV_PYTHON) -m scripts.collect_dataset temporal --labels $(SEQUENCE_LABELS) --num-sequences $(SEQUENCE_COUNT) --seq-length $(SEQUENCE_LENGTH) --camera-index $(SEQUENCE_CAMERA)
+
+collect-minimal-dataset: verify-setup dirs ## 📷 Coleta o dataset mínimo completo em dataset/
+	@echo "$(YELLOW)→ Coletando dataset mínimo completo...$(NC)"
+	@$(MAKE) --no-print-directory collect-static STATIC_SAMPLE_COUNT=$(STATIC_SAMPLE_COUNT) SEQUENCE_CAMERA=$(SEQUENCE_CAMERA)
+	@$(MAKE) --no-print-directory collect-temporal SEQUENCE_COUNT=$(SEQUENCE_COUNT) SEQUENCE_LENGTH=$(SEQUENCE_LENGTH) SEQUENCE_CAMERA=$(SEQUENCE_CAMERA)
 
 generate-checkerboard: verify-setup dirs ## 🧾 Gera uma imagem de tabuleiro para calibração de câmera
 	@echo "$(YELLOW)→ Gerando tabuleiro de calibração...$(NC)"
@@ -239,20 +253,20 @@ calibrate-camera: verify-setup dirs ## 🎥 Calibra a câmera por imagens do tab
 	@echo "$(MAGENTA)  Imagens: $(CALIBRATION_IMAGES) | Padrão do tabuleiro: $(CALIBRATION_COLS)x$(CALIBRATION_ROWS)$(NC)"
 	@$(VENV_PYTHON) -m scripts.calibrate_camera $(CALIBRATION_IMAGES) --cols $(CALIBRATION_COLS) --rows $(CALIBRATION_ROWS)
 
-process: verify-setup ## ⚙️  Processa dados - extrai landmarks
-	@echo "$(MAGENTA)→ Processando dataset (extração de landmarks)...$(NC)"
-	@$(VENV_PYTHON) main.py process
-	@echo "$(GREEN)✓ Processamento completo! Dataset em ./dataset/data.pickle$(NC)"
-
 train: verify-setup ## 🤖 Treina modelo Random Forest
 	@echo "$(MAGENTA)→ Iniciando treinamento do modelo...$(NC)"
 	@$(VENV_PYTHON) main.py train
 	@echo "$(GREEN)✓ Modelo treinado! Salvo em ./model/model.pickle$(NC)"
 
-train-lstm: verify-setup dirs ## 🧠 Treina modelo temporal LSTM com dataset/sequences
+train-lstm: verify-setup dirs ## 🧠 Treina modelo temporal LSTM com dataset/temporal
 	@echo "$(MAGENTA)→ Iniciando treinamento do modelo temporal...$(NC)"
 	@$(VENV_PYTHON) main.py train_lstm
 	@echo "$(GREEN)✓ Modelo temporal treinado! Salvo em ./model/libras_lstm.keras$(NC)"
+
+train-hybrid: verify-setup dirs ## 🧠♻️ Retreina os modelos estático e temporal
+	@echo "$(MAGENTA)→ Iniciando retreinamento híbrido...$(NC)"
+	@$(VENV_PYTHON) main.py train_hybrid
+	@echo "$(GREEN)✓ Modelos híbridos atualizados!$(NC)"
 
 infer: verify-setup ## 🎯 Inferência em tempo real com webcam
 	@echo "$(GREEN)→ Iniciando inferência em tempo real...$(NC)"
@@ -264,15 +278,20 @@ infer-lstm: verify-setup ## 🎯 Inferência temporal LSTM em tempo real
 	@echo "$(MAGENTA)  Pressione 'q' para sair$(NC)"
 	@$(VENV_PYTHON) main.py infer_lstm
 
+infer-hybrid: verify-setup ## 🎯 Inferência híbrida em tempo real
+	@echo "$(GREEN)→ Iniciando inferência híbrida em tempo real...$(NC)"
+	@echo "$(MAGENTA)  Pressione 'q' para sair$(NC)"
+	@$(VENV_PYTHON) main.py infer_hybrid
+
 run-lstm: verify-setup dirs ## ▶️  Pipeline temporal: coletar, treinar, inferir
 	@echo "$(BOLD)$(GREEN)╔════════════════════════════════════════════════════════════════╗$(NC)"
 	@echo "$(BOLD)$(GREEN)║$(NC)         Executando Pipeline Temporal de LibrIA       $(BOLD)$(GREEN)║$(NC)"
 	@echo "$(BOLD)$(GREEN)╚════════════════════════════════════════════════════════════════╝$(NC)"
-	@$(MAKE) --no-print-directory collect-sequences
+	@$(MAKE) --no-print-directory collect-temporal
 	@$(MAKE) --no-print-directory train-lstm
 	@$(MAKE) --no-print-directory infer-lstm
 
-run: verify-setup dirs ## ▶️  Executa pipeline completo (collect→process→train→infer)
+run: verify-setup dirs ## ▶️  Executa pipeline completo (collect-minimal→train-hybrid→infer-hybrid)
 	@echo "$(BOLD)$(GREEN)╔════════════════════════════════════════════════════════════════╗$(NC)"
 	@echo "$(BOLD)$(GREEN)║$(NC)       Executando Pipeline Completo de LibrIA          $(BOLD)$(GREEN)║$(NC)"
 	@echo "$(BOLD)$(GREEN)╚════════════════════════════════════════════════════════════════╝$(NC)"

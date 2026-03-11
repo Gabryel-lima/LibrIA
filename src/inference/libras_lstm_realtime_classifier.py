@@ -7,7 +7,7 @@ Executa inferência em tempo real usando uma janela deslizante de landmarks.
 
 import os
 import pickle
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import cv2 as cv
 import numpy as np
@@ -56,10 +56,12 @@ class LibrasLSTMRealtimeClassifier:
         self.sequence_length = LSTM_CONFIG['sequence_length']
         self.feature_dimension = FEATURE_DIMENSION
         self.feature_mode = FEATURE_MODE
+        self.allowed_classes = {label.upper() for label in LSTM_CONFIG.get('allowed_classes', [])}
         self.sequence_buffer: List[np.ndarray] = []
 
         self.model = self._load_model()
-        self.label_map = self._load_label_map()
+        self.label_map, self.metadata = self._load_label_map()
+        self._validate_temporal_metadata()
         self.camera_calibration = self._load_camera_calibration()
 
         self.mp_hands = mp.solutions.hands
@@ -80,13 +82,36 @@ class LibrasLSTMRealtimeClassifier:
             raise FileNotFoundError(f"Modelo LSTM não encontrado: {self.model_path}")
         return tf.keras.models.load_model(self.model_path)
 
-    def _load_label_map(self) -> Dict[int, str]:
+    def _load_label_map(self) -> Tuple[Dict[int, str], Dict[str, object]]:
         if not os.path.exists(self.label_map_path):
             raise FileNotFoundError(f"Metadados de labels não encontrados: {self.label_map_path}")
 
         with open(self.label_map_path, 'rb') as file_obj:
             metadata = pickle.load(file_obj)
-        return metadata.get('label_map', {})
+        return metadata.get('label_map', {}), metadata
+
+    def _validate_temporal_metadata(self):
+        trained_classes = {label.upper() for label in self.label_map.values()}
+        if self.allowed_classes and not trained_classes.issubset(self.allowed_classes):
+            raise ValueError(
+                'Modelo temporal contém classes fora do conjunto permitido: '
+                f"{sorted(trained_classes.difference(self.allowed_classes))}"
+            )
+
+        metadata_sequence_length = self.metadata.get('sequence_length')
+        metadata_feature_size = self.metadata.get('feature_size')
+
+        if metadata_sequence_length and int(metadata_sequence_length) != self.sequence_length:
+            raise ValueError(
+                'Sequence length incompatível entre configuração e metadados do LSTM: '
+                f'{metadata_sequence_length} != {self.sequence_length}'
+            )
+
+        if metadata_feature_size and int(metadata_feature_size) != self.feature_dimension:
+            raise ValueError(
+                'Feature size incompatível entre configuração e metadados do LSTM: '
+                f'{metadata_feature_size} != {self.feature_dimension}'
+            )
 
     def _load_camera_calibration(self):
         if not CAMERA_CONFIG['enabled']:

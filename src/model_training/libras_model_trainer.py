@@ -14,18 +14,28 @@ Funcionalidades:
 
 import os
 import pickle
+from collections import Counter
+
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 from typing import Dict, Tuple, Any
 
-from config.settings import FEATURE_DIMENSION, FEATURE_MODE, MODEL_CONFIG, TRAINING_CONFIG
+from config.settings import (
+    FEATURE_DIMENSION,
+    FEATURE_MODE,
+    LEGACY_STATIC_DATASET_PATH,
+    MODEL_CONFIG,
+    STATIC_DATASET_DIR,
+    STATIC_LABELS,
+    TRAINING_CONFIG,
+)
 
 class LibrasModelTrainer:
     """Classe para treinamento do modelo de Libras."""
     
-    def __init__(self, dataset_path: str = './dataset/data.pickle', 
+    def __init__(self, dataset_path: str = LEGACY_STATIC_DATASET_PATH,
                  model_output_dir: str = './model'):
         """
         Inicializa o treinador de modelo.
@@ -35,9 +45,45 @@ class LibrasModelTrainer:
             model_output_dir: Diretório para salvar o modelo treinado
         """
         self.dataset_path = dataset_path
+        self.static_dataset_dir = STATIC_DATASET_DIR
         self.model_output_dir = model_output_dir
         self.model = None
         self.training_history = {}
+
+    def _load_from_static_directory(self) -> Tuple[np.ndarray, np.ndarray]:
+        """Carrega amostras estáticas salvas diretamente em dataset/static."""
+        if not os.path.isdir(self.static_dataset_dir):
+            raise FileNotFoundError(f"Diretório de dataset estático não encontrado: {self.static_dataset_dir}")
+
+        data = []
+        labels = []
+        allowed_labels = set(STATIC_LABELS)
+
+        for label in sorted(os.listdir(self.static_dataset_dir)):
+            label_dir = os.path.join(self.static_dataset_dir, label)
+            if not os.path.isdir(label_dir) or label not in allowed_labels:
+                continue
+
+            for filename in sorted(os.listdir(label_dir)):
+                if not filename.endswith('.npy') or not filename.startswith('sample_'):
+                    continue
+
+                sample_path = os.path.join(label_dir, filename)
+                sample = np.load(sample_path)
+                flattened = np.asarray(sample, dtype=np.float32).reshape(-1)
+                if flattened.shape[0] != FEATURE_DIMENSION:
+                    continue
+
+                data.append(flattened)
+                labels.append(label)
+
+        if not data:
+            raise ValueError(
+                'Nenhuma amostra estática válida encontrada em dataset/static com '
+                f'{FEATURE_DIMENSION} features.'
+            )
+
+        return np.asarray(data), np.asarray(labels)
     
     def load_dataset(self) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -48,31 +94,55 @@ class LibrasModelTrainer:
         """
         print("=== LibrIA - Carregamento de Dataset ===")
         
-        if not os.path.exists(self.dataset_path):
-            raise FileNotFoundError(f"Dataset não encontrado em: {self.dataset_path}")
-        
-        # Carregar dataset
-        with open(self.dataset_path, 'rb') as f:
-            data_dict = pickle.load(f)
-        
-        print(f"Dataset carregado com {len(data_dict['data'])} amostras")
-        print(f"Modo de features do treinamento: {FEATURE_MODE} ({FEATURE_DIMENSION} features)")
-        
-        # Filtrar dados válidos conforme a dimensionalidade configurada
-        filtered_data = []
-        filtered_labels = []
-        
-        for x, y in zip(data_dict['data'], data_dict['labels']):
-            if isinstance(x, (list, np.ndarray)) and len(x) == FEATURE_DIMENSION:
-                filtered_data.append(x)
-                filtered_labels.append(y)
-        
-        if not filtered_data:
-            raise ValueError("Nenhum dado válido encontrado no dataset")
-        
-        # Converter para arrays numpy
-        data = np.asarray(filtered_data)
-        labels = np.asarray(filtered_labels)
+        data = None
+        labels = None
+
+        if os.path.isdir(self.static_dataset_dir):
+            print(f"Carregando dataset estático direto de: {self.static_dataset_dir}")
+            data, labels = self._load_from_static_directory()
+        elif os.path.exists(self.dataset_path):
+            with open(self.dataset_path, 'rb') as f:
+                data_dict = pickle.load(f)
+
+            print(f"Dataset legado carregado com {len(data_dict['data'])} amostras")
+            print(f"Modo de features do treinamento: {FEATURE_MODE} ({FEATURE_DIMENSION} features)")
+
+            filtered_data = []
+            filtered_labels = []
+            observed_lengths = Counter()
+
+            for x, y in zip(data_dict['data'], data_dict['labels']):
+                if isinstance(x, (list, np.ndarray)):
+                    observed_lengths[len(x)] += 1
+                if isinstance(x, (list, np.ndarray)) and len(x) == FEATURE_DIMENSION:
+                    filtered_data.append(x)
+                    filtered_labels.append(y)
+
+            if filtered_data:
+                data = np.asarray(filtered_data)
+                labels = np.asarray(filtered_labels)
+            else:
+                details = []
+                dataset_feature_mode = data_dict.get('feature_mode')
+                dataset_num_features = data_dict.get('num_features')
+
+                if dataset_feature_mode is not None:
+                    details.append(f'feature_mode do dataset: {dataset_feature_mode}')
+                if dataset_num_features is not None:
+                    details.append(f'num_features do dataset: {dataset_num_features}')
+                if observed_lengths:
+                    details.append(f'dimensões encontradas: {dict(observed_lengths)}')
+
+                detail_text = '; '.join(details) if details else 'dataset sem metadados úteis'
+                raise ValueError(
+                    'Nenhum dado válido encontrado no dataset legado para o FEATURE_MODE atual. '
+                    f'Esperado: {FEATURE_DIMENSION} features; {detail_text}.'
+                )
+        else:
+            raise FileNotFoundError(
+                'Nenhum dataset estático encontrado. Esperado um destes caminhos: '
+                f'{self.dataset_path} ou {self.static_dataset_dir}'
+            )
         
         print(f"Dados filtrados: {len(data)} amostras válidas")
         print(f"Número de features: {data.shape[1]}")

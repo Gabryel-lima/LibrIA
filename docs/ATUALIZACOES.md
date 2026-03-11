@@ -10,9 +10,9 @@ Sincronização da documentação com as mudanças já presentes no código e no
 
 ## Principais mudanças documentadas
 
-### Pipeline temporal
-- Inclusão do fluxo de coleta de sequências em `dataset/sequences/`
-- Documentação de `make collect-sequences`, `make train-lstm`, `make infer-lstm` e `make run-lstm`
+### Pipeline unificado
+- Inclusão do fluxo de coleta em `dataset/static/` e `dataset/temporal/`
+- Documentação de `make collect-static`, `make collect-temporal`, `make collect-minimal-dataset`, `make train-lstm` e `make run-lstm`
 - Registro do artefato `model/libras_lstm.keras` e do mapa `model/libras_lstm_labels.pickle`
 
 ### Extração de features configurável
@@ -42,6 +42,6 @@ Sincronização da documentação com as mudanças já presentes no código e no
 
 ## Resultado esperado
 
-- O README principal passa a refletir os dois pipelines suportados pelo projeto
+- O README principal passa a refletir o dataset unificado em `dataset/`
 - Os guias de setup e datasets deixam de depender de comandos e arquivos obsoletos
 - A documentação interna deixa de assumir que toda feature extraction usa 42 coordenadas fixas

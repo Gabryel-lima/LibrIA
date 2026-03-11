@@ -68,4 +68,4 @@ Referência rápida para localizar a documentação alinhada ao estado atual do 
 ## Última atualização
 
 - Data: 2026-03-10
-- Status: documentação sincronizada com o pipeline temporal, calibração de câmera e feature extraction configurável
+- Status: documentação sincronizada com o dataset unificado, calibração de câmera e feature extraction configurável

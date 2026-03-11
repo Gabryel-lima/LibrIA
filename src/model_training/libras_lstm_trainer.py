@@ -8,11 +8,11 @@ dinâmicos como J e Z.
 
 import os
 import pickle
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple
 
 import numpy as np
 
-from config.settings import LSTM_CONFIG, SEQUENCES_DIR
+from config.settings import LEGACY_TEMPORAL_DATASET_DIR, LSTM_CONFIG, TEMPORAL_DATASET_DIR
 
 try:
     import tensorflow as tf
@@ -27,7 +27,7 @@ class LibrasLSTMTrainer:
 
     def __init__(
         self,
-        sequences_dir: str = SEQUENCES_DIR,
+        sequences_dir: str = TEMPORAL_DATASET_DIR,
         model_path: str = LSTM_CONFIG['model_path'],
         label_map_path: str = LSTM_CONFIG['label_map_path'],
     ):
@@ -42,35 +42,72 @@ class LibrasLSTMTrainer:
         self.label_map_path = label_map_path
         self.sequence_length = LSTM_CONFIG['sequence_length']
         self.feature_size = LSTM_CONFIG['feature_size']
+        self.allowed_classes: List[str] = list(LSTM_CONFIG.get('allowed_classes', []))
+        self.restrict_to_allowed_classes = bool(LSTM_CONFIG.get('restrict_to_allowed_classes', False))
         self.model = None
         self.label_map: Dict[int, str] = {}
         self.training_history: Dict[str, object] = {}
 
+    def _resolve_sequences_dir(self) -> str:
+        """Retorna o diretório temporal atual com fallback para o legado."""
+        if os.path.isdir(self.sequences_dir):
+            return self.sequences_dir
+        if os.path.isdir(LEGACY_TEMPORAL_DATASET_DIR):
+            return LEGACY_TEMPORAL_DATASET_DIR
+        return self.sequences_dir
+
+    def _get_allowed_class_set(self) -> set:
+        return {label.upper() for label in self.allowed_classes}
+
+    def _filter_class_dirs(self, class_dirs: List[str]) -> List[str]:
+        if not self.restrict_to_allowed_classes:
+            return class_dirs
+
+        allowed_classes = self._get_allowed_class_set()
+        filtered_dirs = [entry for entry in class_dirs if entry.upper() in allowed_classes]
+        missing_classes = sorted(allowed_classes.difference({entry.upper() for entry in filtered_dirs}))
+
+        if missing_classes:
+            raise ValueError(
+                'Classes temporais obrigatórias não encontradas no dataset: '
+                f"{', '.join(missing_classes)}"
+            )
+
+        if not filtered_dirs:
+            raise ValueError('Nenhuma classe temporal permitida encontrada para treino')
+
+        return filtered_dirs
+
     def load_sequence_dataset(self) -> Tuple[np.ndarray, np.ndarray, Dict[int, str]]:
         """Carrega as sequências salvas em disco."""
-        if not os.path.exists(self.sequences_dir):
-            raise FileNotFoundError(f"Diretório de sequências não encontrado: {self.sequences_dir}")
+        sequences_dir = self._resolve_sequences_dir()
+        if not os.path.exists(sequences_dir):
+            raise FileNotFoundError(f"Diretório de sequências não encontrado: {sequences_dir}")
 
         data = []
         labels = []
         self.label_map = {}
 
         class_dirs = [
-            entry for entry in sorted(os.listdir(self.sequences_dir))
-            if os.path.isdir(os.path.join(self.sequences_dir, entry))
+            entry for entry in sorted(os.listdir(sequences_dir))
+            if os.path.isdir(os.path.join(sequences_dir, entry))
         ]
+        class_dirs = self._filter_class_dirs(class_dirs)
         if not class_dirs:
             raise ValueError("Nenhuma classe de sequência encontrada")
 
         for idx, label in enumerate(class_dirs):
             self.label_map[idx] = label
-            label_dir = os.path.join(self.sequences_dir, label)
+            label_dir = os.path.join(sequences_dir, label)
             for filename in sorted(os.listdir(label_dir)):
                 if not filename.endswith('.npy'):
                     continue
 
                 sequence_path = os.path.join(label_dir, filename)
                 sequence = np.load(sequence_path)
+
+                if sequence.ndim == 3:
+                    sequence = sequence.reshape(sequence.shape[0], -1)
 
                 if sequence.shape != (self.sequence_length, self.feature_size):
                     continue
@@ -134,6 +171,8 @@ class LibrasLSTMTrainer:
             'feature_size': self.feature_size,
             'num_classes': len(np.unique(labels)),
             'classes': [self.label_map[idx] for idx in sorted(self.label_map)],
+            'allowed_classes': self.allowed_classes,
+            'restrict_to_allowed_classes': self.restrict_to_allowed_classes,
             'history': history.history,
         }
         self.save_model()
@@ -150,6 +189,10 @@ class LibrasLSTMTrainer:
         metadata = {
             'label_map': self.label_map,
             'training_history': self.training_history,
+            'allowed_classes': self.allowed_classes,
+            'restrict_to_allowed_classes': self.restrict_to_allowed_classes,
+            'sequence_length': self.sequence_length,
+            'feature_size': self.feature_size,
         }
         with open(self.label_map_path, 'wb') as file_obj:
             pickle.dump(metadata, file_obj)

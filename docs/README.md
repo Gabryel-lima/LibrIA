@@ -14,7 +14,7 @@
 
 ## O que mudou nesta rodada
 
-- Pipeline temporal com coleta em `dataset/sequences/`
+- Pipeline unificado com coleta em `dataset/static/` e `dataset/temporal/`
 - Treinamento e inferência LSTM via `main.py train_lstm` e `main.py infer_lstm`
 - Fluxo de calibração de câmera com tabuleiro 9x6
 - Extração de features configurável por `FEATURE_MODE`
@@ -42,11 +42,11 @@ docs/
 ```bash
 make setup
 make verify-setup
-make collect
-make process
+make collect-static
+make collect-temporal
+make collect-minimal-dataset
 make train
 make infer
-make collect-sequences
 make train-lstm
 make infer-lstm
 make capture-calibration

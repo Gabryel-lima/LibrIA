@@ -8,16 +8,20 @@ e esse projeto adere ao [Semantic Versioning](https://semver.org/lang/pt_BR/).
 ## [Não Lançado]
 
 ### Added
-- Pipeline temporal com coleta de sequências em `dataset/sequences/`
+- Pipeline unificado com coleta em `dataset/static/` e `dataset/temporal/`
 - Treinamento LSTM via `main.py train_lstm` e inferência temporal via `main.py infer_lstm`
 - Scripts de calibração de câmera e geração/exibição de tabuleiro
 - Metadados de `feature_mode` persistidos no dataset processado e nos modelos
 
 ### Changed
 - Extração de landmarks agora é configurável por `FEATURE_MODE`
-- Pipeline estático usa helpers compartilhados para extração e pré-processamento
-- Makefile ganhou comandos para fluxo temporal e calibração
+- O pipeline estático agora lê `sample_XXX.npy` direto de `dataset/static/`
+- O pipeline temporal agora usa `dataset/temporal/` como caminho principal
+- Makefile ganhou comandos `collect-static`, `collect-temporal` e `collect-minimal-dataset`
 - Documentação central sincronizada com os fluxos atuais do projeto
+
+### Removed
+- Fluxos legados `process`, `collect_jz`, `src/data_collection/`, `src/data_processing/` e `scripts/collect_sequences.py`
 
 ### Fixed
 - Fluxo de coleta temporal agora mantém a janela OpenCV responsiva durante espera e gravação

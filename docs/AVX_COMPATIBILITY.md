@@ -15,9 +15,9 @@ Parte do stack do LibrIA depende de bibliotecas que costumam exigir suporte AVX 
 
 ### Fluxos que dependem fortemente de AVX
 
-- `make process` e `python main.py process`
+- `make collect-static` e `python main.py collect_static`
 - `make infer` quando a extração de landmarks precisa do MediaPipe
-- `make collect-sequences`
+- `make collect-temporal`
 - `make train-lstm`
 - `make infer-lstm`
 
@@ -56,7 +56,6 @@ python test_setup.py
 Use essa máquina para:
 
 - coleta com MediaPipe
-- processamento do dataset
 - treino e inferência da LSTM
 - geração de artefatos finais
 

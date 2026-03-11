@@ -14,12 +14,18 @@ DATA_DIR = './data'
 DATASET_DIR = './dataset'
 MODEL_DIR = './model'
 OUTPUT_DIR = './output'
+STATIC_DATASET_DIR = os.path.join(DATASET_DIR, 'static')
+TEMPORAL_DATASET_DIR = os.path.join(DATASET_DIR, 'temporal')
+LEGACY_STATIC_DATASET_PATH = os.path.join(DATASET_DIR, 'data.pickle')
+LEGACY_TEMPORAL_DATASET_DIR = os.path.join(DATASET_DIR, 'sequences')
 
 # Configurações de Coleta de Dados
-DATASET_SIZE = 150  # Imagens por classe
+DATASET_SIZE = int(os.getenv('LIBRIA_DATASET_SIZE', '150'))
 NUMBER_OF_CLASSES = 26
 ALPHABET_DICT = {i: chr(65 + i) for i in range(NUMBER_OF_CLASSES)}
 HANDS = ['Right', 'Left']
+STATIC_LABELS = [label for label in ALPHABET_DICT.values() if label not in {'J', 'Z'}]
+TEMPORAL_LABELS = ['J', 'Z']
 
 # Configurações do MediaPipe
 MEDIAPIPE_CONFIG = {
@@ -46,6 +52,14 @@ CAMERA_CONFIG = {
 
 # Configurações do modelo temporal
 SEQUENCES_DIR = './dataset/sequences'
+COLLECTION_CONFIG = {
+    'static_samples_per_label': 30,
+    'temporal_samples_per_label': 30,
+    'min_detection_confidence': 0.8,
+    'min_tracking_confidence': 0.8,
+    'static_frame_ext': '.png',
+}
+
 LSTM_CONFIG = {
     'sequence_length': 30,
     'feature_size': FEATURE_DIMENSION,
@@ -55,6 +69,9 @@ LSTM_CONFIG = {
     'validation_split': 0.2,
     'model_path': './model/libras_lstm.keras',
     'label_map_path': './model/libras_lstm_labels.pickle',
+    'allowed_classes': ['J', 'Z'],
+    'restrict_to_allowed_classes': True,
+    'confidence_threshold': 0.85,
 }
 
 # Configurações do Modelo
@@ -76,7 +93,17 @@ INFERENCE_CONFIG = {
     'min_detection_confidence': 0.3,
     'prediction_interval': 20,  # Frames entre predições
     'record_video': True,
-    'output_video_path': 'output.mp4'
+    'output_video_path': 'output.mp4',
+    'static_confidence_threshold': 0.75,
+}
+
+HYBRID_INFERENCE_CONFIG = {
+    'temporal_priority_classes': tuple(LSTM_CONFIG['allowed_classes']),
+    'temporal_confidence_threshold': LSTM_CONFIG['confidence_threshold'],
+    'static_confidence_threshold': INFERENCE_CONFIG['static_confidence_threshold'],
+    'prediction_cooldown_seconds': 0.5,
+    'window_overlap_tolerance_seconds': 0.25,
+    'overlay_history_size': 5,
 }
 
 # Configurações de Interface
@@ -106,7 +133,15 @@ PERFORMANCE_CONFIG = {
 
 def create_directories():
     """Cria todos os diretórios necessários para o projeto."""
-    directories = [DATA_DIR, DATASET_DIR, MODEL_DIR, OUTPUT_DIR, SEQUENCES_DIR]
+    directories = [
+        DATA_DIR,
+        DATASET_DIR,
+        STATIC_DATASET_DIR,
+        TEMPORAL_DATASET_DIR,
+        MODEL_DIR,
+        OUTPUT_DIR,
+        SEQUENCES_DIR,
+    ]
     
     for directory in directories:
         if not os.path.exists(directory):

@@ -13,7 +13,7 @@
 
 ## 📖 Sobre o Projeto
 
-O **LibrIA** é um sistema de reconhecimento de Libras baseado em visão computacional, com dois fluxos principais já integrados ao código: um pipeline estático com **Random Forest** e um pipeline temporal com **LSTM**. O repositório cobre coleta, processamento, treino, inferência em tempo real e calibração opcional de câmera.
+O **LibrIA** é um sistema de reconhecimento de Libras baseado em visão computacional, com dois fluxos principais já integrados ao código: um pipeline estático com **Random Forest** e um pipeline temporal com **LSTM**. O repositório cobre coleta unificada em `dataset/`, treino, inferência em tempo real e calibração opcional de câmera.
 
 ### 🎯 Objetivos
 
@@ -75,18 +75,15 @@ O **LibrIA** é um sistema de reconhecimento de Libras baseado em visão computa
 ```
 LibrIA/
 ├── 📁 src/                          # Código principal
-│   ├── 📁 data_collection/          # Coleta estática de imagens
-│   ├── 📁 data_processing/          # Processamento com MediaPipe
 │   ├── 📁 model_training/           # Treino Random Forest e LSTM
 │   ├── 📁 inference/                # Inferência estática e temporal
 │   └── 📁 models/                   # Modelos/experimentos adicionais
-├── 📁 scripts/                      # Utilitários de calibração e coleta temporal
+├── 📁 scripts/                      # Utilitários de calibração e coleta unificada
 ├── 📁 config/                       # Configurações centrais e arquivos de calibração
 ├── 📁 utils/                        # Helpers compartilhados
-├── 📁 data/                         # Imagens por classe
-├── 📁 dataset/                      # Dataset processado e sequências temporais
-│   ├── data.pickle
-│   └── sequences/
+├── 📁 dataset/                      # Dataset unificado
+│   ├── static/
+│   └── temporal/
 ├── 📁 model/                        # Artefatos treinados
 │   ├── model.pickle
 │   ├── libras_lstm.keras
@@ -185,14 +182,16 @@ make environment           # Mostra informações do sistema
 
 # Pipeline de ML
 make dirs                  # Cria estrutura de diretórios
-make collect              # Coleta dados com webcam (A-Z)
-make collect-sequences    # Coleta sequências temporais
-make process              # Processa dataset (extrai landmarks)
+make collect-static       # Coleta dataset estático unificado
+make collect-temporal     # Coleta dataset temporal unificado
+make collect-minimal-dataset # Coleta o dataset mínimo completo
 make train                # Treina modelo Random Forest
 make train-lstm           # Treina modelo temporal LSTM
+make train-hybrid         # Retreina os dois modelos
 make infer                # Inferência em tempo real
 make infer-lstm           # Inferência temporal em tempo real
-make run                  # Executa pipeline completo (collect→process→train→infer)
+make infer-hybrid         # Inferência híbrida
+make run                  # Executa pipeline completo unificado
 make run-lstm             # Executa pipeline temporal completo
 
 # Desenvolvimento
@@ -246,10 +245,10 @@ python main.py help
 python main.py all
 
 # Executar etapas individuais
-python main.py collect     # Coletar dados
-python main.py process     # Processar dataset
-python main.py train       # Treinar modelo
-python main.py infer       # Inferência em tempo real
+python main.py collect_static   # Coleta estática
+python main.py collect_temporal # Coleta temporal
+python main.py train            # Treinar modelo
+python main.py infer            # Inferência em tempo real
 ```
 
 ### 🔄 Pipeline Completo
@@ -261,43 +260,41 @@ python main.py all
 ```
 
 Este comando irá:
-1. ✅ Coletar dados via webcam
-2. ✅ Processar imagens e extrair landmarks
-3. ✅ Treinar modelo Random Forest
-4. ✅ Executar inferência em tempo real
+1. ✅ Coletar o dataset mínimo em `dataset/`
+2. ✅ Treinar os modelos estático e temporal
+3. ✅ Executar inferência híbrida
 
 ### 📝 Instruções Detalhadas
 
 #### 1. Fluxo estático
 
 ```bash
-make collect
-make process
+make collect-static
 make train
 make infer
 ```
 
-O fluxo estático usa imagens por classe, extrai landmarks com MediaPipe e treina um Random Forest salvo em `model/model.pickle`.
-
-#### 1.1. Coleta complementar de J e Z
-
-O comando legado ainda existe para complementar um dataset já existente:
-
-```bash
-python main.py collect_jz
-```
-
-Use esse fluxo apenas quando fizer sentido completar um dataset estático antigo. Para sinais dinâmicos, o caminho preferido agora é a coleta temporal.
+O fluxo estático grava `frame_XXX.png` e `sample_XXX.npy` em `dataset/static/<label>/` e treina um Random Forest salvo em `model/model.pickle`.
 
 #### 2. Fluxo temporal
 
 ```bash
-make collect-sequences SEQUENCE_LABELS=J\ Z SEQUENCE_COUNT=30 SEQUENCE_LENGTH=30
+make collect-temporal SEQUENCE_LABELS=J\ Z SEQUENCE_COUNT=30 SEQUENCE_LENGTH=30
 make train-lstm
 make infer-lstm
 ```
 
-Esse fluxo grava sequências em `dataset/sequences/`, treina o modelo `model/libras_lstm.keras` e usa uma janela deslizante para inferência em tempo real.
+Esse fluxo grava sequências em `dataset/temporal/`, treina o modelo `model/libras_lstm.keras` e usa uma janela deslizante para inferência em tempo real.
+
+#### 2.1. Dataset mínimo recomendado
+
+```bash
+make collect-minimal-dataset
+make train-hybrid
+make infer-hybrid
+```
+
+Esse é o fluxo recomendado para validar a arquitetura com 24 classes estáticas e as sequências temporais de `J` e `Z`.
 
 #### 3. Calibração de câmera
 
@@ -325,15 +322,14 @@ O padrão atual é `wrist_relative`.
 
 ## 📥 Datasets e Downloads
 
-O projeto trabalha com dois formatos principais de dados:
+O projeto trabalha com um dataset unificado em `dataset/`:
 
-- **Imagens por classe** em `data/` para o fluxo estático
-- **Sequências `.npy`** em `dataset/sequences/` para o fluxo temporal
+- **Estático**: `dataset/static/<label>/frame_XXX.png` e `sample_XXX.npy`
+- **Temporal**: `dataset/temporal/<label>/seq_XXX.npy`
 
 Recursos úteis:
 
 - Dataset de apoio em `data/archives/`
-- Dataset processado em `dataset/data.pickle`
 - Modelos treinados em `model/`
 
 Para detalhes de estrutura, formatos e artefatos, consulte [docs/DATASETS.md](docs/DATASETS.md).
@@ -354,7 +350,7 @@ O sistema reconhece todas as 26 letras do alfabeto em Libras:
 | H | 7 | P | 15 | Y | 24|
 |   |   | Q | 16 | Z | 25|
 
-**Nota**: o alfabeto completo segue disponível no fluxo estático. Para sinais dinâmicos como J e Z, o pipeline temporal tende a representar melhor o movimento.
+**Nota**: o fluxo estático recomendado usa 24 letras sem `J` e `Z`. Esses dois sinais ficam no pipeline temporal por dependerem de movimento.
 
 ## 🔬 Arquitetura Técnica
 
@@ -426,8 +422,9 @@ if results.multi_hand_landmarks:
 
 Arquivos mais importantes gerados pelo pipeline:
 
-- `dataset/data.pickle`
-- `dataset/sequences/<label>/seq_XXX.npy`
+- `dataset/static/<label>/sample_XXX.npy`
+- `dataset/static/<label>/frame_XXX.png`
+- `dataset/temporal/<label>/seq_XXX.npy`
 - `model/model.pickle`
 - `model/libras_lstm.keras`
 - `model/libras_lstm_labels.pickle`
@@ -446,7 +443,10 @@ Você pode modificar os parâmetros no arquivo `config/settings.py`:
 
 ```python
 # Configurações de coleta
-DATASET_SIZE = 150          # Imagens por classe
+COLLECTION_CONFIG = {
+  'static_samples_per_label': 30,
+  'temporal_samples_per_label': 30,
+}
 
 # Configurações de inferência
 INFERENCE_CONFIG = {
@@ -463,10 +463,9 @@ MODEL_CONFIG = {
 
 ### Adicionando Novas Classes
 
-1. Modifique `ALPHABET_DICT` em `config/settings.py`
-2. Execute `python main.py collect` para as novas classes
-3. Reprocesse com `python main.py process`
-4. Retreine com `python main.py train`
+1. Modifique `STATIC_LABELS` ou `TEMPORAL_LABELS` em `config/settings.py`
+2. Rode a coleta correspondente com `python main.py collect_static` ou `python main.py collect_temporal`
+3. Retreine com `python main.py train` ou `python main.py train_lstm`
 
 ## 🐛 Solução de Problemas
 
@@ -514,11 +513,7 @@ Os arquivos e configurações obsoletas foram movidos para `.deprecated-files/`:
 - `setup-pipenv.sh` → `.deprecated-files/setup-pipenv.sh` (obsoleto)
 - `setup-venv.sh` → `.deprecated-files/setup-venv.sh` (substituído por Makefile)
 
-Os arquivos de código antigos ainda estão em `backup_old_files/` para referência:
-- `collect_data.py` → `src/data_collection/libras_data_collector.py`
-- `create_dataset.py` → `src/data_processing/libras_dataset_processor.py`
-- `model.py` → `src/model_training/libras_model_trainer.py`
-- `inference_classifier.py` → `src/inference/libras_realtime_classifier.py`
+Os arquivos de código antigos ainda estão em `backup_old_files/` apenas como referência histórica de experimentos anteriores.
 
 ## 🤝 Contribuindo
 
