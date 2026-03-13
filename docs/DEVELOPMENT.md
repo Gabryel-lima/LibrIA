@@ -1,13 +1,19 @@
 # Documentação de Desenvolvimento
 
-Guia de setup e rotina de trabalho para quem vai mexer no código do LibrIA.
+Guia de setup, rotina local e pontos de atenção para quem vai mexer no código do LibrIA.
+
+## Navegação rápida
+
+- Visão visual dos fluxos: [ARCHITECTURE.md](ARCHITECTURE.md)
+- Estrutura de dados e artefatos: [DATASETS.md](DATASETS.md)
+- Limitações de CPU e AVX: [AVX_COMPATIBILITY.md](AVX_COMPATIBILITY.md)
 
 ## Pré-requisitos
 
 - Python 3.11+
 - Git
 - Webcam para fluxos de coleta e inferência
-- CPU com suporte AVX para MediaPipe, TensorFlow e boa parte do stack temporal
+- CPU com suporte AVX para usar MediaPipe e TensorFlow com menos restrições
 
 ## Setup recomendado
 
@@ -28,19 +34,10 @@ git clone https://github.com/Gabryel-lima/LibrIA.git
 cd LibrIA
 python3.11 -m venv .venv
 source .venv/bin/activate
+pip install -r requirements.txt
 pip install -r requirements-dev.txt
 python test_setup.py
 ```
-
-## Dependências de desenvolvimento
-
-`requirements-dev.txt` inclui:
-
-- `pytest`, `pytest-cov`, `pytest-xdist`
-- `black`, `flake8`, `isort`, `mypy`, `pylint`
-- `pre-commit`
-- `sphinx`
-- `ipython`, `jupyter`, `notebook`
 
 ## Comandos de rotina
 
@@ -55,14 +52,14 @@ Ou diretamente:
 
 ```bash
 python test_setup.py
-pytest tests/ -v
+python -m unittest tests.test_embedded_bundle tests.test_embedded_cnn_trainer tests.test_static_dataset_loader
 black src/ main.py
 flake8 src/ main.py --max-line-length=119 --exclude=__pycache__
 ```
 
-## Fluxos do projeto para desenvolvimento
+## Fluxos principais para desenvolvimento
 
-### Pipeline estático
+### 1. Pipeline estático host
 
 ```bash
 make collect-static
@@ -70,7 +67,11 @@ make train
 make infer
 ```
 
-### Pipeline temporal
+Artefatos principais:
+- `dataset/static/<label>/sample_XXX.npy`
+- `model/model.pickle`
+
+### 2. Pipeline temporal host
 
 ```bash
 make collect-temporal SEQUENCE_LABELS=J\ Z SEQUENCE_COUNT=30 SEQUENCE_LENGTH=30
@@ -78,7 +79,12 @@ make train-lstm
 make infer-lstm
 ```
 
-### Pipeline mínimo recomendado
+Artefatos principais:
+- `dataset/temporal/<label>/seq_XXX.npy`
+- `model/libras_lstm.keras`
+- `model/libras_lstm_labels.pickle`
+
+### 3. Pipeline híbrido host
 
 ```bash
 make collect-minimal-dataset
@@ -86,7 +92,21 @@ make train-hybrid
 make infer-hybrid
 ```
 
-### Calibração de câmera
+### 4. Pipeline embedded
+
+```bash
+make train-embedded-all
+make export-embedded
+make infer-embedded
+```
+
+Artefatos principais:
+- `model/libria_embedded_cnn_int8.tflite`
+- `model/libria_embedded_temporal_cnn_int8.tflite`
+- `model/embedded_bundle/embedded_bundle.json`
+- `model/embedded_bundle/pico_package/`
+
+### 5. Calibração de câmera
 
 ```bash
 make generate-checkerboard
@@ -99,6 +119,7 @@ make capture-calibration
 ```text
 src/
 ├── inference/
+├── interfaces/
 └── model_training/
 
 scripts/
@@ -116,23 +137,26 @@ config/
 As principais chaves ficam em `config/settings.py`:
 
 - `FEATURE_MODE`: `bounding_box` ou `wrist_relative`
-- `FEATURE_DIMENSIONS`: dimensionalidade por modo
 - `CAMERA_CONFIG`: calibração opcional
-- `LSTM_CONFIG`: sequência, batch size, épocas e caminhos dos artefatos
+- `LSTM_CONFIG`: sequência, batch size e caminhos do fluxo temporal host
+- `EMBEDDED_CONFIG`: treino estático quantizado
+- `EMBEDDED_TEMPORAL_CONFIG`: treino temporal quantizado
+- `EMBEDDED_BUNDLE_CONFIG`: bundle final e pacote do Pico
 
 ## Convenções úteis
 
-- Use `main.py` ou o Makefile para manter o mesmo fluxo documentado
-- O dataset estático fica em `dataset/static/<label>/sample_XXX.npy`
-- O dataset temporal fica em `dataset/temporal/<label>/seq_XXX.npy`
-- O modelo clássico fica em `model/model.pickle`
-- O modelo temporal fica em `model/libras_lstm.keras`
+- Use `main.py` ou o Makefile para manter o mesmo fluxo documentado.
+- O dataset estático fica em `dataset/static/<label>/sample_XXX.npy`.
+- O dataset temporal fica em `dataset/temporal/<label>/seq_XXX.npy`.
+- O Random Forest fica em `model/model.pickle`.
+- O modelo temporal host fica em `model/libras_lstm.keras`.
+- O runtime embedded no dispositivo parte de `src/interfaces/libria_embedded_runtime.h` e `src/interfaces/libria_embedded_runtime.cpp`.
 
 ## Problemas comuns
 
 ### `illegal hardware instruction`
 
-Consulte [AVX_COMPATIBILITY.md](AVX_COMPATIBILITY.md). Em CPUs sem AVX, MediaPipe, TensorFlow e algumas partes do PyTorch podem falhar já no import.
+Consulte [AVX_COMPATIBILITY.md](AVX_COMPATIBILITY.md). Em CPUs sem AVX, MediaPipe, TensorFlow e partes do PyTorch podem falhar no import.
 
 ### `Modelo LSTM não encontrado`
 
@@ -147,77 +171,26 @@ make train-lstm
 
 Verifique se os `.npy` em `dataset/temporal/` têm shape compatível com `LSTM_CONFIG['sequence_length']` e `FEATURE_DIMENSION`.
 
-Última atualização: 2026-03-10
-```bash
-# Use cache aggressivo
-pip install --cache-dir /tmp/pip-cache -r requirements.txt
+### `Bundle embedded não encontrado`
 
-# Ou use mirror brasileiro
-pip install -i https://pypi.tsinghua.edu.cn/simple -r requirements.txt
-```
-
-### Testes falhando localmente mas passando no CI
-
-**Solução:**
-```bash
-# Limpe cache pytest
-pytest --cache-clear tests/
-
-# Reinstale dependências
-pip install --force-reinstall -r requirements-dev.txt
-```
-
-## 📖 Documentação Local
-
-### Buildar Sphinx docs
+Rode primeiro:
 
 ```bash
-cd docs
-
-# Limpar builds anteriores
-make clean
-
-# Build HTML
-make html
-
-# Abrir no navegador
-open _build/html/index.html  # macOS
-xdg-open _build/html/index.html  # Linux
-start _build/html/index.html  # Windows
+make train-embedded-all
 ```
 
-## 🔐 Environment Variables
-
-Criar `.env` baseado em `.env.example`:
+ou, se os `.tflite` já existirem:
 
 ```bash
-cp .env.example .env
-
-# Editar .env com valores locais
-export $(cat .env | xargs)
-python main.py
+make export-embedded
 ```
 
-## 📝 Checklist Antes de Fazer PR
+## Checklist antes de fazer PR
 
-- [ ] Código formatado com Black
-- [ ] Imports organizados com isort
-- [ ] Pylint score 8.0+
-- [ ] mypy type check passou
-- [ ] Testes passam: `pytest tests/ -v`
-- [ ] Coverage 80%+: `pytest --cov=src`
-- [ ] Docstrings em todas funções públicas
-- [ ] Sem `print()` statements (use logging)
-- [ ] Nenhum `TODO` ou `FIXME` esquecido
-- [ ] CHANGELOG.md atualizado
-- [ ] Commits bem estruturados e mensagens claras
+- [ ] Rodei `make verify-setup`
+- [ ] Rodei os testes relevantes para a mudança
+- [ ] Mantive a documentação alinhada ao fluxo real do código
+- [ ] Atualizei `CHANGELOG.md` quando a mudança alterou comportamento visível
+- [ ] Revisei se o impacto em host e embedded foi coberto quando aplicável
 
-## 🆘 Precisa de Ajuda?
-
-- 📧 Email: gabbryellimasi@gmail.com
-- 💬 Discussions: [Issues & Discussions](https://github.com/Gabryel-lima/LibrIA)
-- 📖 Docs: [LibrIA Documentation](https://Gabryel-lima.github.io/LibrIA)
-
----
-
-Última atualização: 2026-02-16
+Ultima atualizacao: 2026-03-12

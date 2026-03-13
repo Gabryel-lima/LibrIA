@@ -6,6 +6,7 @@
 
 | Objetivo | Documento |
 |----------|-----------|
+| Entender a arquitetura por diagramas | [ARCHITECTURE.md](ARCHITECTURE.md) |
 | Setup local | [DEVELOPMENT.md](DEVELOPMENT.md) |
 | Datasets e artefatos | [DATASETS.md](DATASETS.md) |
 | CPUs sem AVX | [AVX_COMPATIBILITY.md](AVX_COMPATIBILITY.md) |
@@ -14,15 +15,16 @@
 
 ## O que mudou nesta rodada
 
-- Pipeline unificado com coleta em `dataset/static/` e `dataset/temporal/`
-- Treinamento e inferência LSTM via `main.py train_lstm` e `main.py infer_lstm`
-- Fluxo de calibração de câmera com tabuleiro 9x6
-- Extração de features configurável por `FEATURE_MODE`
+- Guia visual novo com diagramas menores e navegação por etapa em `ARCHITECTURE.md`
+- Documentação sincronizada com o pipeline embedded atual e export para Pico
+- Guia de desenvolvimento reescrito para refletir os comandos e artefatos reais
+- Guia de datasets ampliado com artefatos embedded e bundle exportável
 
 ## Estrutura da pasta
 
 ```text
 docs/
+├── ARCHITECTURE.md
 ├── README.md
 ├── ATUALIZACOES.md
 ├── AVX_COMPATIBILITY.md
@@ -30,9 +32,6 @@ docs/
 ├── DEVELOPMENT.md
 ├── PULL_REQUEST_GUIDE.md
 ├── video_format_changes.md
-├── api/
-│   ├── cam.md
-│   └── linker_py.md
 └── guides/
     └── README.md
 ```
@@ -49,6 +48,9 @@ make train
 make infer
 make train-lstm
 make infer-lstm
+make train-embedded-all
+make export-embedded
+make infer-embedded
 make capture-calibration
 ```
 
@@ -59,4 +61,4 @@ make capture-calibration
 - [../CONTRIBUTING.md](../CONTRIBUTING.md)
 - [../DOCUMENTATION_INDEX.md](../DOCUMENTATION_INDEX.md)
 
-Última atualização: 2026-03-10
+Última atualização: 2026-03-12

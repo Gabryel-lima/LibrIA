@@ -13,7 +13,7 @@
 
 ## 📖 Sobre o Projeto
 
-O **LibrIA** é um sistema de reconhecimento de Libras baseado em visão computacional, com dois fluxos principais já integrados ao código: um pipeline estático com **Random Forest** e um pipeline temporal com **LSTM**. O repositório cobre coleta unificada em `dataset/`, treino, inferência em tempo real e calibração opcional de câmera.
+O **LibrIA** é um sistema de reconhecimento de Libras baseado em visão computacional, com fluxos host e embedded já integrados ao código. O repositório cobre coleta unificada em `dataset/`, treino, inferência em tempo real, calibração opcional de câmera e export de um bundle quantizado com pacote pronto para o Pico.
 
 ### 🎯 Objetivos
 
@@ -25,10 +25,11 @@ O **LibrIA** é um sistema de reconhecimento de Libras baseado em visão computa
 ### ✨ Características
 
 - 🎥 **Captura em tempo real** via webcam
-- 🤖 **Dois fluxos de modelagem**: Random Forest e LSTM temporal
+- 🤖 **Fluxos host e embedded**: Random Forest, LSTM, CNN estática quantizada e CNN temporal quantizada
 - 📊 **Pipeline completo** de dados estáticos e temporais
 - 🎯 **Inferência contínua** com feedback visual
 - 📷 **Calibração opcional de câmera** com tabuleiro 9x6
+- 📦 **Bundle embedded exportável** com pacote C/C++ para Pico
 - 🏗️ **Arquitetura modular** e configurável por `FEATURE_MODE`
 
 ## 📚 Documentação Completa
@@ -41,6 +42,7 @@ O **LibrIA** é um sistema de reconhecimento de Libras baseado em visão computa
 - **[docs/PULL_REQUEST_GUIDE.md](docs/PULL_REQUEST_GUIDE.md)** - Guia de Pull Requests
 
 ### 📖 Documentação do Projeto
+- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** - Arquitetura visual com diagramas curtos e navegáveis
 - **[docs/DATASETS.md](docs/DATASETS.md)** - Datasets disponíveis e como obter dados
 - **[docs/AVX_COMPATIBILITY.md](docs/AVX_COMPATIBILITY.md)** - Guia para CPUs sem suporte AVX
 - **[docs/video_format_changes.md](docs/video_format_changes.md)** - Mudanças de formatos de vídeo
@@ -87,7 +89,8 @@ LibrIA/
 ├── 📁 model/                        # Artefatos treinados
 │   ├── model.pickle
 │   ├── libras_lstm.keras
-│   └── libras_lstm_labels.pickle
+│   ├── libras_lstm_labels.pickle
+│   └── embedded_bundle/
 ├── 📁 docs/                         # Documentação detalhada
 ├── 📄 Makefile                      # Automação de setup e execução
 ├── 📄 main.py                       # Interface principal por comandos
@@ -187,10 +190,15 @@ make collect-temporal     # Coleta dataset temporal unificado
 make collect-minimal-dataset # Coleta o dataset mínimo completo
 make train                # Treina modelo Random Forest
 make train-lstm           # Treina modelo temporal LSTM
+make train-embedded       # Treina CNN estática quantizada
+make train-embedded-temporal # Treina CNN temporal quantizada para J/Z
+make train-embedded-all   # Treina os dois modelos embedded e exporta o bundle
+make export-embedded      # Reempacota bundle e pacote do Pico
 make train-hybrid         # Retreina os dois modelos
 make infer                # Inferência em tempo real
 make infer-lstm           # Inferência temporal em tempo real
 make infer-hybrid         # Inferência híbrida
+make infer-embedded       # Verifica o bundle embedded com os datasets NPY
 make run                  # Executa pipeline completo unificado
 make run-lstm             # Executa pipeline temporal completo
 
@@ -249,7 +257,28 @@ python main.py collect_static   # Coleta estática
 python main.py collect_temporal # Coleta temporal
 python main.py train            # Treinar modelo
 python main.py infer            # Inferência em tempo real
+python main.py train_embedded_all # Treino embedded completo
+python main.py export_embedded    # Bundle e pacote do Pico
+python main.py infer_embedded     # Validação do bundle embedded
 ```
+
+## 🧭 Arquitetura Visual
+
+Se você quiser entender o projeto por etapas, sem um diagrama único gigante, use:
+
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+
+Esse guia separa o fluxo em blocos menores:
+
+- entradas e comandos
+- coleta e dataset
+- treino host
+- inferência host
+- pipeline embedded
+- export para Pico
+- runtime no dispositivo
+
+Cada diagrama termina com links para a sequência correta de leitura.
 
 ### 🔄 Pipeline Completo
 
@@ -275,6 +304,73 @@ make infer
 ```
 
 O fluxo estático grava `frame_XXX.png` e `sample_XXX.npy` em `dataset/static/<label>/` e treina um Random Forest salvo em `model/model.pickle`.
+
+#### 1.1. Fluxo embedded estático sem MediaPipe
+
+```bash
+make collect-static
+make train-embedded
+```
+
+Esse fluxo reutiliza os `sample_XXX.npy` do dataset estático, treina uma CNN pequena sobre landmarks normalizados e exporta:
+
+- `model/libria_embedded_cnn.keras`
+- `model/libria_embedded_cnn_int8.tflite`
+- `model/libria_embedded_cnn_labels.json`
+
+Esse caminho foi pensado para deployment embedded e é o ponto de partida recomendado para portar letras estáticas para microcontroladores. Como a automação principal do projeto está baseada em `.npy`, essa trilha usa diretamente os landmarks já coletados.
+
+#### 1.2. Fluxo embedded temporal para J e Z
+
+```bash
+make collect-temporal SEQUENCE_LABELS=J\ Z SEQUENCE_COUNT=30 SEQUENCE_LENGTH=30
+make train-embedded-temporal
+```
+
+Esse fluxo reutiliza `seq_XXX.npy` em `dataset/temporal/`, treina uma CNN temporal leve para capturar movimento e exporta:
+
+- `model/libria_embedded_temporal_cnn.keras`
+- `model/libria_embedded_temporal_cnn_int8.tflite`
+- `model/libria_embedded_temporal_cnn_labels.json`
+
+Para embedded, a estratégia recomendada passa a ser duas trilhas complementares:
+
+- CNN estática para as letras sem movimento
+- CNN temporal para `J` e `Z`
+
+Se quiser treinar as duas em sequência:
+
+```bash
+make train-embedded-all
+```
+
+Isso já exporta automaticamente o bundle combinado em `model/embedded_bundle/`.
+
+Se quiser apenas reempacotar os artefatos existentes:
+
+```bash
+make export-embedded
+```
+
+Para validar se o runtime híbrido está coerente com os `.npy` do projeto:
+
+```bash
+make infer-embedded
+```
+
+Esse comando não usa MediaPipe. Ele carrega o bundle quantizado, roda os modelos TFLite sobre `sample_XXX.npy` e `seq_XXX.npy` e reporta acurácia estática, temporal e híbrida.
+
+O esqueleto de runtime no dispositivo ficou em:
+
+- `src/interfaces/libria_embedded_runtime.h`
+- `src/interfaces/libria_embedded_runtime.cpp`
+
+Observação importante sobre o MediaPipe:
+
+- a coleta do dataset continua igual e não foi alterada
+- o MediaPipe segue apenas no host para produzir os landmarks do dataset atual
+- o bundle embedded usa o mesmo contrato geométrico de landmarks, mas não depende do MediaPipe em runtime
+- no Pico, o caminho viável é reproduzir o mesmo layout normalizado de landmarks com outro extrator leve ou firmware dedicado
 
 #### 2. Fluxo temporal
 

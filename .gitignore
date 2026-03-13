@@ -272,6 +272,8 @@ requirements.lock
 
 # datasset sequences
 dataset/sequences
+dataset/static
+dataset/temporal
 
 # .npy
-config/*.npy
+#config/*.npy

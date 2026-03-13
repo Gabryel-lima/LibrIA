@@ -74,6 +74,32 @@ LSTM_CONFIG = {
     'confidence_threshold': 0.85,
 }
 
+EMBEDDED_CONFIG = {
+    'dataset_dir': STATIC_DATASET_DIR,
+    'input_points': 21,
+    'input_channels': 3,
+    'epochs': 20,
+    'batch_size': 16,
+    'validation_split': 0.2,
+    'min_samples_per_class': 8,
+    'keras_model_path': './model/libria_embedded_cnn.keras',
+    'tflite_model_path': './model/libria_embedded_cnn_int8.tflite',
+    'label_map_path': './model/libria_embedded_cnn_labels.json',
+}
+
+EMBEDDED_TEMPORAL_CONFIG = {
+    'dataset_dir': TEMPORAL_DATASET_DIR,
+    'sequence_length': LSTM_CONFIG['sequence_length'],
+    'feature_size': FEATURE_DIMENSION,
+    'epochs': 25,
+    'batch_size': 8,
+    'validation_split': 0.2,
+    'allowed_classes': ['J', 'Z'],
+    'keras_model_path': './model/libria_embedded_temporal_cnn.keras',
+    'tflite_model_path': './model/libria_embedded_temporal_cnn_int8.tflite',
+    'label_map_path': './model/libria_embedded_temporal_cnn_labels.json',
+}
+
 # Configurações do Modelo
 MODEL_CONFIG = {
     'n_estimators': 100,
@@ -104,6 +130,27 @@ HYBRID_INFERENCE_CONFIG = {
     'prediction_cooldown_seconds': 0.5,
     'window_overlap_tolerance_seconds': 0.25,
     'overlay_history_size': 5,
+}
+
+EMBEDDED_BUNDLE_CONFIG = {
+    'bundle_dir': './model/embedded_bundle',
+    'manifest_path': './model/embedded_bundle/embedded_bundle.json',
+    'runtime_header_path': './model/embedded_bundle/libria_embedded_bundle_config.h',
+    'pico_package_dir': './model/embedded_bundle/pico_package',
+    'pico_include_dir': './model/embedded_bundle/pico_package/include',
+    'pico_src_dir': './model/embedded_bundle/pico_package/src',
+    'pico_examples_dir': './model/embedded_bundle/pico_package/examples',
+    'pico_cmake_path': './model/embedded_bundle/pico_package/CMakeLists.txt',
+    'pico_readme_path': './model/embedded_bundle/pico_package/README.md',
+    'pico_archive_path': './model/embedded_bundle/libria_embedded_pico_package',
+    'pico_archive_format': 'zip',
+    'static_model_filename': 'libria_embedded_cnn_int8.tflite',
+    'static_labels_filename': 'libria_embedded_cnn_labels.json',
+    'temporal_model_filename': 'libria_embedded_temporal_cnn_int8.tflite',
+    'temporal_labels_filename': 'libria_embedded_temporal_cnn_labels.json',
+    'static_confidence_threshold': 0.75,
+    'temporal_confidence_threshold': 0.75,
+    'export_runtime_header': True,
 }
 
 # Configurações de Interface

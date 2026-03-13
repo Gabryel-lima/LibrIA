@@ -1,13 +1,18 @@
 # Datasets e Artefatos - LibrIA
 
-Este documento descreve o dataset unificado usado pelo LibrIA e onde cada artefato entra no pipeline.
+Este documento descreve o dataset unificado, os formatos `NPY` usados no treino e os artefatos gerados pelos fluxos host e embedded.
+
+## Navegação rápida
+
+- Visão dos fluxos em diagramas: [ARCHITECTURE.md](ARCHITECTURE.md)
+- Setup e execução local: [DEVELOPMENT.md](DEVELOPMENT.md)
 
 ## Visão geral
 
 O projeto hoje usa um dataset unificado com dois subconjuntos principais:
 
-1. Fluxo estático: frames + landmarks em `NPY` por classe, treino de Random Forest.
-2. Fluxo temporal: sequências de landmarks em `NPY` por classe, treino de LSTM e inferência com janela deslizante.
+1. Fluxo estático host e embedded: landmarks em `sample_XXX.npy` por classe.
+2. Fluxo temporal host e embedded: sequências de landmarks em `seq_XXX.npy` por classe.
 
 ## 1. Dataset estático unificado
 
@@ -39,7 +44,10 @@ Cada `sample_XXX.npy` contém os landmarks normalizados da mão. No modo padrão
 (21, 3)
 ```
 
-No treino estático, esse tensor é achatado para 63 features.
+Uso por pipeline:
+
+- Random Forest host: achatamento para 63 features.
+- CNN embedded estática: tensor mantido como `(21, 3)`.
 
 ### Dataset externo de apoio
 
@@ -87,7 +95,10 @@ No padrão atual isso significa:
 (30, 21, 3)
 ```
 
-O loader temporal faz o reshape interno quando necessário para o treino da LSTM.
+Uso por pipeline:
+
+- LSTM host: reshape interno conforme o trainer temporal.
+- CNN embedded temporal: reshape para `(30, 63)` quando necessario.
 
 ## 3. Modos de feature
 
@@ -147,6 +158,48 @@ make train-lstm
 make infer-lstm
 ```
 
+### Modelos embedded
+
+```text
+model/libria_embedded_cnn.keras
+model/libria_embedded_cnn_int8.tflite
+model/libria_embedded_cnn_labels.json
+model/libria_embedded_temporal_cnn.keras
+model/libria_embedded_temporal_cnn_int8.tflite
+model/libria_embedded_temporal_cnn_labels.json
+```
+
+Execução:
+
+```bash
+make train-embedded-all
+```
+
+### Bundle embedded e pacote Pico
+
+```text
+model/embedded_bundle/
+├── embedded_bundle.json
+├── libria_embedded_bundle_config.h
+├── libria_embedded_cnn_int8.tflite
+├── libria_embedded_temporal_cnn_int8.tflite
+└── pico_package/
+    ├── include/
+    ├── src/
+    ├── examples/
+    ├── CMakeLists.txt
+    └── README.md
+```
+
+Execução:
+
+```bash
+make export-embedded
+make infer-embedded
+```
+
+O pacote `pico_package/` ja sai preparado para exportacao ao RP2040/Pico e inclui arrays C/C++ com os modelos quantizados, manifesto, header de configuracao e runtime skeleton.
+
 ## 6. Calibração de câmera
 
 Arquivos gerados:
@@ -177,7 +230,14 @@ Na pasta `model/` e em áreas legadas do projeto existem artefatos de experiment
 
 Esses arquivos não substituem automaticamente o fluxo principal documentado. Use-os apenas se o experimento correspondente estiver configurado no código.
 
-## 8. Checklist rápido
+## 8. Relação com MediaPipe e runtime embedded
+
+- O MediaPipe continua no host como extrator de landmarks durante coleta e fluxos de inferência host.
+- O dataset salvo em `NPY` vira o contrato entre coleta e treino.
+- O bundle embedded nao depende de MediaPipe em runtime.
+- No dispositivo, o firmware precisa apenas reproduzir o mesmo layout de landmarks normalizados e o mesmo ROI controlado.
+
+## 9. Checklist rápido
 
 - [ ] Escolhi o fluxo: estático ou temporal
 - [ ] Tenho dados em `dataset/static/` ou em `dataset/temporal/`
@@ -185,4 +245,4 @@ Esses arquivos não substituem automaticamente o fluxo principal documentado. Us
 - [ ] Rodei `make verify-setup`
 - [ ] Treinei o modelo correspondente antes de inferir
 
-Última atualização: 2026-03-10
+Ultima atualizacao: 2026-03-12

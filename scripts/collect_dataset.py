@@ -119,6 +119,48 @@ def _extract_valid_sample(results) -> Optional[np.ndarray]:
     return _storage_shape(features)
 
 
+def _extract_valid_sample_from_frame(frame: np.ndarray, hands) -> Optional[np.ndarray]:
+    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    results = hands.process(rgb_frame)
+    return _extract_valid_sample(results)
+
+
+def _backfill_static_samples_from_frames(
+    label_dir: str,
+    calibration: Optional[Dict[str, np.ndarray]],
+    extractor,
+) -> int:
+    generated_samples = 0
+
+    for filename in sorted(os.listdir(label_dir)):
+        name, extension = os.path.splitext(filename)
+        if not name.startswith('frame_') or extension.lower() not in {'.png', '.jpg', '.jpeg'}:
+            continue
+
+        suffix = name.split('_')[-1]
+        if not suffix.isdigit():
+            continue
+
+        sample_path = os.path.join(label_dir, f'sample_{suffix}.npy')
+        if os.path.exists(sample_path):
+            continue
+
+        frame_path = os.path.join(label_dir, filename)
+        frame = cv2.imread(frame_path)
+        if frame is None:
+            continue
+
+        processed_frame = preprocess_frame(frame, calibration)
+        sample = extractor(processed_frame)
+        if sample is None:
+            continue
+
+        np.save(sample_path, np.asarray(sample, dtype=np.float32))
+        generated_samples += 1
+
+    return generated_samples
+
+
 def _build_hands():
     if not MEDIAPIPE_AVAILABLE:
         raise RuntimeError(
@@ -152,7 +194,21 @@ def collect_static(labels: List[str], samples_per_label: int, output_dir: str, c
         for label in labels:
             label_dir = os.path.join(output_dir, label)
             os.makedirs(label_dir, exist_ok=True)
+
+            generated_samples = _backfill_static_samples_from_frames(
+                label_dir,
+                calibration,
+                lambda frame: _extract_valid_sample_from_frame(frame, hands),
+            )
+            if generated_samples:
+                print(
+                    f'[collect-static] {label}: gerados {generated_samples} sample_XXX.npy '
+                    'a partir de frames existentes.'
+                )
+
             sample_index = _next_sample_index(label_dir, 'sample_')
+            if generated_samples:
+                _write_manifest('static', labels, output_dir, samples_per_label, None)
 
             while sample_index < samples_per_label:
                 ret, frame = cap.read()

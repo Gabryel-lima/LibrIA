@@ -14,7 +14,7 @@
 
 
 
-.PHONY: help setup install install-gpu install-cpu collect-static collect-temporal collect-minimal-dataset generate-checkerboard show-checkerboard capture-calibration calibrate-camera train train-lstm train-hybrid infer infer-lstm infer-hybrid run-lstm \
+.PHONY: help setup install install-gpu install-cpu collect-static collect-temporal collect-minimal-dataset generate-checkerboard show-checkerboard capture-calibration calibrate-camera train train-lstm train-embedded train-embedded-temporal train-embedded-all export-embedded train-hybrid infer infer-lstm infer-hybrid infer-embedded run-lstm \
 	run test clean clean-all dirs verify-setup environment lint format install-dev freeze update status
 
 # Variáveis de Configuração
@@ -90,7 +90,7 @@ help: ## 📖 Mostra este menu de ajuda com todos os comandos
 	@awk 'BEGIN {FS = ":.*?## "} /^setup|^install|^verify/ && !/^$$/ {printf "  $(GREEN)%-20s$(NC) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@echo ""
 	@echo "$(BOLD)$(GREEN)● EXECUTE - Execução do Pipeline:$(NC)"
-	@awk 'BEGIN {FS = ":.*?## "} /^run|^collect-static|^collect-temporal|^collect-minimal-dataset|^generate-checkerboard|^show-checkerboard|^capture-calibration|^train|^train-lstm|^train-hybrid|^infer|^infer-lstm|^infer-hybrid|^calibrate-camera/ && !/^setup/ && !/^$$/ {printf "  $(YELLOW)%-20s$(NC) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*?## "} /^run|^collect-static|^collect-temporal|^collect-minimal-dataset|^generate-checkerboard|^show-checkerboard|^capture-calibration|^train|^train-lstm|^train-embedded|^train-embedded-temporal|^train-embedded-all|^export-embedded|^train-hybrid|^infer|^infer-lstm|^infer-hybrid|^infer-embedded|^calibrate-camera/ && !/^setup/ && !/^$$/ {printf "  $(YELLOW)%-20s$(NC) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@echo ""
 	@echo "$(BOLD)$(YELLOW)● TESTING & DEBUG:$(NC)"
 	@awk 'BEGIN {FS = ":.*?## "} /^test|^environment|^lint|^format/ && !/^$$/ {printf "  $(MAGENTA)%-20s$(NC) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -114,12 +114,17 @@ help: ## 📖 Mostra este menu de ajuda com todos os comandos
 	@echo "  make capture-calibration # Abrir webcam, salvar fotos do tabuleiro e calibrar"
 	@echo "  make calibrate-camera CALIBRATION_IMAGES='calibration/*.jpg'"
 	@echo "  make train-lstm        # Treinar modelo temporal LSTM"
+	@echo "  make train-embedded    # Treinar CNN estática embedded via sample_XXX.npy"
+	@echo "  make train-embedded-temporal # Treinar CNN temporal embedded para J e Z"
+	@echo "  make train-embedded-all # Treinar os dois modelos embedded em sequência"
+	@echo "  make export-embedded   # Empacotar os dois modelos quantizados e metadados"
 	@echo "  make train-hybrid      # Retreinar modelos estático + temporal"
 	@echo "  make run-lstm          # Pipeline temporal completo"
 	@echo "  make run            # Executar pipeline completo"
 	@echo "  make infer          # Inferência em tempo real"
 	@echo "  make infer-lstm     # Inferência temporal em tempo real"
 	@echo "  make infer-hybrid   # Inferência híbrida com arbitragem"
+	@echo "  make infer-embedded # Verificar o bundle embedded em cima dos datasets NPY"
 	@echo ""
 
 setup: $(VENV_DIR) ## 🔧 Setup inicial - cria venv e instala dependências
@@ -263,6 +268,26 @@ train-lstm: verify-setup dirs ## 🧠 Treina modelo temporal LSTM com dataset/te
 	@$(VENV_PYTHON) main.py train_lstm
 	@echo "$(GREEN)✓ Modelo temporal treinado! Salvo em ./model/libras_lstm.keras$(NC)"
 
+train-embedded: verify-setup dirs ## 📦 Treina CNN estática quantizada para deployment embedded
+	@echo "$(MAGENTA)→ Iniciando treinamento embedded...$(NC)"
+	@$(VENV_PYTHON) main.py train_embedded
+	@echo "$(GREEN)✓ Modelo embedded exportado em ./model/libria_embedded_cnn_int8.tflite$(NC)"
+
+train-embedded-temporal: verify-setup dirs ## 🎞️ Treina CNN temporal quantizada para J e Z em embedded
+	@echo "$(MAGENTA)→ Iniciando treinamento embedded temporal...$(NC)"
+	@$(VENV_PYTHON) main.py train_embedded_temporal
+	@echo "$(GREEN)✓ Modelo temporal embedded exportado em ./model/libria_embedded_temporal_cnn_int8.tflite$(NC)"
+
+train-embedded-all: verify-setup dirs ## 🧩 Treina os modelos embedded estático e temporal em sequência
+	@echo "$(MAGENTA)→ Iniciando treinamento embedded completo...$(NC)"
+	@$(VENV_PYTHON) main.py train_embedded_all
+	@echo "$(GREEN)✓ Modelos embedded estático e temporal atualizados!$(NC)"
+
+export-embedded: verify-setup dirs ## 📦 Empacota modelos, metadados e pacote C/C++ pronto para o Pico
+	@echo "$(MAGENTA)→ Exportando bundle embedded...$(NC)"
+	@$(VENV_PYTHON) main.py export_embedded
+	@echo "$(GREEN)✓ Bundle embedded e pacote Pico exportados em ./model/embedded_bundle$(NC)"
+
 train-hybrid: verify-setup dirs ## 🧠♻️ Retreina os modelos estático e temporal
 	@echo "$(MAGENTA)→ Iniciando retreinamento híbrido...$(NC)"
 	@$(VENV_PYTHON) main.py train_hybrid
@@ -282,6 +307,10 @@ infer-hybrid: verify-setup ## 🎯 Inferência híbrida em tempo real
 	@echo "$(GREEN)→ Iniciando inferência híbrida em tempo real...$(NC)"
 	@echo "$(MAGENTA)  Pressione 'q' para sair$(NC)"
 	@$(VENV_PYTHON) main.py infer_hybrid
+
+infer-embedded: verify-setup ## 🎯 Verifica o bundle embedded usando os datasets NPY
+	@echo "$(GREEN)→ Verificando runtime embedded...$(NC)"
+	@$(VENV_PYTHON) main.py infer_embedded
 
 run-lstm: verify-setup dirs ## ▶️  Pipeline temporal: coletar, treinar, inferir
 	@echo "$(BOLD)$(GREEN)╔════════════════════════════════════════════════════════════════╗$(NC)"

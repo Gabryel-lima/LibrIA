@@ -7,6 +7,7 @@ Referência rápida para localizar a documentação alinhada ao estado atual do 
 ### Quero rodar o projeto
 - [README.md](README.md)
 - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
 ### Quero configurar ambiente local
 - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
@@ -14,6 +15,7 @@ Referência rápida para localizar a documentação alinhada ao estado atual do 
 
 ### Quero entender os dados e modelos
 - [docs/DATASETS.md](docs/DATASETS.md)
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - [README.md](README.md)
 
 ### Quero contribuir
@@ -38,6 +40,7 @@ Referência rápida para localizar a documentação alinhada ao estado atual do 
 
 ### Pasta docs
 - [docs/README.md](docs/README.md): índice da pasta docs
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): arquitetura visual em diagramas curtos e navegáveis
 - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md): setup, testes e fluxo de desenvolvimento
 - [docs/DATASETS.md](docs/DATASETS.md): datasets, artefatos e formatos
 - [docs/AVX_COMPATIBILITY.md](docs/AVX_COMPATIBILITY.md): limitações de CPU e bibliotecas com AVX
@@ -45,21 +48,21 @@ Referência rápida para localizar a documentação alinhada ao estado atual do 
 - [docs/PULL_REQUEST_GUIDE.md](docs/PULL_REQUEST_GUIDE.md): processo de PR
 
 ### Documentação técnica complementar
-- [docs/api/cam.md](docs/api/cam.md): notas sobre captura em C++ e OpenCV
-- [docs/api/linker_py.md](docs/api/linker_py.md): referência adicional
 - [src/models/transformer-gpt/README.md](src/models/transformer-gpt/README.md): modelo experimental para sequências
 
 ## Fluxo recomendado
 
-1. Leia [README.md](README.md) para entender o pipeline estático e temporal.
-2. Faça o setup com [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
-3. Se a máquina tiver CPU antiga, confira [docs/AVX_COMPATIBILITY.md](docs/AVX_COMPATIBILITY.md) antes de instalar tudo.
-4. Para dados e artefatos, use [docs/DATASETS.md](docs/DATASETS.md).
-5. Para contribuir, siga [docs/PULL_REQUEST_GUIDE.md](docs/PULL_REQUEST_GUIDE.md).
+1. Leia [README.md](README.md) para visão geral e comandos principais.
+2. Use [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) para navegar pelos fluxos em diagramas curtos.
+3. Faça o setup com [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+4. Se a máquina tiver CPU antiga, confira [docs/AVX_COMPATIBILITY.md](docs/AVX_COMPATIBILITY.md) antes de instalar tudo.
+5. Para dados e artefatos, use [docs/DATASETS.md](docs/DATASETS.md).
+6. Para contribuir, siga [docs/PULL_REQUEST_GUIDE.md](docs/PULL_REQUEST_GUIDE.md).
 
 ## Checklist rápido
 
 - [ ] Li [README.md](README.md)
+- [ ] Li [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - [ ] Rodei `make setup`
 - [ ] Rodei `make verify-setup`
 - [ ] Sei qual fluxo vou usar: estático ou temporal
@@ -67,5 +70,5 @@ Referência rápida para localizar a documentação alinhada ao estado atual do 
 
 ## Última atualização
 
-- Data: 2026-03-10
-- Status: documentação sincronizada com o dataset unificado, calibração de câmera e feature extraction configurável
+- Data: 2026-03-12
+- Status: documentação sincronizada com o pipeline embedded atual, com diagramas de navegação por etapa
