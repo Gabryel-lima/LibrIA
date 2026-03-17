@@ -2,7 +2,7 @@
 import sys
 sys.path.append('./src')
 
-from inference.libras_realtime_classifier import LibrasRealtimeClassifier
+from src.inference.libras_realtime_classifier import LibrasRealtimeClassifier
 
 print("Iniciando classificador em tempo real...")
 print("="*60)

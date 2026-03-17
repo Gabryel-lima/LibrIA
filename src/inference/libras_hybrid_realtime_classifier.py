@@ -1,5 +1,10 @@
 """Classificador híbrido com arbitragem entre modelos estático e temporal."""
 
+from warnings import filterwarnings
+
+# Ignora especificamente o UserWarning do Protobuf
+filterwarnings("ignore", category=UserWarning, module="google.protobuf.symbol_database")
+
 import os
 import pickle
 import time
@@ -9,8 +14,16 @@ from typing import Deque, List, Optional, Tuple
 import cv2 as cv
 import numpy as np
 
-from config.settings import CAMERA_CONFIG, FEATURE_DIMENSION, FEATURE_MODE, HYBRID_INFERENCE_CONFIG, INFERENCE_CONFIG, LSTM_CONFIG
-from utils.helpers import extract_landmarks_by_mode, load_camera_calibration, preprocess_frame
+from config.settings import CAMERA_CONFIG, FEATURE_MODE, HYBRID_INFERENCE_CONFIG, INFERENCE_CONFIG, LSTM_CONFIG
+from utils.helpers import (
+    enrich_model_metadata,
+    extract_landmarks_by_mode,
+    get_feature_dimension,
+    infer_feature_mode_from_dimension,
+    load_camera_calibration,
+    patch_legacy_sklearn_model,
+    preprocess_frame,
+)
 
 from .prediction_merger import PredictionEvent, PredictionMerger
 
@@ -54,14 +67,18 @@ class LibrasHybridRealtimeClassifier:
         self.temporal_model_path = temporal_model_path
         self.temporal_label_map_path = temporal_label_map_path
         self.prediction_interval = prediction_interval
-        self.feature_mode = FEATURE_MODE
-        self.feature_dimension = FEATURE_DIMENSION
         self.sequence_length = LSTM_CONFIG['sequence_length']
         self.allowed_temporal_classes = {label.upper() for label in LSTM_CONFIG.get('allowed_classes', [])}
 
         self.static_model, self.static_metadata = self._load_static_model()
         self.temporal_model = self._load_temporal_model()
         self.temporal_label_map, self.temporal_metadata = self._load_temporal_metadata()
+        self.static_feature_mode = self._resolve_static_feature_mode()
+        self.static_feature_dimension = get_feature_dimension(self.static_feature_mode)
+        self.temporal_feature_mode = self._resolve_temporal_feature_mode()
+        self.temporal_feature_dimension = get_feature_dimension(self.temporal_feature_mode)
+        self.feature_mode = self.temporal_feature_mode
+        self.feature_dimension = self.temporal_feature_dimension
         self._validate_temporal_metadata()
 
         self.camera_calibration = self._load_camera_calibration()
@@ -96,7 +113,9 @@ class LibrasHybridRealtimeClassifier:
             raise FileNotFoundError(f'Modelo estático não encontrado: {self.static_model_path}')
         with open(self.static_model_path, 'rb') as file_obj:
             model_dict = pickle.load(file_obj)
-        return model_dict.get('model'), {key: value for key, value in model_dict.items() if key != 'model'}
+        model = patch_legacy_sklearn_model(model_dict.get('model'))
+        metadata = enrich_model_metadata(model, {key: value for key, value in model_dict.items() if key != 'model'})
+        return model, metadata
 
     def _load_temporal_model(self):
         if not os.path.exists(self.temporal_model_path):
@@ -110,6 +129,31 @@ class LibrasHybridRealtimeClassifier:
             metadata = pickle.load(file_obj)
         return metadata.get('label_map', {}), metadata
 
+    def _resolve_static_feature_mode(self) -> str:
+        metadata_mode = self.static_metadata.get('feature_mode')
+        if metadata_mode:
+            return metadata_mode
+
+        metadata_num_features = self.static_metadata.get('num_features')
+        if metadata_num_features is not None:
+            return infer_feature_mode_from_dimension(int(metadata_num_features))
+
+        if hasattr(self.static_model, 'n_features_in_'):
+            return infer_feature_mode_from_dimension(int(self.static_model.n_features_in_))
+
+        return FEATURE_MODE
+
+    def _resolve_temporal_feature_mode(self) -> str:
+        metadata_mode = self.temporal_metadata.get('feature_mode')
+        if metadata_mode:
+            return metadata_mode
+
+        metadata_feature_size = self.temporal_metadata.get('feature_size')
+        if metadata_feature_size is not None:
+            return infer_feature_mode_from_dimension(int(metadata_feature_size))
+
+        return FEATURE_MODE
+
     def _validate_temporal_metadata(self):
         trained_classes = {label.upper() for label in self.temporal_label_map.values()}
         if self.allowed_temporal_classes and not trained_classes.issubset(self.allowed_temporal_classes):
@@ -120,10 +164,10 @@ class LibrasHybridRealtimeClassifier:
 
         metadata_feature_size = self.temporal_metadata.get('feature_size')
         metadata_sequence_length = self.temporal_metadata.get('sequence_length')
-        if metadata_feature_size and int(metadata_feature_size) != self.feature_dimension:
+        if metadata_feature_size and int(metadata_feature_size) != self.temporal_feature_dimension:
             raise ValueError(
                 'Feature size incompatível entre híbrido e metadados do LSTM: '
-                f'{metadata_feature_size} != {self.feature_dimension}'
+                f'{metadata_feature_size} != {self.temporal_feature_dimension}'
             )
         if metadata_sequence_length and int(metadata_sequence_length) != self.sequence_length:
             raise ValueError(
@@ -180,6 +224,15 @@ class LibrasHybridRealtimeClassifier:
     def _append_temporal_features(self, features: np.ndarray, timestamp: float):
         self.sequence_buffer.append(features)
         self.sequence_timestamps.append(timestamp)
+
+    def _extract_features(self, landmarks) -> Tuple[np.ndarray, np.ndarray]:
+        static_features = extract_landmarks_by_mode(landmarks, self.static_feature_mode)
+
+        if self.static_feature_mode == self.temporal_feature_mode:
+            return static_features, static_features.copy()
+
+        temporal_features = extract_landmarks_by_mode(landmarks, self.temporal_feature_mode)
+        return static_features, temporal_features
 
     def _draw_overlay(self, frame: np.ndarray) -> np.ndarray:
         cv.putText(frame, 'LibrIA - Inferencia Hibrida', (10, 30), cv.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
@@ -252,13 +305,14 @@ class LibrasHybridRealtimeClassifier:
                         self.mp_drawing_styles.get_default_hand_landmarks_style(),
                         self.mp_drawing_styles.get_default_hand_connections_style(),
                     )
-                    features = extract_landmarks_by_mode(hand_landmarks.landmark, self.feature_mode)
+                    static_features, temporal_features = self._extract_features(hand_landmarks.landmark)
                 else:
-                    features = np.zeros(self.feature_dimension, dtype=np.float32)
+                    static_features = np.zeros(self.static_feature_dimension, dtype=np.float32)
+                    temporal_features = np.zeros(self.temporal_feature_dimension, dtype=np.float32)
 
-                self._append_temporal_features(features, timestamp)
+                self._append_temporal_features(temporal_features, timestamp)
 
-                static_event = self._predict_static(features, timestamp)
+                static_event = self._predict_static(static_features, timestamp)
                 if static_event is not None:
                     self.last_static_candidate = static_event
                     merged_event = self.merger.submit(static_event)

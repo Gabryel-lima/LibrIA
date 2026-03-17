@@ -134,6 +134,37 @@ def infer_feature_mode_from_dimension(num_features: int) -> str:
             return feature_mode
     raise ValueError(f"Nenhum modo de features corresponde a {num_features} features")
 
+def patch_legacy_sklearn_model(model: Any) -> Any:
+    """Aplica atributos ausentes exigidos por versões recentes do scikit-learn."""
+    if model is None or not hasattr(model, 'estimators_'):
+        return model
+
+    if not hasattr(model, 'monotonic_cst'):
+        model.monotonic_cst = None
+
+    for estimator in getattr(model, 'estimators_', []):
+        if not hasattr(estimator, 'monotonic_cst'):
+            estimator.monotonic_cst = None
+
+    return model
+
+def enrich_model_metadata(model: Any, metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Completa metadados de modelo com dimensionalidade e modo de features."""
+    resolved_metadata = dict(metadata or {})
+
+    num_features = resolved_metadata.get('num_features')
+    if num_features is None and model is not None and hasattr(model, 'n_features_in_'):
+        num_features = int(model.n_features_in_)
+        resolved_metadata['num_features'] = num_features
+
+    if not resolved_metadata.get('feature_mode') and num_features is not None:
+        try:
+            resolved_metadata['feature_mode'] = infer_feature_mode_from_dimension(int(num_features))
+        except ValueError:
+            pass
+
+    return resolved_metadata
+
 def landmarks_to_bounding_box(landmarks) -> np.ndarray:
     """Normaliza landmarks usando a bounding box da mão."""
     x_coords = [landmark.x for landmark in landmarks]
@@ -418,3 +449,22 @@ def format_time(seconds: float) -> str:
         minutes = int((seconds % 3600) // 60)
         secs = seconds % 60
         return f"{hours}h {minutes}m {secs:.1f}s"
+
+def extract_dir_structure(base_path):
+    """
+    Extrai a estrutura de diretórios e arquivos a partir de um caminho base.
+    
+    Args:
+        base_path: Caminho base para iniciar a extração
+        
+    Returns:
+        Dicionário com a estrutura de diretórios e arquivos
+    """
+    structure = {}
+    for root, dirs, files in os.walk(base_path):
+        rel_root = os.path.relpath(root, base_path)
+        structure[rel_root] = {
+            "dirs": sorted(dirs),
+            "files": sorted(files)
+        }
+    return structure
