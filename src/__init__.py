@@ -13,5 +13,5 @@ Módulos:
 """
 
 __version__ = "1.0.0"
-__author__ = "João Emanuel"
+__author__ = "Gabryel-lima"
 __description__ = "Sistema de Reconhecimento de Libras com Visão Computacional"
