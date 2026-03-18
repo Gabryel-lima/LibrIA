@@ -13,6 +13,7 @@ e esse projeto adere ao [Semantic Versioning](https://semver.org/lang/pt_BR/).
 - Scripts de calibração de câmera e geração/exibição de tabuleiro
 - Metadados de `feature_mode` persistidos no dataset processado e nos modelos
 - Guia de arquitetura em `docs/ARCHITECTURE.md` com diagramas curtos e navegação por etapa
+- Testes para exit code do `main.py`, espelhamento no dataset e utilitários de inferência híbrida
 
 ### Changed
 - Extração de landmarks agora é configurável por `FEATURE_MODE`
@@ -20,6 +21,9 @@ e esse projeto adere ao [Semantic Versioning](https://semver.org/lang/pt_BR/).
 - O pipeline temporal agora usa `dataset/temporal/` como caminho principal
 - Makefile ganhou comandos `collect-static`, `collect-temporal` e `collect-minimal-dataset`
 - Documentação central sincronizada com os fluxos atuais do projeto, incluindo bundle embedded e export para Pico
+- Coleta estática e temporal agora salvam variantes espelhadas `_mirror.npy` para suportar simetria esquerda/direita
+- Treinos LSTM e embedded temporal aceitam fallback para o diretório temporal legado quando o caminho atual está vazio
+- Trainers LSTM e embedded agora persistem gráficos de histórico em `training_plots/`
 
 ### Removed
 - Fluxos legados `process`, `collect_jz`, `src/data_collection/`, `src/data_processing/` e `scripts/collect_sequences.py`
@@ -28,6 +32,8 @@ e esse projeto adere ao [Semantic Versioning](https://semver.org/lang/pt_BR/).
 ### Fixed
 - Fluxo de coleta temporal agora mantém a janela OpenCV responsiva durante espera e gravação
 - Inferência estática passou a respeitar dimensionalidade do modelo e calibração opcional
+- `main.py` agora retorna status não nulo quando comandos falham, permitindo automação confiável
+- Inferência híbrida agora compara hipóteses originais e espelhadas antes de escolher a predição final por trilha
 
 ---
 

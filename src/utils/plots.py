@@ -1,8 +1,11 @@
 from src.utils.imports import (
     plt # from matplotlib.pyplot as plt 
 )
+import os
+import glob
+from datetime import datetime
 
-def plot_training_history(history, save_path='training_history.png'):
+def plot_training_history(history, save_path='training_history.png', accuracy_dir='training_plots/accuracy'):
     """Função para plotar o histórico de treinamento e validação.
     
     Args:
@@ -36,7 +39,44 @@ def plot_training_history(history, save_path='training_history.png'):
 
     # Ajustar espaçamento e salvar o gráfico
     plt.tight_layout()
-    plt.savefig(save_path)
+    # salvar figura combinada (loss + accuracy) se solicitado
+    try:
+        plt.savefig(save_path)
+    except Exception:
+        # se houver problema salvando no caminho fornecido, tente um nome simples
+        plt.savefig('training_history.png')
+
+    # Salvar também apenas o gráfico de precisão com timestamp em um diretório controlado
+    try:
+        os.makedirs(accuracy_dir, exist_ok=True)
+        ts = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        acc_filename = os.path.join(accuracy_dir, f'accuracy_{ts}.png')
+
+        # criar uma figura separada somente com precisão
+        fig_acc, ax_acc = plt.subplots(1, 1, figsize=(7, 6))
+        ax_acc.plot(accuracy, label='Training Accuracy', color='blue')
+        ax_acc.plot(val_accuracy, label='Validation Accuracy', color='orange')
+        ax_acc.set_title('Training and Validation Accuracy')
+        ax_acc.set_xlabel('Epochs')
+        ax_acc.set_ylabel('Accuracy')
+        ax_acc.legend()
+        fig_acc.tight_layout()
+        fig_acc.savefig(acc_filename)
+        plt.close(fig_acc)
+
+        # manter apenas os 10 arquivos mais recentes no diretório de precisão
+        pattern = os.path.join(accuracy_dir, 'accuracy_*.png')
+        files = sorted(glob.glob(pattern), key=os.path.getmtime)
+        while len(files) > 10:
+            try:
+                os.remove(files[0])
+            except Exception:
+                pass
+            files = sorted(glob.glob(pattern), key=os.path.getmtime)
+    except Exception:
+        # não deve interromper o fluxo de treinamento se falhar ao salvar plots
+        pass
+
     plt.show()
 
 def sample_correct_class():

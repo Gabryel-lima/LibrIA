@@ -70,9 +70,15 @@ flowchart TD
     B --> C[Calibracao opcional]
     C --> D[Extracao de landmarks]
     D --> E[dataset/static/<label>/sample_XXX.npy]
-    D --> F[dataset/temporal/<label>/seq_XXX.npy]
-    B --> G[frame_XXX.png para referencia visual]
+    D --> F[dataset/static/<label>/sample_XXX_mirror.npy]
+    D --> G[dataset/temporal/<label>/seq_XXX.npy]
+    D --> H[dataset/temporal/<label>/seq_XXX_mirror.npy]
+    B --> I[frame_XXX.png para referencia visual]
 ```
+
+Notas desta etapa:
+- A coleta estática reaproveita `frame_XXX.png` legados para gerar `sample_XXX.npy` ausentes antes da captura ao vivo.
+- As variantes `_mirror.npy` são geradas no momento da coleta para reforçar simetria esquerda/direita.
 
 Sequencia desta etapa:
 - Voltar: [2. Entradas e Comandos](#2-entradas-e-comandos)
@@ -92,7 +98,14 @@ flowchart LR
     D[dataset/temporal] --> E[LibrasLSTMTrainer]
     E --> F[model/libras_lstm.keras]
     E --> G[model/libras_lstm_labels.pickle]
+    B --> H[training_plots/]
+    E --> H
 ```
+
+Notas desta etapa:
+- O treino estático duplica amostras por espelhamento no eixo X, ignorando arquivos que já terminam com `_mirror.npy`.
+- O treino LSTM aceita fallback para o diretório temporal legado quando o caminho principal configurado está vazio.
+- Os trainers persistem gráficos de histórico em `training_plots/`.
 
 Sequencia desta etapa:
 - Voltar: [3. Coleta e Geracao de Dataset](#3-coleta-e-geracao-de-dataset)
@@ -109,14 +122,18 @@ Leitura complementar:
 flowchart TD
     A[Webcam] --> B[Inferencia estatica]
     A --> C[Janela temporal]
-    B --> D[LibrasRealtimeClassifier]
-    C --> E[LibrasLSTMRealtimeClassifier]
-    D --> F[Predicao estatica]
-    E --> G[Predicao temporal]
+    B --> D[Original + espelhado]
+    C --> E[Original + espelhado]
+    D --> F[Melhor hipotese estatica]
+    E --> G[Melhor hipotese temporal]
     F --> H[Arbitragem hibrida]
     G --> H
     H --> I[Overlay e resultado final]
 ```
+
+Notas desta etapa:
+- A inferência híbrida compara amostra original e amostra espelhada nas trilhas estática e temporal.
+- A arbitragem recebe apenas a hipótese de maior confiança de cada trilha.
 
 Sequencia desta etapa:
 - Voltar: [4. Treinamento Host](#4-treinamento-host)
@@ -204,4 +221,4 @@ Leitura complementar:
 - Fluxo embedded: [6. Pipeline Embedded e Export para Pico](#6-pipeline-embedded-e-export-para-pico)
 - Runtime final: [7. Runtime no Dispositivo](#7-runtime-no-dispositivo)
 
-Ultima atualizacao: 2026-03-12
+Ultima atualizacao: 2026-03-17

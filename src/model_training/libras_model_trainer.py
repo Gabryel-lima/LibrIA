@@ -77,6 +77,14 @@ class LibrasModelTrainer:
                 data.append(flattened)
                 labels.append(label)
 
+                # Evita espelhar novamente arquivos que já representam amostras espelhadas.
+                if '_mirror' in filename:
+                    continue
+
+                mirrored = self._mirror_features(flattened)
+                data.append(mirrored)
+                labels.append(label)
+
         if not data:
             raise ValueError(
                 'Nenhuma amostra estática válida encontrada em dataset/static com '
@@ -84,6 +92,14 @@ class LibrasModelTrainer:
             )
 
         return np.asarray(data), np.asarray(labels)
+
+    def _mirror_features(self, features: np.ndarray) -> np.ndarray:
+        mirrored = np.asarray(features, dtype=np.float32).copy().reshape(-1)
+        if FEATURE_MODE == 'wrist_relative':
+            mirrored[0::3] = -mirrored[0::3]
+        else:
+            mirrored[0::3] = 1.0 - mirrored[0::3]
+        return mirrored
     
     def load_dataset(self) -> Tuple[np.ndarray, np.ndarray]:
         """

@@ -2,32 +2,28 @@
 
 ## Data
 
-2026-03-12
+2026-03-17
 
 ## Escopo desta atualização
 
-Sincronização ampla da documentação com o fluxo embedded atual, export para Pico e organização por diagramas menores.
+Sincronização documental com as mudanças recentes em coleta, treino híbrido, persistência de plots e automação por CLI.
 
 ## Principais mudanças documentadas
 
-### Arquitetura visual
-- Criação de `docs/ARCHITECTURE.md`
-- Separação do projeto em diagramas menores por etapa
-- Inclusão de links de continuidade logo abaixo de cada diagrama para navegação limpa
+### Espelhamento no dataset
+- Registro dos arquivos `sample_XXX_mirror.npy` e `seq_XXX_mirror.npy` como parte oficial do pipeline atual
+- Documentação do backfill estático a partir de `frame_XXX.png` legados
+- Explicação de como o treino evita duplicar arquivos que já usam o sufixo `_mirror`
 
-### Pipeline embedded
-- Documentação dos comandos `make train-embedded-all`, `make export-embedded` e `make infer-embedded`
-- Registro do bundle em `model/embedded_bundle/`
-- Registro do pacote exportável para Pico em `model/embedded_bundle/pico_package/`
+### Treino e artefatos visuais
+- Inclusão dos gráficos `training_history_*.png` como saídas persistidas dos trainers
+- Documentação do diretório `training_plots/accuracy/` e da retenção dos 10 PNGs mais recentes
+- Registro do fallback para dataset temporal legado nos trainers temporais
 
-### Guias principais revisados
-- README principal ajustado para refletir host + embedded
-- `docs/DEVELOPMENT.md` reescrito para remover trechos antigos e refletir os comandos reais
-- `docs/DATASETS.md` ampliado para cobrir artefatos host, TFLite e bundle final
-
-### Limpeza documental
-- Remoção de referências a exemplos C++ experimentais sem integração com o fluxo atual
-- Atualização dos índices para apontar para a nova documentação de arquitetura
+### Inferência e automação
+- Atualização do fluxo híbrido para explicitar a comparação entre hipóteses originais e espelhadas
+- Registro de que `main.py` retorna exit code `0` em sucesso e `1` em falha
+- Ajuste das instruções de desenvolvimento para testes e automações recentes
 
 ## Arquivos atualizados nesta rodada
 
@@ -42,6 +38,6 @@ Sincronização ampla da documentação com o fluxo embedded atual, export para 
 
 ## Resultado esperado
 
-- O leitor consegue navegar pelo projeto em etapas curtas, sem depender de um diagrama gigante
-- A documentação passa a refletir o fluxo atual do repositório, incluindo embedded e export para Pico
-- O caminho entre coleta, treino, inferência, bundle e runtime fica explícito e didático
+- O leitor entende que o dataset atual inclui variantes espelhadas e que elas participam do treino e da inferência híbrida
+- O caminho entre coleta, treino, plots e automação por CLI fica explícito
+- Scripts externos conseguem confiar no exit code do `main.py` sem depender de parsing textual

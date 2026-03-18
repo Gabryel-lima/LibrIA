@@ -11,8 +11,8 @@ Este documento descreve o dataset unificado, os formatos `NPY` usados no treino 
 
 O projeto hoje usa um dataset unificado com dois subconjuntos principais:
 
-1. Fluxo estático host e embedded: landmarks em `sample_XXX.npy` por classe.
-2. Fluxo temporal host e embedded: sequências de landmarks em `seq_XXX.npy` por classe.
+1. Fluxo estático host e embedded: landmarks em `sample_XXX.npy` por classe, com variante espelhada `sample_XXX_mirror.npy`.
+2. Fluxo temporal host e embedded: sequências de landmarks em `seq_XXX.npy` por classe, com variante espelhada `seq_XXX_mirror.npy`.
 
 ## 1. Dataset estático unificado
 
@@ -29,6 +29,7 @@ dataset/static/
 ├── A/
 │   ├── frame_000.png
 │   ├── sample_000.npy
+│   ├── sample_000_mirror.npy
 │   └── ...
 ├── B/
 └── ...
@@ -44,9 +45,11 @@ Cada `sample_XXX.npy` contém os landmarks normalizados da mão. No modo padrão
 (21, 3)
 ```
 
+Quando a coleta roda sobre uma pasta que já possui apenas `frame_XXX.png`, o backfill gera automaticamente os `sample_XXX.npy` ausentes e, no mesmo passo, salva `sample_XXX_mirror.npy` para reaproveitar datasets legados.
+
 Uso por pipeline:
 
-- Random Forest host: achatamento para 63 features.
+- Random Forest host: achatamento para 63 features e treino com espelhamento no eixo X, evitando duplicar arquivos que já terminam em `_mirror.npy`.
 - CNN embedded estática: tensor mantido como `(21, 3)`.
 
 ### Dataset externo de apoio
@@ -75,10 +78,12 @@ Estrutura gerada:
 dataset/temporal/
 ├── J/
 │   ├── seq_000.npy
+│   ├── seq_000_mirror.npy
 │   ├── seq_001.npy
 │   └── ...
 └── Z/
     ├── seq_000.npy
+    ├── seq_000_mirror.npy
     ├── seq_001.npy
     └── ...
 ```
@@ -95,9 +100,11 @@ No padrão atual isso significa:
 (30, 21, 3)
 ```
 
+A coleta temporal salva a sequência original e sua versão espelhada no mesmo diretório. Os trainers temporais também aceitam `LEGACY_TEMPORAL_DATASET_DIR` como fallback quando o diretório principal configurado está presente, mas vazio.
+
 Uso por pipeline:
 
-- LSTM host: reshape interno conforme o trainer temporal.
+- LSTM host: reshape interno conforme o trainer temporal, com augmentação espelhada ignorando arquivos que já usam o sufixo `_mirror`.
 - CNN embedded temporal: reshape para `(30, 63)` quando necessario.
 
 ## 3. Modos de feature
@@ -158,6 +165,13 @@ make train-lstm
 make infer-lstm
 ```
 
+Artefato visual adicional:
+
+```text
+training_plots/training_history_lstm.png
+training_plots/accuracy/accuracy_YYYY-MM-DD_HH-MM-SS.png
+```
+
 ### Modelos embedded
 
 ```text
@@ -174,6 +188,16 @@ Execução:
 ```bash
 make train-embedded-all
 ```
+
+Artefatos visuais adicionais:
+
+```text
+training_plots/training_history_embedded.png
+training_plots/training_history_temporal_embedded.png
+training_plots/accuracy/accuracy_YYYY-MM-DD_HH-MM-SS.png
+```
+
+O diretório `training_plots/accuracy/` mantém somente os 10 PNGs mais recentes para não acumular histórico infinito.
 
 ### Bundle embedded e pacote Pico
 
@@ -241,8 +265,9 @@ Esses arquivos não substituem automaticamente o fluxo principal documentado. Us
 
 - [ ] Escolhi o fluxo: estático ou temporal
 - [ ] Tenho dados em `dataset/static/` ou em `dataset/temporal/`
+- [ ] Entendo que arquivos `_mirror.npy` são parte do dataset atual
 - [ ] Sei qual `FEATURE_MODE` está ativo
 - [ ] Rodei `make verify-setup`
 - [ ] Treinei o modelo correspondente antes de inferir
 
-Ultima atualizacao: 2026-03-12
+Ultima atualizacao: 2026-03-17

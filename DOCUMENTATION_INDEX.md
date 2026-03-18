@@ -66,9 +66,10 @@ Referência rápida para localizar a documentação alinhada ao estado atual do 
 - [ ] Rodei `make setup`
 - [ ] Rodei `make verify-setup`
 - [ ] Sei qual fluxo vou usar: estático ou temporal
+- [ ] Se vou automatizar comandos, sei que `main.py` retorna `1` em falha
 - [ ] Verifiquei restrições de AVX quando necessário
 
 ## Última atualização
 
-- Data: 2026-03-12
-- Status: documentação sincronizada com o pipeline embedded atual, com diagramas de navegação por etapa
+- Data: 2026-03-17
+- Status: documentação sincronizada com espelhamento `_mirror.npy`, plots persistidos de treino e exit codes confiáveis no CLI

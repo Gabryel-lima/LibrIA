@@ -12,7 +12,8 @@ from typing import Dict, List, Tuple
 
 import numpy as np
 
-from config.settings import LEGACY_TEMPORAL_DATASET_DIR, LSTM_CONFIG, TEMPORAL_DATASET_DIR
+from config.settings import FEATURE_MODE, LEGACY_TEMPORAL_DATASET_DIR, LSTM_CONFIG, TEMPORAL_DATASET_DIR
+from src.utils.plots import plot_training_history
 
 try:
     import tensorflow as tf
@@ -50,10 +51,28 @@ class LibrasLSTMTrainer:
 
     def _resolve_sequences_dir(self) -> str:
         """Retorna o diretório temporal atual com fallback para o legado."""
+        # Se o diretório configurado existe, verifique se contém classes/arquivos
         if os.path.isdir(self.sequences_dir):
-            return self.sequences_dir
+            # retornar se houver subdiretórios (classes) ou arquivos .npy
+            try:
+                entries = [e for e in os.listdir(self.sequences_dir) if e and not e.startswith('.')]
+            except OSError:
+                entries = []
+
+            if entries:
+                return self.sequences_dir
+
+        # Fallback para o diretório legado, caso haja dados lá
         if os.path.isdir(LEGACY_TEMPORAL_DATASET_DIR):
-            return LEGACY_TEMPORAL_DATASET_DIR
+            try:
+                legacy_entries = [e for e in os.listdir(LEGACY_TEMPORAL_DATASET_DIR) if e and not e.startswith('.')]
+            except OSError:
+                legacy_entries = []
+
+            if legacy_entries:
+                return LEGACY_TEMPORAL_DATASET_DIR
+
+        # Por fim, retornar o configurado (mesmo que esteja vazio)
         return self.sequences_dir
 
     def _get_allowed_class_set(self) -> set:
@@ -112,7 +131,15 @@ class LibrasLSTMTrainer:
                 if sequence.shape != (self.sequence_length, self.feature_size):
                     continue
 
-                data.append(sequence.astype(np.float32))
+                sequence = sequence.astype(np.float32)
+                data.append(sequence)
+                labels.append(idx)
+
+                # Evita duplicar espelhamento quando o arquivo já é _mirror.
+                if '_mirror' in filename:
+                    continue
+
+                data.append(self._mirror_sequence(sequence))
                 labels.append(idx)
 
         if not data:
@@ -122,6 +149,20 @@ class LibrasLSTMTrainer:
             )
 
         return np.asarray(data), np.asarray(labels), self.label_map
+
+    def _mirror_sequence(self, sequence: np.ndarray) -> np.ndarray:
+        mirrored = np.asarray(sequence, dtype=np.float32).copy()
+        if mirrored.ndim != 2:
+            mirrored = mirrored.reshape(self.sequence_length, self.feature_size)
+
+        if self.feature_size % 3 != 0:
+            return mirrored
+
+        if FEATURE_MODE == 'wrist_relative':
+            mirrored[:, 0::3] = -mirrored[:, 0::3]
+        else:
+            mirrored[:, 0::3] = 1.0 - mirrored[:, 0::3]
+        return mirrored
 
     def build_model(self, num_classes: int):
         """Constrói a arquitetura LSTM."""
@@ -175,6 +216,17 @@ class LibrasLSTMTrainer:
             'restrict_to_allowed_classes': self.restrict_to_allowed_classes,
             'history': history.history,
         }
+        # salvar gráficos de treinamento (histórico + gráfico de precisão separado)
+        try:
+            plot_training_history({
+                'training_loss': history.history.get('loss', []),
+                'validation_loss': history.history.get('val_loss', []),
+                'training_accuracy': history.history.get('accuracy', []),
+                'validation_accuracy': history.history.get('val_accuracy', []),
+            }, save_path=os.path.join('training_plots', 'training_history_lstm.png'))
+        except Exception:
+            pass
+
         self.save_model()
         return history
 

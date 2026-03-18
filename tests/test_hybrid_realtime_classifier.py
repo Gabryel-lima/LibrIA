@@ -51,6 +51,36 @@ class HybridRealtimeClassifierStaticModelTests(unittest.TestCase):
         self.assertEqual(metadata['num_features'], 42)
         self.assertEqual(metadata['feature_mode'], 'bounding_box')
 
+    def test_mirror_features_inverts_x_axis_for_landmark_layout(self):
+        classifier = LibrasHybridRealtimeClassifier.__new__(LibrasHybridRealtimeClassifier)
+
+        features = np.zeros(63, dtype=np.float32)
+        features[0::3] = np.linspace(0.1, 0.9, 21, dtype=np.float32)
+        features[1::3] = 0.5
+        features[2::3] = 0.25
+
+        mirrored = classifier._mirror_features(features)
+
+        self.assertTrue(np.allclose(mirrored[0::3], -features[0::3]))
+        self.assertTrue(np.allclose(mirrored[1::3], features[1::3]))
+        self.assertTrue(np.allclose(mirrored[2::3], features[2::3]))
+
+    def test_mirror_sequence_applies_framewise_mirroring(self):
+        classifier = LibrasHybridRealtimeClassifier.__new__(LibrasHybridRealtimeClassifier)
+        classifier.temporal_feature_mode = 'wrist_relative'
+        classifier.sequence_length = 4
+
+        sequence = np.zeros((4, 63), dtype=np.float32)
+        sequence[:, 0::3] = np.linspace(0.2, 0.8, 21, dtype=np.float32)
+        sequence[:, 1::3] = 0.5
+        sequence[:, 2::3] = 0.25
+
+        mirrored = classifier._mirror_sequence(sequence)
+
+        self.assertTrue(np.allclose(mirrored[:, 0::3], -sequence[:, 0::3]))
+        self.assertTrue(np.allclose(mirrored[:, 1::3], sequence[:, 1::3]))
+        self.assertTrue(np.allclose(mirrored[:, 2::3], sequence[:, 2::3]))
+
 
 if __name__ == '__main__':
     unittest.main()

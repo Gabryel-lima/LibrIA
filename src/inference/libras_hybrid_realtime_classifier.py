@@ -193,7 +193,18 @@ class LibrasHybridRealtimeClassifier:
         except AttributeError:
             confidence = 0.0
 
-        token = self.alphabet_dict.get(int(prediction), '?')
+        mirrored_features = self._mirror_features(features, self.static_feature_mode)
+        mirrored_prediction = self.static_model.predict([mirrored_features])[0]
+        try:
+            mirrored_confidence = float(np.max(self.static_model.predict_proba([mirrored_features])[0]))
+        except AttributeError:
+            mirrored_confidence = 0.0
+
+        if mirrored_confidence > confidence:
+            prediction = mirrored_prediction
+            confidence = mirrored_confidence
+
+        token = self._static_prediction_to_token(prediction)
         return PredictionEvent(
             token=token,
             confidence=confidence,
@@ -203,6 +214,43 @@ class LibrasHybridRealtimeClassifier:
             frame_index=self.frame_index,
         )
 
+    def _static_prediction_to_token(self, prediction) -> str:
+        """Normalize static model prediction to a single-letter token.
+
+        Handles cases where the model returns an integer index or a string label
+        (e.g., 'G'). Falls back to '?' when conversion fails.
+        """
+        # Numpy scalar or Python int
+        try:
+            if isinstance(prediction, (int, np.integer)):
+                return self.alphabet_dict.get(int(prediction), '?')
+        except Exception:
+            pass
+
+        # Bytes -> decode
+        if isinstance(prediction, (bytes, bytearray)):
+            try:
+                prediction = prediction.decode('utf-8')
+            except Exception:
+                return '?'
+
+        # String labels (e.g., 'G') or numeric strings
+        if isinstance(prediction, str):
+            p = prediction.strip()
+            # If single alpha character, return uppercase
+            if len(p) == 1 and p.isalpha():
+                return p.upper()
+            # Try numeric string -> index
+            try:
+                idx = int(p)
+                return self.alphabet_dict.get(idx, '?')
+            except Exception:
+                # Unknown string format, return as-is (uppercased) if plausible
+                return p.upper() if p else '?'
+
+        # Fallback
+        return '?'
+
     def _predict_temporal(self) -> Optional[PredictionEvent]:
         if len(self.sequence_buffer) < self.sequence_length:
             return None
@@ -211,6 +259,19 @@ class LibrasHybridRealtimeClassifier:
         probabilities = self.temporal_model.predict(input_sequence, verbose=0)[0]
         label_idx = int(np.argmax(probabilities))
         confidence = float(probabilities[label_idx])
+
+        mirrored_sequence = self._mirror_sequence(np.asarray(self.sequence_buffer, dtype=np.float32))
+        mirrored_probabilities = self.temporal_model.predict(
+            np.expand_dims(mirrored_sequence, axis=0),
+            verbose=0,
+        )[0]
+        mirrored_label_idx = int(np.argmax(mirrored_probabilities))
+        mirrored_confidence = float(mirrored_probabilities[mirrored_label_idx])
+
+        if mirrored_confidence > confidence:
+            label_idx = mirrored_label_idx
+            confidence = mirrored_confidence
+
         token = self.temporal_label_map.get(label_idx, str(label_idx))
         return PredictionEvent(
             token=token,
@@ -225,6 +286,34 @@ class LibrasHybridRealtimeClassifier:
         self.sequence_buffer.append(features)
         self.sequence_timestamps.append(timestamp)
 
+    def _mirror_features(self, features: np.ndarray, feature_mode: Optional[str] = None) -> np.ndarray:
+        mode = feature_mode or getattr(self, 'feature_mode', FEATURE_MODE)
+        mirrored = np.asarray(features, dtype=np.float32).copy().reshape(-1)
+
+        if mirrored.size % 3 != 0:
+            return mirrored
+
+        if mode == 'wrist_relative':
+            mirrored[0::3] = -mirrored[0::3]
+        else:
+            mirrored[0::3] = 1.0 - mirrored[0::3]
+        return mirrored
+
+    def _mirror_sequence(self, sequence: np.ndarray) -> np.ndarray:
+        sequence_array = np.asarray(sequence, dtype=np.float32)
+        if sequence_array.ndim != 2:
+            sequence_array = sequence_array.reshape(self.sequence_length, -1)
+
+        mirrored = sequence_array.copy()
+        if mirrored.shape[1] % 3 != 0:
+            return mirrored
+
+        if self.temporal_feature_mode == 'wrist_relative':
+            mirrored[:, 0::3] = -mirrored[:, 0::3]
+        else:
+            mirrored[:, 0::3] = 1.0 - mirrored[:, 0::3]
+        return mirrored
+
     def _extract_features(self, landmarks) -> Tuple[np.ndarray, np.ndarray]:
         static_features = extract_landmarks_by_mode(landmarks, self.static_feature_mode)
 
@@ -235,25 +324,36 @@ class LibrasHybridRealtimeClassifier:
         return static_features, temporal_features
 
     def _draw_overlay(self, frame: np.ndarray) -> np.ndarray:
-        cv.putText(frame, 'LibrIA - Inferencia Hibrida', (10, 30), cv.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+        cv.putText(frame, 'LibrIA - Inferencia Hibrida', (10, 30), cv.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
         cv.putText(
             frame,
             f'Buffer temporal: {len(self.sequence_buffer)}/{self.sequence_length}',
             (10, 60),
             cv.FONT_HERSHEY_SIMPLEX,
             0.6,
-            (0, 220, 220),
+            (255, 0, 0), # Quem foi o gênio que inverteu o padrão RGB?
             2,
         )
 
-        if self.last_output is not None:
+        # if self.last_output is not None:
+        #     cv.putText(
+        #         frame,
+        #         f'Saida: {self.last_output.token} [{self.last_output.source}] {self.last_output.confidence:.2%}',
+        #         (10, 95),
+        #         cv.FONT_HERSHEY_SIMPLEX,
+        #         0.7,
+        #         (255, 0, 0), # Quem foi o gênio que inverteu o padrão RGB?
+        #         2,
+        #     )
+
+        if self.last_temporal_candidate is not None:
             cv.putText(
                 frame,
-                f'Saida: {self.last_output.token} [{self.last_output.source}] {self.last_output.confidence:.2%}',
+                f'Temporal: {self.last_temporal_candidate.token} {self.last_temporal_candidate.confidence:.2%}',
                 (10, 95),
                 cv.FONT_HERSHEY_SIMPLEX,
-                0.7,
-                (255, 0, 0),
+                0.55,
+                (255, 0, 0), # Quem foi o gênio que inverteu o padrão RGB?
                 2,
             )
 
@@ -264,18 +364,7 @@ class LibrasHybridRealtimeClassifier:
                 (10, 125),
                 cv.FONT_HERSHEY_SIMPLEX,
                 0.55,
-                (180, 255, 180),
-                2,
-            )
-
-        if self.last_temporal_candidate is not None:
-            cv.putText(
-                frame,
-                f'Temporal: {self.last_temporal_candidate.token} {self.last_temporal_candidate.confidence:.2%}',
-                (10, 150),
-                cv.FONT_HERSHEY_SIMPLEX,
-                0.55,
-                (180, 180, 255),
+                (255, 0, 0), # Quem foi o gênio que inverteu o padrão RGB?
                 2,
             )
 

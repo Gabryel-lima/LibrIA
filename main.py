@@ -500,6 +500,39 @@ def show_help():
         """
     print(help_text)
 
+
+def run_command(command: str) -> bool:
+    """Executa um comando e retorna sucesso/falha para controle de exit code."""
+    command_handlers = {
+        'collect_static': collect_static_data,
+        'collect_temporal': collect_temporal_data,
+        'collect_minimal': collect_minimal_dataset,
+        'train': train_model,
+        'train_lstm': train_lstm_model,
+        'train_embedded': train_embedded_model,
+        'train_embedded_temporal': train_embedded_temporal_model,
+        'train_embedded_all': train_embedded_models,
+        'export_embedded': export_embedded_bundle,
+        'train_hybrid': train_hybrid_models,
+        'infer': run_inference,
+        'infer_lstm': run_lstm_inference,
+        'infer_hybrid': run_hybrid_inference,
+        'infer_embedded': run_embedded_inference_check,
+        'all': run_pipeline,
+    }
+
+    if command == 'help':
+        show_help()
+        return True
+
+    handler = command_handlers.get(command)
+    if handler is None:
+        show_help()
+        return False
+
+    result = handler()
+    return True if result is None else bool(result)
+
 def main():
     """Função principal."""
     # Configurar logging
@@ -517,39 +550,8 @@ def main():
     # Parse argumentos
     args = parser.parse_args()
     
-    # Executar comando
-    if args.command == 'collect_static':
-        collect_static_data()
-    elif args.command == 'collect_temporal':
-        collect_temporal_data()
-    elif args.command == 'collect_minimal':
-        collect_minimal_dataset()
-    elif args.command == 'train':
-        train_model()
-    elif args.command == 'train_lstm':
-        train_lstm_model()
-    elif args.command == 'train_embedded':
-        train_embedded_model()
-    elif args.command == 'train_embedded_temporal':
-        train_embedded_temporal_model()
-    elif args.command == 'train_embedded_all':
-        train_embedded_models()
-    elif args.command == 'export_embedded':
-        export_embedded_bundle()
-    elif args.command == 'train_hybrid':
-        train_hybrid_models()
-    elif args.command == 'infer':
-        run_inference()
-    elif args.command == 'infer_lstm':
-        run_lstm_inference()
-    elif args.command == 'infer_hybrid':
-        run_hybrid_inference()
-    elif args.command == 'infer_embedded':
-        run_embedded_inference_check()
-    elif args.command == 'all':
-        run_pipeline()
-    else:
-        show_help()
+    success = run_command(args.command)
+    sys.exit(0 if success else 1)
 
 if __name__ == "__main__":
     main()

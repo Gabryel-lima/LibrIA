@@ -9,6 +9,7 @@ from sklearn.metrics import accuracy_score, classification_report
 from sklearn.model_selection import train_test_split
 
 from config.settings import EMBEDDED_CONFIG, STATIC_DATASET_DIR, STATIC_LABELS
+from src.utils.plots import plot_training_history
 
 try:
     import tensorflow as tf
@@ -150,6 +151,17 @@ class LibrasEmbeddedCNNTrainer:
             batch_size=batch_size,
             verbose=1,
         )
+
+        # salvar gráficos de treinamento (histórico + gráfico de precisão separado)
+        try:
+            plot_training_history({
+                'training_loss': history.history.get('loss', []),
+                'validation_loss': history.history.get('val_loss', []),
+                'training_accuracy': history.history.get('accuracy', []),
+                'validation_accuracy': history.history.get('val_accuracy', []),
+            }, save_path=os.path.join('training_plots', 'training_history_embedded.png'))
+        except Exception:
+            pass
 
         predictions = self.model.predict(x_test, verbose=0)
         predicted_labels = np.argmax(predictions, axis=1)

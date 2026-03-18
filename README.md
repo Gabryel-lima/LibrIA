@@ -256,11 +256,15 @@ python main.py all
 python main.py collect_static   # Coleta estática
 python main.py collect_temporal # Coleta temporal
 python main.py train            # Treinar modelo
+python main.py train_hybrid     # Retreino estático + temporal com status code confiável
 python main.py infer            # Inferência em tempo real
+python main.py infer_hybrid     # Inferência híbrida com arbitragem
 python main.py train_embedded_all # Treino embedded completo
 python main.py export_embedded    # Bundle e pacote do Pico
 python main.py infer_embedded     # Validação do bundle embedded
 ```
+
+Para automação local, CI ou scripts de shell, `main.py` agora propaga sucesso ou falha via exit code: `0` quando o comando conclui e `1` quando alguma etapa retorna erro.
 
 ## 🧭 Arquitetura Visual
 
@@ -304,6 +308,8 @@ make infer
 ```
 
 O fluxo estático grava `frame_XXX.png` e `sample_XXX.npy` em `dataset/static/<label>/` e treina um Random Forest salvo em `model/model.pickle`.
+
+Durante a coleta estática, o projeto também grava `sample_XXX_mirror.npy` para espelhar a amostra no eixo X. Se a pasta da classe já tiver apenas `frame_XXX.png`, a coleta faz backfill automático dos `sample_XXX.npy` ausentes antes de abrir a captura ao vivo e gera as versões espelhadas junto com as originais.
 
 #### 1.1. Fluxo embedded estático sem MediaPipe
 
@@ -382,6 +388,8 @@ make infer-lstm
 
 Esse fluxo grava sequências em `dataset/temporal/`, treina o modelo `model/libras_lstm.keras` e usa uma janela deslizante para inferência em tempo real.
 
+Cada sequência válida também ganha uma contraparte `seq_XXX_mirror.npy`. No treino host e no treino temporal embedded, o carregador aceita o diretório temporal legado como fallback quando o caminho principal configurado existe, mas está vazio.
+
 #### 2.1. Dataset mínimo recomendado
 
 ```bash
@@ -391,6 +399,8 @@ make infer-hybrid
 ```
 
 Esse é o fluxo recomendado para validar a arquitetura com 24 classes estáticas e as sequências temporais de `J` e `Z`.
+
+Na inferência híbrida, a etapa estática e a etapa temporal agora comparam a amostra original com sua versão espelhada e mantêm a hipótese de maior confiança antes da arbitragem final.
 
 #### 3. Calibração de câmera
 
@@ -420,8 +430,8 @@ O padrão atual é `wrist_relative`.
 
 O projeto trabalha com um dataset unificado em `dataset/`:
 
-- **Estático**: `dataset/static/<label>/frame_XXX.png` e `sample_XXX.npy`
-- **Temporal**: `dataset/temporal/<label>/seq_XXX.npy`
+- **Estático**: `dataset/static/<label>/frame_XXX.png`, `sample_XXX.npy` e `sample_XXX_mirror.npy`
+- **Temporal**: `dataset/temporal/<label>/seq_XXX.npy` e `seq_XXX_mirror.npy`
 
 Recursos úteis:
 
@@ -519,11 +529,17 @@ if results.multi_hand_landmarks:
 Arquivos mais importantes gerados pelo pipeline:
 
 - `dataset/static/<label>/sample_XXX.npy`
+- `dataset/static/<label>/sample_XXX_mirror.npy`
 - `dataset/static/<label>/frame_XXX.png`
 - `dataset/temporal/<label>/seq_XXX.npy`
+- `dataset/temporal/<label>/seq_XXX_mirror.npy`
 - `model/model.pickle`
 - `model/libras_lstm.keras`
 - `model/libras_lstm_labels.pickle`
+- `training_plots/training_history_lstm.png`
+- `training_plots/training_history_embedded.png`
+- `training_plots/training_history_temporal_embedded.png`
+- `training_plots/accuracy/accuracy_*.png`
 - `config/camera_matrix.npy`
 - `config/dist_coeffs.npy`
 

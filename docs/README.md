@@ -15,10 +15,10 @@
 
 ## O que mudou nesta rodada
 
-- Guia visual novo com diagramas menores e navegação por etapa em `ARCHITECTURE.md`
-- Documentação sincronizada com o pipeline embedded atual e export para Pico
-- Guia de desenvolvimento reescrito para refletir os comandos e artefatos reais
-- Guia de datasets ampliado com artefatos embedded e bundle exportável
+- Dataset documentado com artefatos espelhados `_mirror.npy` para coleta estática e temporal
+- Fluxo híbrido documentado com comparação original + espelhado antes da arbitragem
+- Guias de desenvolvimento e datasets atualizados com plots persistidos em `training_plots/`
+- README principal e índices atualizados para refletir exit code confiável em `main.py`
 
 ## Estrutura da pasta
 
@@ -48,6 +48,8 @@ make train
 make infer
 make train-lstm
 make infer-lstm
+make train-hybrid
+make infer-hybrid
 make train-embedded-all
 make export-embedded
 make infer-embedded
@@ -61,4 +63,4 @@ make capture-calibration
 - [../CONTRIBUTING.md](../CONTRIBUTING.md)
 - [../DOCUMENTATION_INDEX.md](../DOCUMENTATION_INDEX.md)
 
-Última atualização: 2026-03-12
+Última atualização: 2026-03-17

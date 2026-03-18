@@ -8,7 +8,8 @@ import numpy as np
 from sklearn.metrics import accuracy_score, classification_report
 from sklearn.model_selection import train_test_split
 
-from config.settings import EMBEDDED_TEMPORAL_CONFIG, TEMPORAL_DATASET_DIR
+from config.settings import EMBEDDED_TEMPORAL_CONFIG, TEMPORAL_DATASET_DIR, LEGACY_TEMPORAL_DATASET_DIR
+from src.utils.plots import plot_training_history
 
 try:
     import tensorflow as tf
@@ -61,14 +62,25 @@ class LibrasEmbeddedTemporalCNNTrainer:
         self.training_history: Dict[str, object] = {}
 
     def load_dataset(self) -> Tuple[np.ndarray, np.ndarray, Dict[int, str]]:
-        if not os.path.isdir(self.dataset_dir):
-            raise FileNotFoundError(f'Diretório temporal embedded não encontrado: {self.dataset_dir}')
+        # Se o diretório configurado existe mas está vazio, tente o diretório legado
+        dataset_dir = self.dataset_dir
+        if os.path.isdir(dataset_dir):
+            try:
+                entries = [e for e in os.listdir(dataset_dir) if e and not e.startswith('.')]
+            except OSError:
+                entries = []
+
+            if not entries and os.path.isdir(LEGACY_TEMPORAL_DATASET_DIR):
+                dataset_dir = LEGACY_TEMPORAL_DATASET_DIR
+
+        if not os.path.isdir(dataset_dir):
+            raise FileNotFoundError(f'Diretório temporal embedded não encontrado: {dataset_dir}')
 
         data: List[np.ndarray] = []
         labels: List[int] = []
         class_names = [
-            entry for entry in sorted(os.listdir(self.dataset_dir))
-            if os.path.isdir(os.path.join(self.dataset_dir, entry)) and entry.upper() in self.allowed_classes
+            entry for entry in sorted(os.listdir(dataset_dir))
+            if os.path.isdir(os.path.join(dataset_dir, entry)) and entry.upper() in self.allowed_classes
         ]
 
         if not class_names:
@@ -77,7 +89,7 @@ class LibrasEmbeddedTemporalCNNTrainer:
         for class_name in class_names:
             class_index = len(self.label_map)
             self.label_map[class_index] = class_name
-            class_dir = os.path.join(self.dataset_dir, class_name)
+            class_dir = os.path.join(dataset_dir, class_name)
             sequence_files = [
                 filename for filename in sorted(os.listdir(class_dir))
                 if filename.startswith('seq_') and filename.endswith('.npy')
@@ -170,6 +182,17 @@ class LibrasEmbeddedTemporalCNNTrainer:
             'history': history.history,
             'classification_report': report,
         }
+
+        # salvar gráficos de treinamento (histórico + gráfico de precisão separado)
+        try:
+            plot_training_history({
+                'training_loss': history.history.get('loss', []),
+                'validation_loss': history.history.get('val_loss', []),
+                'training_accuracy': history.history.get('accuracy', []),
+                'validation_accuracy': history.history.get('val_accuracy', []),
+            }, save_path=os.path.join('training_plots', 'training_history_temporal_embedded.png'))
+        except Exception:
+            pass
 
         self._save_model()
         self._export_tflite_int8(x_train)

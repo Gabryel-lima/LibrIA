@@ -52,10 +52,12 @@ Ou diretamente:
 
 ```bash
 python test_setup.py
-python -m unittest tests.test_embedded_bundle tests.test_embedded_cnn_trainer tests.test_static_dataset_loader
+python -m unittest tests.test_embedded_bundle tests.test_embedded_cnn_trainer tests.test_static_dataset_loader tests.test_lstm_dataset_loader tests.test_hybrid_realtime_classifier tests.test_main_command_exit_code
 black src/ main.py
 flake8 src/ main.py --max-line-length=119 --exclude=__pycache__
 ```
+
+Se o comando vier de `main.py`, o processo agora encerra com `0` em sucesso e `1` em falha. Isso permite usar `make train-hybrid`, `python main.py train_hybrid` e comandos similares em automações sem parsear texto do terminal.
 
 ## Fluxos principais para desenvolvimento
 
@@ -69,7 +71,11 @@ make infer
 
 Artefatos principais:
 - `dataset/static/<label>/sample_XXX.npy`
+- `dataset/static/<label>/sample_XXX_mirror.npy`
 - `model/model.pickle`
+
+Observação prática:
+- A coleta estática faz backfill dos `sample_XXX.npy` ausentes a partir de `frame_XXX.png` já existentes e grava a versão espelhada na mesma passada.
 
 ### 2. Pipeline temporal host
 
@@ -81,8 +87,13 @@ make infer-lstm
 
 Artefatos principais:
 - `dataset/temporal/<label>/seq_XXX.npy`
+- `dataset/temporal/<label>/seq_XXX_mirror.npy`
 - `model/libras_lstm.keras`
 - `model/libras_lstm_labels.pickle`
+- `training_plots/training_history_lstm.png`
+
+Observação prática:
+- O trainer LSTM usa `LEGACY_TEMPORAL_DATASET_DIR` como fallback quando o diretório temporal principal configurado existe, mas está vazio.
 
 ### 3. Pipeline híbrido host
 
@@ -91,6 +102,10 @@ make collect-minimal-dataset
 make train-hybrid
 make infer-hybrid
 ```
+
+Notas de comportamento:
+- `make train-hybrid` falha com status não nulo se o dataset estático ou temporal estiver ausente, ou se alguma das duas etapas de treino falhar.
+- `make infer-hybrid` testa a hipótese original e a hipótese espelhada nas trilhas estática e temporal antes da arbitragem final.
 
 ### 4. Pipeline embedded
 
@@ -105,6 +120,9 @@ Artefatos principais:
 - `model/libria_embedded_temporal_cnn_int8.tflite`
 - `model/embedded_bundle/embedded_bundle.json`
 - `model/embedded_bundle/pico_package/`
+- `training_plots/training_history_embedded.png`
+- `training_plots/training_history_temporal_embedded.png`
+- `training_plots/accuracy/accuracy_*.png`
 
 ### 5. Calibração de câmera
 
@@ -148,6 +166,7 @@ As principais chaves ficam em `config/settings.py`:
 - Use `main.py` ou o Makefile para manter o mesmo fluxo documentado.
 - O dataset estático fica em `dataset/static/<label>/sample_XXX.npy`.
 - O dataset temporal fica em `dataset/temporal/<label>/seq_XXX.npy`.
+- Sufixos `_mirror.npy` fazem parte do pipeline atual e não devem ser removidos do dataset ativo sem intenção explícita.
 - O Random Forest fica em `model/model.pickle`.
 - O modelo temporal host fica em `model/libras_lstm.keras`.
 - O runtime embedded no dispositivo parte de `src/interfaces/libria_embedded_runtime.h` e `src/interfaces/libria_embedded_runtime.cpp`.
@@ -193,4 +212,4 @@ make export-embedded
 - [ ] Atualizei `CHANGELOG.md` quando a mudança alterou comportamento visível
 - [ ] Revisei se o impacto em host e embedded foi coberto quando aplicável
 
-Ultima atualizacao: 2026-03-12
+Ultima atualizacao: 2026-03-17

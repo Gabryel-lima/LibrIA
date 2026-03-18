@@ -66,6 +66,24 @@ def _storage_shape(features: np.ndarray) -> np.ndarray:
     return array
 
 
+def _mirror_landmark_sample(sample: np.ndarray) -> np.ndarray:
+    mirrored = np.asarray(sample, dtype=np.float32).copy()
+
+    if mirrored.ndim == 2 and mirrored.shape[1] == 3:
+        if FEATURE_MODE == 'wrist_relative':
+            mirrored[:, 0] = -mirrored[:, 0]
+        else:
+            mirrored[:, 0] = 1.0 - mirrored[:, 0]
+        return mirrored
+
+    flat = mirrored.reshape(-1)
+    if FEATURE_MODE == 'wrist_relative':
+        flat[0::3] = -flat[0::3]
+    else:
+        flat[0::3] = 1.0 - flat[0::3]
+    return flat.reshape(mirrored.shape)
+
+
 def _next_sample_index(label_dir: str, prefix: str) -> int:
     existing_indices = []
     for filename in os.listdir(label_dir):
@@ -129,6 +147,7 @@ def _backfill_static_samples_from_frames(
     label_dir: str,
     calibration: Optional[Dict[str, np.ndarray]],
     extractor,
+    save_mirrored: bool = False,
 ) -> int:
     generated_samples = 0
 
@@ -155,8 +174,15 @@ def _backfill_static_samples_from_frames(
         if sample is None:
             continue
 
-        np.save(sample_path, np.asarray(sample, dtype=np.float32))
+        sample_array = np.asarray(sample, dtype=np.float32)
+        np.save(sample_path, sample_array)
         generated_samples += 1
+
+        if save_mirrored:
+            mirrored_path = os.path.join(label_dir, f'sample_{suffix}_mirror.npy')
+            if not os.path.exists(mirrored_path):
+                np.save(mirrored_path, _mirror_landmark_sample(sample_array))
+                generated_samples += 1
 
     return generated_samples
 
@@ -199,6 +225,7 @@ def collect_static(labels: List[str], samples_per_label: int, output_dir: str, c
                 label_dir,
                 calibration,
                 lambda frame: _extract_valid_sample_from_frame(frame, hands),
+                save_mirrored=True,
             )
             if generated_samples:
                 print(
@@ -246,11 +273,14 @@ def collect_static(labels: List[str], samples_per_label: int, output_dir: str, c
                     raise KeyboardInterrupt
                 if key in CAPTURE_KEYS and sample is not None:
                     sample_path = os.path.join(label_dir, f'sample_{sample_index:03d}.npy')
+                    mirror_path = os.path.join(label_dir, f'sample_{sample_index:03d}_mirror.npy')
                     frame_path = os.path.join(
                         label_dir,
                         f'frame_{sample_index:03d}{COLLECTION_CONFIG["static_frame_ext"]}',
                     )
-                    np.save(sample_path, np.asarray(sample, dtype=np.float32))
+                    sample_array = np.asarray(sample, dtype=np.float32)
+                    np.save(sample_path, sample_array)
+                    np.save(mirror_path, _mirror_landmark_sample(sample_array))
                     cv2.imwrite(frame_path, frame)
                     sample_index += 1
                     _write_manifest('static', labels, output_dir, samples_per_label, None)
@@ -377,7 +407,10 @@ def collect_temporal(labels: List[str], num_sequences: int, seq_length: int, out
                         raise KeyboardInterrupt
 
                 sequence_path = os.path.join(label_dir, f'seq_{sequence_index:03d}.npy')
-                np.save(sequence_path, np.asarray(sequence_frames, dtype=np.float32))
+                mirror_path = os.path.join(label_dir, f'seq_{sequence_index:03d}_mirror.npy')
+                sequence_array = np.asarray(sequence_frames, dtype=np.float32)
+                np.save(sequence_path, sequence_array)
+                np.save(mirror_path, _mirror_landmark_sample(sequence_array))
                 sequence_index += 1
                 _write_manifest('temporal', labels, output_dir, num_sequences, seq_length)
     finally:
