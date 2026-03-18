@@ -545,7 +545,7 @@ Arquivos mais importantes gerados pelo pipeline:
 
 ## 🎥 Demonstração
 
-[![Vídeo de Demonstração](https://img.shields.io/badge/YouTube-Demonstração-red)](https://www.linkedin.com/posts/joao-emanuel-7bb2981a4_projeto-de-vis%C3%A3o-computacional-com-linguagem-activity-7345904031329845248-s-o2?utm_source=share&utm_medium=member_desktop&rcm=ACoAAC-9a38B_ih9uTXawvKzjklse66Jn0wYGio)
+[![Vídeo de Demonstração](https://img.shields.io/badge/YouTube-Demonstração-red)](https://youtu.be/WT0BZP_kRvQ?si=gDnGLICMUs_cUyn-)
 
 ## 🔧 Personalização
 
