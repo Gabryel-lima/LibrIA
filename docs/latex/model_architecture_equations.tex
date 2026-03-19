@@ -1,0 +1,201 @@
+\documentclass[12pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb}
+\usepackage{microtype}
+\usepackage{geometry}
+\geometry{margin=1in}
+\title{LibrIA — Cálculos, Equações e Fórmulas\\Modelos Estático, Temporal e Híbrido}
+\author{Repo: LibrIA}
+\date{19 de março de 2026}
+
+\begin{document}
+\sloppy
+\maketitle
+\section*{Notação}
+- $x\in\mathbb{R}^D$: vetor de features estáticas (dimensão $D=\text{FEATURE\_DIMENSION}$).\\
+- $T$: número de estimadores (árvores) quando aplicável.\\
+- $K$: número de classes.\\
+- $\mathbf{X}\in\mathbb{R}^{L\times F}$: sequência temporal de comprimento $L$ (sequence\_length) e $F$ features por frame (feature\_size).\\
+- $p(y=k\mid\cdot)$: probabilidade estimada para a classe $k$.
+\bigskip
+
+\section*{1. Extração e Normalização de Features}
+\subsection*{1.1 Modo \textit{bounding\_box} (42 features)}
+Dado o conjunto de $21$ landmarks com coordenadas normalizadas $(x_i,y_i)$:
+\[
+x'_{i}=x_i-\min_j x_j,\qquad y'_{i}=y_i-\min_j y_j\qquad (i=1,\dots,21).
+\]
+O vetor de features é
+\[
+\mathbf{f}_{\text{bbox}} = [x'_1,y'_1,\dots,x'_{21},y'_{21}]\in\mathbb{R}^{42}.
+\]
+
+\subsection*{1.2 Modo \textit{wrist\_relative} (63 features)}
+Defina o pulso (wrist) como $p_{0}=(x_0,y_0,z_0)$. Para cada landmark $i$ com $p_i=(x_i,y_i,z_i)$:
+\[
+r_i = p_i - p_0,\qquad d_i=\lVert r_i\rVert_2.
+\]
+Se $d_{\max}=\max_i d_i>0$, normaliza-se:
+\[
+\tilde r_i = \frac{r_i}{d_{\max}}.
+\]
+O vetor de features é o empilhamento:
+\[
+\mathbf{f}_{\text{wrist}} = [\tilde r_1^\top,\tilde r_2^\top,\dots,\tilde r_{21}^\top]\in\mathbb{R}^{63}.
+\]
+
+\subsection*{1.3 Espelhamento (mirror) usado em inferência/treino}
+- Se modo = \textit{wrist\_relative}: espelha eixo $x$:
+\[
+\tilde r_{i,x} \leftarrow -\tilde r_{i,x}.
+\]
+- Se modo = \textit{bounding\_box}: espelha como $x \leftarrow 1-x$ (já normalizado no intervalo).
+
+\section*{2. Modelo Estático (Random Forest)}
+Entrada $\mathbf{x}\in\mathbb{R}^D$.
+
+Cada árvore $t$ produz uma predição $h_t(\mathbf{x})\in\{1,\dots,K\}$. A estimativa de probabilidade por classe é:
+\[
+\hat p(k\mid \mathbf{x}) = \frac{1}{T}\sum_{t=1}^{T} \mathbf{1}\{h_t(\mathbf{x})=k\}.
+\]
+Decisão final:
+\[
+\hat y = \arg\max_{k}\hat p(k\mid\mathbf{x}),\qquad
+\text{confiança} = \max_k \hat p(k\mid\mathbf{x}).
+\]
+
+Observação: se o objeto scikit-learn fornece $p(\cdot)$ diretamente, usa‑se essa média internamente.
+
+\section*{3. Arquitetura CNN Embutida (Estática)}
+Construção (entrada shape $(P,C)$ — p.ex. $P=21$, $C=3$):
+- Camada Conv1D: filtros $f_1=16$, kernel $k=3$, ativação ReLU.
+- Conv1D: $f_2=24$, kernel $3$, ReLU.
+- MaxPool1D$(s=2)$.
+- Conv1D: $f_3=32$, kernel $3$, ReLU.
+- GlobalAveragePooling1D.
+- Dense($32$), ReLU.
+- Dense($K$), Softmax.
+
+Operação de convolução 1D para um filtro $w\in\mathbb{R}^{k\times C}$ e bias $b$:
+\[
+z_{t} = \sum_{j=0}^{k-1} w_j\cdot x_{t+j} + b,\qquad a_t=\text{ReLU}(z_t)=\max(0,z_t).
+\]
+Global average pooling sobre tempo:
+\[
+g = \frac{1}{T'}\sum_{t=1}^{T'} a_t.
+\]
+Camada densa final (logits):
+\[
+z = W g + b,\qquad \hat p = \text{softmax}(z),\quad \text{softmax}(z)_i=\frac{e^{z_i}}{\sum_j e^{z_j}}.
+\]
+
+Função de perda usada (treino): sparse categorical crossentropy
+\[
+\mathcal{L} = -\frac{1}{N}\sum_{n=1}^{N}\log \big(\hat p_{y^{(n)}}(\mathbf{x}^{(n)})\big).
+\]
+
+O otimizador: Adam (parâmetros padrão do Keras, não expostos como equação aqui).
+
+\section*{4. Arquitetura CNN Temporal (Embeddable)}
+Entrada: $\mathbf{X}\in\mathbb{R}^{L\times F}$ com $L=\text{sequence\_length}$ (tipicamente 30) e $F=\text{feature\_size}$.
+
+Camadas (conforme implementado):
+- Input$(L,F)$
+- Conv1D(24,3) ReLU
+- Conv1D(32,3) ReLU
+- MaxPool1D(2)
+- Conv1D(48,3) ReLU
+- GlobalAveragePooling1D
+- Dense(32) ReLU
+- Dense($K$) softmax
+
+As operações seguem as mesmas fórmulas de convolução, pooling e softmax da Secção 3.
+
+\section*{5. Arquitetura LSTM (Modelo Temporal Host)}
+Entrada: $\mathbf{X}\in\mathbb{R}^{L\times F}$.
+
+Camadas:
+- LSTM(128, return\_sequences=True)
+- Dropout(0.3)
+- LSTM(64)
+- Dropout(0.3)
+- Dense(64) ReLU
+- Dense($K$) softmax
+
+Equações internas do LSTM (por passo temporal $t$; vetores em negrito):
+\[
+\begin{aligned}
+i_t &= \sigma(W_i x_t + U_i h_{t-1} + b_i)\\
+f_t &= \sigma(W_f x_t + U_f h_{t-1} + b_f)\\
+o_t &= \sigma(W_o x_t + U_o h_{t-1} + b_o)\\
+\tilde c_t &= \tanh(W_c x_t + U_c h_{t-1} + b_c)\\
+c_t &= f_t \odot c_{t-1} + i_t \odot \tilde c_t\\
+h_t &= o_t \odot \tanh(c_t).
+\end{aligned}
+\]
+Posteriormente, $h_{L}$ (ou saída do último LSTM) é passada por Dense/ReLU e softmax para produzir $\hat p$; perda: mesma crossentropy como acima.
+
+\section*{6. Regras de Inferência Híbrida e Arbitragem}
+
+Existem duas camadas de regras: (A) runtime embeddable \texttt{choose\_embedded\_prediction} e (B) \texttt{PredictionMerger} (host).
+
+(A) Escolha no runtime embedded (regra declarativa):
+- Se existir previsão temporal válida e
+  \[
+  \text{confidence}_{\text{temporal}} \ge \tau_{temporal}
+  \quad\text{e}\quad
+  \text{token}_{\text{temporal}}\in\mathcal{C}_{prioridade},
+  \]
+  então escolher previsão temporal.
+- Senão, se
+  \[
+  \text{confidence}_{\text{static}} \ge \tau_{static},
+  \]
+  escolher previsão estática.
+- Senão, nenhum token é emitido.
+
+(B) \texttt{PredictionMerger} (host) — comportamento formal:
+- Parâmetros: $\mathcal{C}_{prioridade}$ (temporal priority classes), $\tau_{temporal}$, $\tau_{static}$, $t_{cooldown}$.
+- Estado: $t_{\text{active\_temporal}}$ (tempo até quando predições estáticas são suprimidas).
+- Ao submeter evento temporal $e$ com token $k$ e confiança $c$:
+  - Se $k\notin\mathcal{C}_{prioridade}$ OR $c<\tau_{temporal}$: ignorar (não emitir).
+  - Caso contrário: emitir $e$ e atualizar
+    \[
+    t_{\text{active\_temporal}} \leftarrow \max\big(t_{\text{active\_temporal}},\, t_{\text{end}}(e)+t_{cooldown}\big).
+    \]
+- Ao submeter evento estático $s$ com confiança $c$ e início $t_{\text{start}}$:
+  - Se $c<\tau_{static}$: ignorar.
+  - Se $t_{\text{start}}\le t_{\text{active\_temporal}}$: ignorar (bloqueado por janela temporal ativa).
+  - Caso contrário: emitir $s$.
+Essas regras implementam desigualdades simples e atualizações de estado com máximo.
+
+\section*{7. Métricas e Confiança}
+- Para modelos com probabilidade de saída: confiança = $\max_k \hat p(k\mid \cdot)$.\\
+- Acurácia: $\frac{1}{N}\sum_{n}\mathbf{1}\{\hat y^{(n)}=y^{(n)}\}$.\\
+- Durante treino registra-se \emph{training/validation loss} e \emph{accuracy} por época.
+
+\section*{8. Observações de Implementação Relevantes}
+ - Dimensões configuradas (em \texttt{config/settings.py}):
+  
+  \[
+  \text{FEATURE\_DIMENSIONS: bounding\_box}=42,\quad wrist\_relative=63.
+  \]
+  Modo padrão: \texttt{wrist\_relative}. Sequence\_length típica: $L=30$.
+- Quantização embedded: modelos Keras são exportados para TFLite int8 para deployment; fluxos de quantização aplicam mapeamento de ponto flutuante para representação inteira (não detalhado aqui, pois depende do calibrator e estatísticas de referência).
+ - Random Forest usa parâmetros em \texttt{MODEL\_CONFIG} (ex.: $n\_estimators=100$).
+
+\section*{9. Referências de Códigos (onde as fórmulas são aplicadas)}
+ - Pré-processamento / normalização: \texttt{utils/helpers.py} (\texttt{landmarks\_to\_relative}, \texttt{landmarks\_to\_bounding\_box}).\\
+ - Modelos embarcados (CNN estático/temporal): \texttt{src/model\_training/libras\_embedded\_cnn\_trainer.py}, \texttt{src/model\_training/libras\_embedded\_temporal\_cnn\_trainer.py} (arquiteturas Conv1D, pooling, GAP, Dense, Softmax).\\
+ - LSTM host: \texttt{src/model\_training/libras\_lstm\_trainer.py} (camadas LSTM e configuração).\\
+ - RandomForest e pipeline estático: \texttt{src/model\_training/libras\_model\_trainer.py} e artefato \texttt{model/model.pickle}.\\
+ - Lógica híbrida / arbitragem: \texttt{src/inference/prediction\_merger.py} e \texttt{src/inference/libras\_embedded\_runtime.py}.
+
+\section*{10. Conclusão}
+Este documento reúne as fórmulas essenciais para estudar a arquitetura: transformação de landmarks, operações convolucionais/recorrentes, função softmax/cross‑entropy, estimativa de probabilidade do Random Forest e regras de arbitragem híbrida. Se quiser, eu:
+- gero o PDF compilado deste \LaTeX{}; ou
+- salvo o .tex em \texttt{docs/} do repositório e abro um PR.
+
+\end{document}

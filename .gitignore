@@ -277,3 +277,16 @@ dataset/temporal
 
 # .npy
 #config/*.npy
+
+# LaTeX build artifacts (generated in docs/latex)
+/docs/latex/*.aux
+/docs/latex/*.log
+/docs/latex/*.out
+/docs/latex/*.toc
+/docs/latex/*.fls
+/docs/latex/*.fdb_latexmk
+/docs/latex/*.synctex.gz
+#/docs/latex/*.pdf
+
+# latexmk/state files
+/docs/latex/.latexmk

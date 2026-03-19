@@ -46,6 +46,8 @@ O **LibrIA** é um sistema de reconhecimento de Libras baseado em visão computa
 - **[docs/DATASETS.md](docs/DATASETS.md)** - Datasets disponíveis e como obter dados
 - **[docs/AVX_COMPATIBILITY.md](docs/AVX_COMPATIBILITY.md)** - Guia para CPUs sem suporte AVX
 - **[docs/video_format_changes.md](docs/video_format_changes.md)** - Mudanças de formatos de vídeo
+- **[docs/model_architecture_equations.tex](docs/model_architecture_equations.tex)** - (TEX disponível) Com fórmulas essenciais da arquitetura
+- **[docs/latex/model_architecture_equations.pdf](docs/latex/model_architecture_equations.pdf)** - (PDF disponível) Com fórmulas essenciais da arquitetura
 
 ### 🏛️ Governança e Comunidade
 - **[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)** - Código de conduta
