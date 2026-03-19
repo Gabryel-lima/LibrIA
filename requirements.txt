@@ -10,8 +10,11 @@
 # Core ML/DL (COMMENTED OUT IF - requires AVX)
 tensorflow==2.16.1
 keras==3.13.2
-torch==2.8.0
-torchvision==0.20.1
+# PyTorch / TorchVision: use matching versions for your environment.
+# Use a compatible range to reduce strict resolver conflicts. For GPU/CUDA
+# builds install the exact wheel recommended by https://pytorch.org/get-started/locally/
+torch>=2.5.1,<2.9
+torchvision>=0.20.1,<0.21
 
 # Landmark Detection (if using MediaPipe)
 mediapipe==0.10.14  # ⚠️ Requires AVX support
