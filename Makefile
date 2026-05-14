@@ -323,7 +323,7 @@ run-lstm: verify-setup dirs ## ▶️  Pipeline temporal: coletar, treinar, infe
 
 run: verify-setup dirs ## ▶️  Executa pipeline completo (collect-minimal→train-hybrid→infer-hybrid)
 	@echo "$(BOLD)$(GREEN)╔════════════════════════════════════════════════════════════════╗$(NC)"
-	@echo "$(BOLD)$(GREEN)║$(NC)       Executando Pipeline Completo de LibrIA          $(BOLD)$(GREEN)║$(NC)"
+	@echo "$(BOLD)$(GREEN)║$(NC)       Executando Pipeline Completo de LibrIA                  $(BOLD)$(GREEN)║$(NC)"
 	@echo "$(BOLD)$(GREEN)╚════════════════════════════════════════════════════════════════╝$(NC)"
 	@$(VENV_PYTHON) main.py all
 	@echo "$(BOLD)$(GREEN)═══════════════════════════════════════════════════════════════$(NC)"
