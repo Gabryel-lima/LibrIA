@@ -13,7 +13,7 @@ keras==3.13.2
 # PyTorch / TorchVision: use matching versions for your environment.
 # Use a compatible range to reduce strict resolver conflicts. For GPU/CUDA
 # builds install the exact wheel recommended by https://pytorch.org/get-started/locally/
-torch>=2.5.1,<2.9
+torch>=2.12.0,<2.13
 torchvision>=0.20.1,<0.21
 
 # Landmark Detection (if using MediaPipe)
@@ -26,7 +26,7 @@ scikit-learn==1.6.1
 opencv-python==4.11.0.86
 opencv-contrib-python==4.11.0.86
 # mediapipe==0.10.14  # ⚠️ Requires AVX support - use on machine with AVX
-Pillow==12.1.1
+Pillow==12.2.0
 
 # Numerical & Scientific
 numpy==1.26.4
@@ -39,7 +39,7 @@ sounddevice==0.5.2
 
 # Utilities
 joblib==1.4.2
-python-dotenv==1.0.1
+python-dotenv==1.2.2
 tqdm==4.67.1
 
 # Visualization & Logging
