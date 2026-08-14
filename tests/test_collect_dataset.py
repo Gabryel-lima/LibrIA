@@ -6,7 +6,13 @@ import unittest
 import cv2
 import numpy as np
 
-from scripts.collect_dataset import _backfill_static_samples_from_frames
+from scripts.collect_dataset import (
+    CaptureContext,
+    _backfill_static_samples_from_frames,
+    _resolve_vocabulary_labels,
+)
+from config.vocabulary import MODALITY_STATIC, MODALITY_TEMPORAL, UNKNOWN_LABEL
+from src.dataset.sample_metadata import read_metadata
 
 
 class StaticCollectionBackfillTests(unittest.TestCase):
@@ -91,6 +97,103 @@ class StaticCollectionBackfillTests(unittest.TestCase):
             self.assertTrue(np.allclose(mirrored[:, 1:], sample[:, 1:]))
         finally:
             shutil.rmtree(temp_dir)
+
+
+class StaticCollectionMetadataTests(unittest.TestCase):
+    def test_backfill_writes_metadata_for_sample_and_mirror(self):
+        temp_dir = tempfile.mkdtemp(prefix='libria-static-metadata-')
+
+        try:
+            label_dir = os.path.join(temp_dir, 'A')
+            os.makedirs(label_dir, exist_ok=True)
+
+            cv2.imwrite(
+                os.path.join(label_dir, 'frame_003.png'),
+                np.full((32, 32, 3), 160, dtype=np.uint8),
+            )
+
+            context = CaptureContext(
+                subject_id='pessoa_01',
+                camera_id='webcam_c920',
+                environment='sala_luz_natural',
+                dominant_hand='right',
+            )
+
+            generated = _backfill_static_samples_from_frames(
+                label_dir,
+                calibration=None,
+                extractor=lambda image: np.ones((21, 3), dtype=np.float32),
+                save_mirrored=True,
+                context=context,
+            )
+
+            self.assertEqual(generated, 2)
+
+            metadata = read_metadata(os.path.join(label_dir, 'sample_003.npy'))
+            self.assertIsNotNone(metadata)
+            self.assertEqual(metadata.label, 'A')
+            self.assertEqual(metadata.modality, MODALITY_STATIC)
+            self.assertEqual(metadata.sign_type, 'alphabet')
+            self.assertEqual(metadata.subject_id, 'pessoa_01')
+            self.assertEqual(metadata.camera_id, 'webcam_c920')
+            self.assertEqual(metadata.environment, 'sala_luz_natural')
+            self.assertEqual(metadata.dominant_hand, 'right')
+            self.assertFalse(metadata.mirrored)
+
+            mirrored = read_metadata(os.path.join(label_dir, 'sample_003_mirror.npy'))
+            self.assertIsNotNone(mirrored)
+            self.assertTrue(mirrored.mirrored)
+            self.assertEqual(mirrored.dominant_hand, 'left')
+            self.assertEqual(mirrored.source_sample, 'sample_003.npy')
+        finally:
+            shutil.rmtree(temp_dir)
+
+    def test_backfill_without_context_keeps_legacy_behavior(self):
+        temp_dir = tempfile.mkdtemp(prefix='libria-static-metadata-')
+
+        try:
+            label_dir = os.path.join(temp_dir, 'A')
+            os.makedirs(label_dir, exist_ok=True)
+            cv2.imwrite(
+                os.path.join(label_dir, 'frame_004.png'),
+                np.full((32, 32, 3), 160, dtype=np.uint8),
+            )
+
+            _backfill_static_samples_from_frames(
+                label_dir,
+                calibration=None,
+                extractor=lambda image: np.ones((21, 3), dtype=np.float32),
+            )
+
+            self.assertTrue(os.path.exists(os.path.join(label_dir, 'sample_004.npy')))
+            self.assertIsNone(read_metadata(os.path.join(label_dir, 'sample_004.npy')))
+        finally:
+            shutil.rmtree(temp_dir)
+
+
+class VocabularySelectionTests(unittest.TestCase):
+    def test_temporal_selection_covers_each_family(self):
+        alphabet = _resolve_vocabulary_labels('alphabet', MODALITY_TEMPORAL)
+        lexical = _resolve_vocabulary_labels('lexical', MODALITY_TEMPORAL)
+        functional = _resolve_vocabulary_labels('functional', MODALITY_TEMPORAL)
+        every = _resolve_vocabulary_labels('all', MODALITY_TEMPORAL)
+
+        self.assertEqual(alphabet, ['J', 'Z'])
+        self.assertIn('OI', lexical)
+        self.assertIn('APAGAR', functional)
+        self.assertEqual(set(every), set(alphabet) | set(lexical) | set(functional))
+
+    def test_unknown_selection_targets_the_rejection_class(self):
+        self.assertEqual(
+            _resolve_vocabulary_labels('unknown', MODALITY_TEMPORAL), [UNKNOWN_LABEL]
+        )
+
+    def test_static_selection_stays_on_the_alphabet(self):
+        labels = _resolve_vocabulary_labels('all', MODALITY_STATIC)
+
+        self.assertIn('A', labels)
+        self.assertNotIn('J', labels)
+        self.assertNotIn('OI', labels)
 
 
 if __name__ == '__main__':

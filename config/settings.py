@@ -9,6 +9,17 @@ incluindo parâmetros de coleta de dados, processamento e inferência.
 import os
 from typing import Dict, List
 
+from config.vocabulary import (
+    MODALITY_STATIC,
+    MODALITY_TEMPORAL,
+    SIGN_TYPE_ALPHABET,
+    SIGN_TYPE_FUNCTIONAL,
+    SIGN_TYPE_LEXICAL,
+    UNKNOWN_LABEL,
+    get_labels,
+    validate_vocabulary,
+)
+
 # Configurações de Diretórios
 DATA_DIR = './data'
 DATASET_DIR = './dataset'
@@ -24,8 +35,16 @@ DATASET_SIZE = int(os.getenv('LIBRIA_DATASET_SIZE', '150'))
 NUMBER_OF_CLASSES = 26
 ALPHABET_DICT = {i: chr(65 + i) for i in range(NUMBER_OF_CLASSES)}
 HANDS = ['Right', 'Left']
-STATIC_LABELS = [label for label in ALPHABET_DICT.values() if label not in {'J', 'Z'}]
-TEMPORAL_LABELS = ['J', 'Z']
+
+# Labels derivados do vocabulário (config/vocabulary.py é a fonte de verdade).
+# STATIC_LABELS/TEMPORAL_LABELS continuam sendo apenas o alfabeto manual para
+# não alterar os fluxos de coleta e treino existentes; o vocabulário completo
+# (palavras e gestos funcionais) fica em TEMPORAL_VOCABULARY_LABELS.
+STATIC_LABELS = get_labels(sign_type=SIGN_TYPE_ALPHABET, modality=MODALITY_STATIC)
+TEMPORAL_LABELS = get_labels(sign_type=SIGN_TYPE_ALPHABET, modality=MODALITY_TEMPORAL)
+LEXICAL_LABELS = get_labels(sign_type=SIGN_TYPE_LEXICAL)
+FUNCTIONAL_LABELS = get_labels(sign_type=SIGN_TYPE_FUNCTIONAL)
+TEMPORAL_VOCABULARY_LABELS = get_labels(modality=MODALITY_TEMPORAL)
 
 # Configurações do MediaPipe
 MEDIAPIPE_CONFIG = {
@@ -58,6 +77,22 @@ COLLECTION_CONFIG = {
     'min_detection_confidence': 0.8,
     'min_tracking_confidence': 0.8,
     'static_frame_ext': '.png',
+    # Metadados gravados junto de cada amostra (ver src/dataset/sample_metadata.py).
+    # Sobrescreva pela linha de comando a cada sessão de coleta.
+    'write_sample_metadata': True,
+    'default_subject_id': 'desconhecido',
+    'default_camera_id': 'desconhecido',
+    'default_environment': 'desconhecido',
+    'default_dominant_hand': 'desconhecido',
+}
+
+# Avaliação por pessoa, por classe e por ambiente (Fase 1 do plano).
+EVALUATION_CONFIG = {
+    'split_ratios': {'train': 0.6, 'validation': 0.2, 'test': 0.2},
+    'unknown_label': UNKNOWN_LABEL,
+    # Abaixo deste limiar a predição vira UNKNOWN_LABEL em vez de virar tradução.
+    'rejection_threshold': 0.75,
+    'report_path': './output/evaluation_report.json',
 }
 
 LSTM_CONFIG = {
@@ -71,6 +106,9 @@ LSTM_CONFIG = {
     'label_map_path': './model/libras_lstm_labels.pickle',
     'allowed_classes': ['J', 'Z'],
     'restrict_to_allowed_classes': True,
+    # Ao ampliar allowed_classes para o vocabulário lexical, deixe False para
+    # treinar com as classes já coletadas em vez de falhar nas que faltam.
+    'require_all_allowed_classes': True,
     'confidence_threshold': 0.85,
 }
 
@@ -228,5 +266,11 @@ def validate_config():
     
     if len(ALPHABET_DICT) != 26:
         errors.append("ALPHABET_DICT deve conter 26 letras do alfabeto completo")
-    
+
+    errors.extend(validate_vocabulary())
+
+    split_total = sum(EVALUATION_CONFIG['split_ratios'].values())
+    if abs(split_total - 1.0) > 1e-6:
+        errors.append("EVALUATION_CONFIG['split_ratios'] deve somar 1.0")
+
     return errors

@@ -14,7 +14,7 @@
 
 
 
-.PHONY: help setup install install-gpu install-cpu collect-static collect-temporal collect-minimal-dataset generate-checkerboard show-checkerboard capture-calibration calibrate-camera train train-lstm train-embedded train-embedded-temporal train-embedded-all export-embedded train-hybrid infer infer-lstm infer-hybrid infer-embedded run-lstm \
+.PHONY: help setup install install-gpu install-cpu collect-static collect-temporal collect-minimal-dataset dataset-report generate-checkerboard show-checkerboard capture-calibration calibrate-camera train train-lstm train-embedded train-embedded-temporal train-embedded-all export-embedded train-hybrid infer infer-lstm infer-hybrid infer-embedded run-lstm \
 	run test clean clean-all dirs verify-setup environment lint format install-dev freeze update status
 
 # Variáveis de Configuração
@@ -32,6 +32,13 @@ SEQUENCE_LABELS ?= J Z
 SEQUENCE_COUNT ?= 30
 SEQUENCE_LENGTH ?= 30
 SEQUENCE_CAMERA ?= 0
+# Metadados da sessão de coleta (gravados junto de cada amostra)
+CAPTURE_SUBJECT ?= desconhecido
+CAPTURE_CAMERA_ID ?= desconhecido
+CAPTURE_ENVIRONMENT ?= desconhecido
+CAPTURE_DOMINANT_HAND ?= desconhecido
+CAPTURE_METADATA_ARGS = --subject $(CAPTURE_SUBJECT) --camera-id $(CAPTURE_CAMERA_ID) --environment $(CAPTURE_ENVIRONMENT) --dominant-hand $(CAPTURE_DOMINANT_HAND)
+DATASET_REPORT_JSON ?= ./output/dataset_report.json
 CALIBRATION_IMAGES ?= calibration/*.jpg
 CALIBRATION_COLS ?= 9
 CALIBRATION_ROWS ?= 6
@@ -90,7 +97,7 @@ help: ## 📖 Mostra este menu de ajuda com todos os comandos
 	@awk 'BEGIN {FS = ":.*?## "} /^setup|^install|^verify/ && !/^$$/ {printf "  $(GREEN)%-20s$(NC) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@echo ""
 	@echo "$(BOLD)$(GREEN)● EXECUTE - Execução do Pipeline:$(NC)"
-	@awk 'BEGIN {FS = ":.*?## "} /^run|^collect-static|^collect-temporal|^collect-minimal-dataset|^generate-checkerboard|^show-checkerboard|^capture-calibration|^train|^train-lstm|^train-embedded|^train-embedded-temporal|^train-embedded-all|^export-embedded|^train-hybrid|^infer|^infer-lstm|^infer-hybrid|^infer-embedded|^calibrate-camera/ && !/^setup/ && !/^$$/ {printf "  $(YELLOW)%-20s$(NC) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*?## "} /^run|^collect-static|^collect-temporal|^collect-minimal-dataset|^dataset-report|^generate-checkerboard|^show-checkerboard|^capture-calibration|^train|^train-lstm|^train-embedded|^train-embedded-temporal|^train-embedded-all|^export-embedded|^train-hybrid|^infer|^infer-lstm|^infer-hybrid|^infer-embedded|^calibrate-camera/ && !/^setup/ && !/^$$/ {printf "  $(YELLOW)%-20s$(NC) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@echo ""
 	@echo "$(BOLD)$(YELLOW)● TESTING & DEBUG:$(NC)"
 	@awk 'BEGIN {FS = ":.*?## "} /^test|^environment|^lint|^format/ && !/^$$/ {printf "  $(MAGENTA)%-20s$(NC) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -227,17 +234,23 @@ dirs: ## 📂 Cria a estrutura de diretórios do projeto
 collect-static: verify-setup dirs ## 📷 Coleta dataset estático unificado em dataset/static
 	@echo "$(YELLOW)→ Coletando dataset estático unificado...$(NC)"
 	@echo "$(CYAN)  Labels: $(STATIC_LABELS) | Amostras por classe: $(STATIC_SAMPLE_COUNT) | Câmera: $(SEQUENCE_CAMERA)$(NC)"
-	@$(VENV_PYTHON) -m scripts.collect_dataset static --labels $(STATIC_LABELS) --samples-per-label $(STATIC_SAMPLE_COUNT) --camera-index $(SEQUENCE_CAMERA)
+	@echo "$(CYAN)  Pessoa: $(CAPTURE_SUBJECT) | Ambiente: $(CAPTURE_ENVIRONMENT) | Mão dominante: $(CAPTURE_DOMINANT_HAND)$(NC)"
+	@$(VENV_PYTHON) -m scripts.collect_dataset static --labels $(STATIC_LABELS) --samples-per-label $(STATIC_SAMPLE_COUNT) --camera-index $(SEQUENCE_CAMERA) $(CAPTURE_METADATA_ARGS)
 
 collect-temporal: verify-setup dirs ## 📷 Coleta dataset temporal unificado em dataset/temporal
 	@echo "$(YELLOW)→ Coletando dataset temporal unificado...$(NC)"
 	@echo "$(CYAN)  Labels: $(SEQUENCE_LABELS) | Sequências: $(SEQUENCE_COUNT) | Frames válidos: $(SEQUENCE_LENGTH) | Câmera: $(SEQUENCE_CAMERA)$(NC)"
-	@$(VENV_PYTHON) -m scripts.collect_dataset temporal --labels $(SEQUENCE_LABELS) --num-sequences $(SEQUENCE_COUNT) --seq-length $(SEQUENCE_LENGTH) --camera-index $(SEQUENCE_CAMERA)
+	@echo "$(CYAN)  Pessoa: $(CAPTURE_SUBJECT) | Ambiente: $(CAPTURE_ENVIRONMENT) | Mão dominante: $(CAPTURE_DOMINANT_HAND)$(NC)"
+	@$(VENV_PYTHON) -m scripts.collect_dataset temporal --labels $(SEQUENCE_LABELS) --num-sequences $(SEQUENCE_COUNT) --seq-length $(SEQUENCE_LENGTH) --camera-index $(SEQUENCE_CAMERA) $(CAPTURE_METADATA_ARGS)
 
 collect-minimal-dataset: verify-setup dirs ## 📷 Coleta o dataset mínimo completo em dataset/
 	@echo "$(YELLOW)→ Coletando dataset mínimo completo...$(NC)"
 	@$(MAKE) --no-print-directory collect-static STATIC_SAMPLE_COUNT=$(STATIC_SAMPLE_COUNT) SEQUENCE_CAMERA=$(SEQUENCE_CAMERA)
 	@$(MAKE) --no-print-directory collect-temporal SEQUENCE_COUNT=$(SEQUENCE_COUNT) SEQUENCE_LENGTH=$(SEQUENCE_LENGTH) SEQUENCE_CAMERA=$(SEQUENCE_CAMERA)
+
+dataset-report: verify-setup dirs ## 📊 Relatório de cobertura do dataset (vocabulário, metadados, divisão por pessoa)
+	@echo "$(YELLOW)→ Gerando relatório do dataset...$(NC)"
+	@$(VENV_PYTHON) -m scripts.dataset_report --json $(DATASET_REPORT_JSON)
 
 generate-checkerboard: verify-setup dirs ## 🧾 Gera uma imagem de tabuleiro para calibração de câmera
 	@echo "$(YELLOW)→ Gerando tabuleiro de calibração...$(NC)"

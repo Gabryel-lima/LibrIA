@@ -45,6 +45,7 @@ class LibrasLSTMTrainer:
         self.feature_size = LSTM_CONFIG['feature_size']
         self.allowed_classes: List[str] = list(LSTM_CONFIG.get('allowed_classes', []))
         self.restrict_to_allowed_classes = bool(LSTM_CONFIG.get('restrict_to_allowed_classes', False))
+        self.require_all_allowed_classes = bool(LSTM_CONFIG.get('require_all_allowed_classes', True))
         self.model = None
         self.label_map: Dict[int, str] = {}
         self.training_history: Dict[str, object] = {}
@@ -87,8 +88,15 @@ class LibrasLSTMTrainer:
         missing_classes = sorted(allowed_classes.difference({entry.upper() for entry in filtered_dirs}))
 
         if missing_classes:
-            raise ValueError(
-                'Classes temporais obrigatórias não encontradas no dataset: '
+            # Com o vocabulário em expansão (Fase 1), classes ainda não coletadas
+            # são esperadas: avisamos e treinamos com o que existe.
+            if self.require_all_allowed_classes:
+                raise ValueError(
+                    'Classes temporais obrigatórias não encontradas no dataset: '
+                    f"{', '.join(missing_classes)}"
+                )
+            print(
+                '[lstm] Classes do vocabulário ainda sem dados coletados: '
                 f"{', '.join(missing_classes)}"
             )
 

@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 import time
+from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional
 
 import cv2
@@ -15,12 +16,17 @@ from config.settings import (
     COLLECTION_CONFIG,
     FEATURE_DIMENSION,
     FEATURE_MODE,
+    FUNCTIONAL_LABELS,
+    LEXICAL_LABELS,
     LSTM_CONFIG,
     STATIC_DATASET_DIR,
     STATIC_LABELS,
     TEMPORAL_DATASET_DIR,
     TEMPORAL_LABELS,
+    TEMPORAL_VOCABULARY_LABELS,
 )
+from config.vocabulary import MODALITY_STATIC, MODALITY_TEMPORAL, UNKNOWN_LABEL, get_sign_type
+from src.dataset.sample_metadata import UNSPECIFIED, SampleMetadata, write_metadata
 from utils.helpers import extract_landmarks_by_mode, load_camera_calibration, preprocess_frame
 
 try:
@@ -34,6 +40,41 @@ except (ImportError, RuntimeError) as error:
 WINDOW_NAME = 'LibrIA - Coleta Unificada'
 CAPTURE_KEYS = {32, 13, 10}
 QUIT_KEYS = {27, ord('q')}
+
+VOCABULARY_CHOICES = ('alphabet', 'lexical', 'functional', 'all', 'unknown')
+
+
+@dataclass
+class CaptureContext:
+    """Contexto da sessão de coleta, gravado como metadado de cada amostra."""
+
+    subject_id: str = COLLECTION_CONFIG['default_subject_id']
+    camera_id: str = COLLECTION_CONFIG['default_camera_id']
+    environment: str = COLLECTION_CONFIG['default_environment']
+    dominant_hand: str = COLLECTION_CONFIG['default_dominant_hand']
+    write_metadata: bool = COLLECTION_CONFIG['write_sample_metadata']
+
+
+DEFAULT_CAPTURE_CONTEXT = CaptureContext()
+
+
+def _resolve_vocabulary_labels(selection: str, modality: str) -> List[str]:
+    """Traduz a opção --vocabulary na lista de labels a coletar."""
+    if selection == 'unknown':
+        return [UNKNOWN_LABEL]
+
+    if modality == MODALITY_STATIC:
+        # Palavras e gestos funcionais são temporais; no modo estático só o
+        # alfabeto (e a classe de rejeição) faz sentido.
+        return list(STATIC_LABELS)
+
+    if selection == 'alphabet':
+        return list(TEMPORAL_LABELS)
+    if selection == 'lexical':
+        return list(LEXICAL_LABELS)
+    if selection == 'functional':
+        return list(FUNCTIONAL_LABELS)
+    return list(TEMPORAL_VOCABULARY_LABELS)
 
 
 def _draw_status_overlay(preview: np.ndarray, lines: Iterable[str], accent_color=(0, 255, 0)):
@@ -82,6 +123,79 @@ def _mirror_landmark_sample(sample: np.ndarray) -> np.ndarray:
     else:
         flat[0::3] = 1.0 - flat[0::3]
     return flat.reshape(mirrored.shape)
+
+
+def _build_metadata(
+    label: str,
+    modality: str,
+    context: CaptureContext,
+    capture_hand: Optional[str] = None,
+    quality: Optional[float] = None,
+    duration_seconds: Optional[float] = None,
+    sequence_length: Optional[int] = None,
+) -> SampleMetadata:
+    return SampleMetadata(
+        label=label,
+        modality=modality,
+        sign_type=get_sign_type(label) or UNSPECIFIED,
+        subject_id=context.subject_id,
+        camera_id=context.camera_id,
+        environment=context.environment,
+        dominant_hand=context.dominant_hand,
+        capture_hand=capture_hand or UNSPECIFIED,
+        duration_seconds=duration_seconds,
+        quality=quality,
+        feature_mode=FEATURE_MODE,
+        feature_dimension=FEATURE_DIMENSION,
+        sequence_length=sequence_length,
+    )
+
+
+def _persist_sample(
+    label_dir: str,
+    base_name: str,
+    sample_array: np.ndarray,
+    metadata: Optional[SampleMetadata],
+    save_mirrored: bool = True,
+    skip_existing_mirror: bool = False,
+) -> int:
+    """Grava a amostra, sua versão espelhada e os metadados de ambas.
+
+    Retorna quantos arquivos ``.npy`` foram criados.
+    """
+    written = 0
+
+    sample_path = os.path.join(label_dir, f'{base_name}.npy')
+    np.save(sample_path, sample_array)
+    written += 1
+    if metadata is not None:
+        write_metadata(sample_path, metadata)
+
+    if not save_mirrored:
+        return written
+
+    mirrored_path = os.path.join(label_dir, f'{base_name}_mirror.npy')
+    if skip_existing_mirror and os.path.exists(mirrored_path):
+        return written
+
+    np.save(mirrored_path, _mirror_landmark_sample(sample_array))
+    written += 1
+    if metadata is not None:
+        write_metadata(mirrored_path, metadata.mirrored_copy(f'{base_name}.npy'))
+
+    return written
+
+
+def _handedness_score(results) -> Optional[float]:
+    if not getattr(results, 'multi_handedness', None):
+        return None
+    return float(results.multi_handedness[0].classification[0].score)
+
+
+def _handedness_label(results) -> Optional[str]:
+    if not getattr(results, 'multi_handedness', None):
+        return None
+    return str(results.multi_handedness[0].classification[0].label)
 
 
 def _next_sample_index(label_dir: str, prefix: str) -> int:
@@ -148,8 +262,10 @@ def _backfill_static_samples_from_frames(
     calibration: Optional[Dict[str, np.ndarray]],
     extractor,
     save_mirrored: bool = False,
+    context: Optional[CaptureContext] = None,
 ) -> int:
     generated_samples = 0
+    label = os.path.basename(os.path.normpath(label_dir))
 
     for filename in sorted(os.listdir(label_dir)):
         name, extension = os.path.splitext(filename)
@@ -174,15 +290,21 @@ def _backfill_static_samples_from_frames(
         if sample is None:
             continue
 
-        sample_array = np.asarray(sample, dtype=np.float32)
-        np.save(sample_path, sample_array)
-        generated_samples += 1
+        metadata = None
+        if context is not None and context.write_metadata:
+            # Backfill não conhece a captura original: registra o contexto atual
+            # e marca a origem para não confundir com uma coleta ao vivo.
+            metadata = _build_metadata(label, MODALITY_STATIC, context)
+            metadata.source_sample = filename
 
-        if save_mirrored:
-            mirrored_path = os.path.join(label_dir, f'sample_{suffix}_mirror.npy')
-            if not os.path.exists(mirrored_path):
-                np.save(mirrored_path, _mirror_landmark_sample(sample_array))
-                generated_samples += 1
+        generated_samples += _persist_sample(
+            label_dir,
+            f'sample_{suffix}',
+            np.asarray(sample, dtype=np.float32),
+            metadata,
+            save_mirrored=save_mirrored,
+            skip_existing_mirror=True,
+        )
 
     return generated_samples
 
@@ -202,7 +324,14 @@ def _build_hands():
     )
 
 
-def collect_static(labels: List[str], samples_per_label: int, output_dir: str, camera_index: int):
+def collect_static(
+    labels: List[str],
+    samples_per_label: int,
+    output_dir: str,
+    camera_index: int,
+    context: Optional[CaptureContext] = None,
+):
+    context = context or DEFAULT_CAPTURE_CONTEXT
     calibration = _load_optional_calibration()
     hands = _build_hands()
     draw_utils = mp.solutions.drawing_utils
@@ -226,6 +355,7 @@ def collect_static(labels: List[str], samples_per_label: int, output_dir: str, c
                 calibration,
                 lambda frame: _extract_valid_sample_from_frame(frame, hands),
                 save_mirrored=True,
+                context=context,
             )
             if generated_samples:
                 print(
@@ -272,15 +402,26 @@ def collect_static(labels: List[str], samples_per_label: int, output_dir: str, c
                 if key in QUIT_KEYS:
                     raise KeyboardInterrupt
                 if key in CAPTURE_KEYS and sample is not None:
-                    sample_path = os.path.join(label_dir, f'sample_{sample_index:03d}.npy')
-                    mirror_path = os.path.join(label_dir, f'sample_{sample_index:03d}_mirror.npy')
                     frame_path = os.path.join(
                         label_dir,
                         f'frame_{sample_index:03d}{COLLECTION_CONFIG["static_frame_ext"]}',
                     )
-                    sample_array = np.asarray(sample, dtype=np.float32)
-                    np.save(sample_path, sample_array)
-                    np.save(mirror_path, _mirror_landmark_sample(sample_array))
+                    metadata = None
+                    if context.write_metadata:
+                        metadata = _build_metadata(
+                            label,
+                            MODALITY_STATIC,
+                            context,
+                            capture_hand=_handedness_label(results),
+                            quality=_handedness_score(results),
+                        )
+
+                    _persist_sample(
+                        label_dir,
+                        f'sample_{sample_index:03d}',
+                        np.asarray(sample, dtype=np.float32),
+                        metadata,
+                    )
                     cv2.imwrite(frame_path, frame)
                     sample_index += 1
                     _write_manifest('static', labels, output_dir, samples_per_label, None)
@@ -332,7 +473,15 @@ def _wait_for_sequence_start(cap, calibration, label: str, sequence_index: int, 
             raise KeyboardInterrupt
 
 
-def collect_temporal(labels: List[str], num_sequences: int, seq_length: int, output_dir: str, camera_index: int):
+def collect_temporal(
+    labels: List[str],
+    num_sequences: int,
+    seq_length: int,
+    output_dir: str,
+    camera_index: int,
+    context: Optional[CaptureContext] = None,
+):
+    context = context or DEFAULT_CAPTURE_CONTEXT
     calibration = _load_optional_calibration()
     hands = _build_hands()
     draw_utils = mp.solutions.drawing_utils
@@ -365,6 +514,9 @@ def collect_temporal(labels: List[str], num_sequences: int, seq_length: int, out
                 )
 
                 sequence_frames = []
+                frame_scores = []
+                capture_hand = None
+                recording_started_at = time.monotonic()
                 while len(sequence_frames) < seq_length:
                     ret, frame = cap.read()
                     if not ret:
@@ -387,6 +539,10 @@ def collect_temporal(labels: List[str], num_sequences: int, seq_length: int, out
 
                     if sample is not None:
                         sequence_frames.append(sample)
+                        score = _handedness_score(results)
+                        if score is not None:
+                            frame_scores.append(score)
+                        capture_hand = _handedness_label(results) or capture_hand
 
                     _draw_status_overlay(
                         preview,
@@ -406,11 +562,24 @@ def collect_temporal(labels: List[str], num_sequences: int, seq_length: int, out
                     if cv2.getWindowProperty(WINDOW_NAME, cv2.WND_PROP_VISIBLE) < 1:
                         raise KeyboardInterrupt
 
-                sequence_path = os.path.join(label_dir, f'seq_{sequence_index:03d}.npy')
-                mirror_path = os.path.join(label_dir, f'seq_{sequence_index:03d}_mirror.npy')
-                sequence_array = np.asarray(sequence_frames, dtype=np.float32)
-                np.save(sequence_path, sequence_array)
-                np.save(mirror_path, _mirror_landmark_sample(sequence_array))
+                metadata = None
+                if context.write_metadata:
+                    metadata = _build_metadata(
+                        label,
+                        MODALITY_TEMPORAL,
+                        context,
+                        capture_hand=capture_hand,
+                        quality=float(np.mean(frame_scores)) if frame_scores else None,
+                        duration_seconds=time.monotonic() - recording_started_at,
+                        sequence_length=seq_length,
+                    )
+
+                _persist_sample(
+                    label_dir,
+                    f'seq_{sequence_index:03d}',
+                    np.asarray(sequence_frames, dtype=np.float32),
+                    metadata,
+                )
                 sequence_index += 1
                 _write_manifest('temporal', labels, output_dir, num_sequences, seq_length)
     finally:
@@ -427,15 +596,59 @@ def main():
     parser.add_argument('--num-sequences', type=int, default=COLLECTION_CONFIG['temporal_samples_per_label'])
     parser.add_argument('--seq-length', type=int, default=LSTM_CONFIG['sequence_length'])
     parser.add_argument('--camera-index', type=int, default=0)
+    parser.add_argument(
+        '--vocabulary',
+        choices=VOCABULARY_CHOICES,
+        default='alphabet',
+        help='Qual parte do vocabulário coletar quando --labels não é informado',
+    )
+    parser.add_argument('--subject', default=COLLECTION_CONFIG['default_subject_id'],
+                        help='Identificador da pessoa que está sinalizando')
+    parser.add_argument('--camera-id', default=COLLECTION_CONFIG['default_camera_id'],
+                        help='Identificador da câmera usada (modelo/apelido)')
+    parser.add_argument('--environment', default=COLLECTION_CONFIG['default_environment'],
+                        help='Ambiente da captura (ex.: sala_luz_natural)')
+    parser.add_argument('--dominant-hand', default=COLLECTION_CONFIG['default_dominant_hand'],
+                        choices=['left', 'right', 'desconhecido'],
+                        help='Mão dominante da pessoa')
+    parser.add_argument('--no-metadata', action='store_true',
+                        help='Não gravar o JSON de metadados junto das amostras')
     args = parser.parse_args()
 
+    context = CaptureContext(
+        subject_id=args.subject,
+        camera_id=args.camera_id,
+        environment=args.environment,
+        dominant_hand=args.dominant_hand,
+        write_metadata=not args.no_metadata,
+    )
+
+    if context.write_metadata and args.subject == COLLECTION_CONFIG['default_subject_id']:
+        print(
+            '[coleta] Aviso: --subject não informado. Sem identificar a pessoa não é '
+            'possível dividir treino/validação/teste sem vazamento.'
+        )
+
     if args.mode in {'static', 'all'}:
-        labels = [label.upper() for label in (args.labels or STATIC_LABELS)]
-        collect_static(labels, args.samples_per_label, STATIC_DATASET_DIR, args.camera_index)
+        labels = [
+            label.upper()
+            for label in (args.labels or _resolve_vocabulary_labels(args.vocabulary, MODALITY_STATIC))
+        ]
+        collect_static(labels, args.samples_per_label, STATIC_DATASET_DIR, args.camera_index, context)
 
     if args.mode in {'temporal', 'all'}:
-        labels = [label.upper() for label in (args.labels or TEMPORAL_LABELS)]
-        collect_temporal(labels, args.num_sequences, args.seq_length, TEMPORAL_DATASET_DIR, args.camera_index)
+        labels = [
+            label.upper()
+            for label in (args.labels or _resolve_vocabulary_labels(args.vocabulary, MODALITY_TEMPORAL))
+        ]
+        collect_temporal(
+            labels,
+            args.num_sequences,
+            args.seq_length,
+            TEMPORAL_DATASET_DIR,
+            args.camera_index,
+            context,
+        )
 
 
 if __name__ == '__main__':

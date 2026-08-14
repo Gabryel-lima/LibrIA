@@ -1,0 +1,198 @@
+[
+  {
+    "dataset_dir": "./dataset/static",
+    "modality": "static",
+    "metadata_coverage": {
+      "dataset_dir": "./dataset/static",
+      "total_samples": 720,
+      "annotated_samples": 0,
+      "coverage": 0.0,
+      "subjects": [],
+      "environments": [],
+      "cameras": [],
+      "per_label": {
+        "A": {
+          "total": 30,
+          "annotated": 0
+        },
+        "B": {
+          "total": 30,
+          "annotated": 0
+        },
+        "C": {
+          "total": 30,
+          "annotated": 0
+        },
+        "D": {
+          "total": 30,
+          "annotated": 0
+        },
+        "E": {
+          "total": 30,
+          "annotated": 0
+        },
+        "F": {
+          "total": 30,
+          "annotated": 0
+        },
+        "G": {
+          "total": 30,
+          "annotated": 0
+        },
+        "H": {
+          "total": 30,
+          "annotated": 0
+        },
+        "I": {
+          "total": 30,
+          "annotated": 0
+        },
+        "K": {
+          "total": 30,
+          "annotated": 0
+        },
+        "L": {
+          "total": 30,
+          "annotated": 0
+        },
+        "M": {
+          "total": 30,
+          "annotated": 0
+        },
+        "N": {
+          "total": 30,
+          "annotated": 0
+        },
+        "O": {
+          "total": 30,
+          "annotated": 0
+        },
+        "P": {
+          "total": 30,
+          "annotated": 0
+        },
+        "Q": {
+          "total": 30,
+          "annotated": 0
+        },
+        "R": {
+          "total": 30,
+          "annotated": 0
+        },
+        "S": {
+          "total": 30,
+          "annotated": 0
+        },
+        "T": {
+          "total": 30,
+          "annotated": 0
+        },
+        "U": {
+          "total": 30,
+          "annotated": 0
+        },
+        "V": {
+          "total": 30,
+          "annotated": 0
+        },
+        "W": {
+          "total": 30,
+          "annotated": 0
+        },
+        "X": {
+          "total": 30,
+          "annotated": 0
+        },
+        "Y": {
+          "total": 30,
+          "annotated": 0
+        }
+      }
+    },
+    "vocabulary_counts": {
+      "A": 30,
+      "B": 30,
+      "C": 30,
+      "D": 30,
+      "E": 30,
+      "F": 30,
+      "G": 30,
+      "H": 30,
+      "I": 30,
+      "K": 30,
+      "L": 30,
+      "M": 30,
+      "N": 30,
+      "O": 30,
+      "P": 30,
+      "Q": 30,
+      "R": 30,
+      "S": 30,
+      "T": 30,
+      "U": 30,
+      "V": 30,
+      "W": 30,
+      "X": 30,
+      "Y": 30
+    },
+    "missing_labels": [],
+    "split": null,
+    "split_error": null
+  },
+  {
+    "dataset_dir": "./dataset/temporal",
+    "modality": "temporal",
+    "metadata_coverage": {
+      "dataset_dir": "./dataset/temporal",
+      "total_samples": 0,
+      "annotated_samples": 0,
+      "coverage": 0.0,
+      "subjects": [],
+      "environments": [],
+      "cameras": [],
+      "per_label": {}
+    },
+    "vocabulary_counts": {
+      "J": 0,
+      "Z": 0,
+      "OI": 0,
+      "TUDO_BEM": 0,
+      "OBRIGADO": 0,
+      "POR_FAVOR": 0,
+      "DESCULPA": 0,
+      "SIM": 0,
+      "NAO": 0,
+      "EU": 0,
+      "VOCE": 0,
+      "NOME": 0,
+      "AJUDA": 0,
+      "ENTENDER": 0,
+      "ESPACO": 0,
+      "PAUSA": 0,
+      "APAGAR": 0,
+      "CONFIRMAR": 0
+    },
+    "missing_labels": [
+      "AJUDA",
+      "APAGAR",
+      "CONFIRMAR",
+      "DESCULPA",
+      "ENTENDER",
+      "ESPACO",
+      "EU",
+      "J",
+      "NAO",
+      "NOME",
+      "OBRIGADO",
+      "OI",
+      "PAUSA",
+      "POR_FAVOR",
+      "SIM",
+      "TUDO_BEM",
+      "VOCE",
+      "Z"
+    ],
+    "split": null,
+    "split_error": null
+  }
+]
