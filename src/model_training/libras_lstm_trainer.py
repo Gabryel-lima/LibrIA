@@ -12,7 +12,7 @@ from typing import Dict, List, Tuple
 
 import numpy as np
 
-from config.settings import FEATURE_MODE, LEGACY_TEMPORAL_DATASET_DIR, LSTM_CONFIG, TEMPORAL_DATASET_DIR
+from config.settings import FEATURE_MODE, LSTM_CONFIG, TEMPORAL_DATASET_DIR
 from src.utils.plots import plot_training_history
 
 try:
@@ -50,32 +50,6 @@ class LibrasLSTMTrainer:
         self.label_map: Dict[int, str] = {}
         self.training_history: Dict[str, object] = {}
 
-    def _resolve_sequences_dir(self) -> str:
-        """Retorna o diretório temporal atual com fallback para o legado."""
-        # Se o diretório configurado existe, verifique se contém classes/arquivos
-        if os.path.isdir(self.sequences_dir):
-            # retornar se houver subdiretórios (classes) ou arquivos .npy
-            try:
-                entries = [e for e in os.listdir(self.sequences_dir) if e and not e.startswith('.')]
-            except OSError:
-                entries = []
-
-            if entries:
-                return self.sequences_dir
-
-        # Fallback para o diretório legado, caso haja dados lá
-        if os.path.isdir(LEGACY_TEMPORAL_DATASET_DIR):
-            try:
-                legacy_entries = [e for e in os.listdir(LEGACY_TEMPORAL_DATASET_DIR) if e and not e.startswith('.')]
-            except OSError:
-                legacy_entries = []
-
-            if legacy_entries:
-                return LEGACY_TEMPORAL_DATASET_DIR
-
-        # Por fim, retornar o configurado (mesmo que esteja vazio)
-        return self.sequences_dir
-
     def _get_allowed_class_set(self) -> set:
         return {label.upper() for label in self.allowed_classes}
 
@@ -107,7 +81,7 @@ class LibrasLSTMTrainer:
 
     def load_sequence_dataset(self) -> Tuple[np.ndarray, np.ndarray, Dict[int, str]]:
         """Carrega as sequências salvas em disco."""
-        sequences_dir = self._resolve_sequences_dir()
+        sequences_dir = self.sequences_dir
         if not os.path.exists(sequences_dir):
             raise FileNotFoundError(f"Diretório de sequências não encontrado: {sequences_dir}")
 

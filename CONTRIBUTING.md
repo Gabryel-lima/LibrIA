@@ -301,7 +301,6 @@ tests/
 ├── test_data_collection.py
 ├── test_data_processing.py
 ├── test_model_training.py
-├── test_inference.py
 └── fixtures/  # Dados para testes
 ```
 
@@ -393,7 +392,7 @@ python main.py --model efficientnet
 
 1. Verifique se o bug já foi reportado
 2. Teste com a versão mais recente
-3. Procure a solução no [FAQ](docs/FAQ.md)
+3. Procure a solução na seção de problemas do [README](README.md#solução-de-problemas)
 
 ### Ao Reportar
 
@@ -459,10 +458,11 @@ Ao revisar um PR, verifique:
 
 ## 🎓 Recursos Úteis
 
-- [Git Workflow](docs/GIT_WORKFLOW.md)
 - [Setup de Desenvolvimento](docs/DEVELOPMENT.md)
 - [Estrutura do Código](docs/ARCHITECTURE.md)
-- [FAQ](docs/FAQ.md)
+- [Guia de Pull Requests](docs/PULL_REQUEST_GUIDE.md)
+- [Fase 1 — vocabulário e avaliação](docs/FASE1_RECONHECIMENTO.md)
+- [Fase 2 — pipeline temporal](docs/FASE2_TEMPORAL.md)
 
 ## 🎉 Recompensas
 

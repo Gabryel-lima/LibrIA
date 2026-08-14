@@ -15,23 +15,23 @@ Parte do stack do LibrIA depende de bibliotecas que costumam exigir suporte AVX 
 
 ### Fluxos que dependem fortemente de AVX
 
-- `make collect-static` e `python main.py collect_static`
+- `make collect-static` e `python main.py collect-static`
 - `make infer` quando a extração de landmarks precisa do MediaPipe
 - `make collect-temporal`
-- `make train-lstm`
-- `make infer-lstm`
+- `make train-temporal`
+- `make infer-temporal`
 
 ### Fluxos que continuam úteis para diagnóstico
 
 - `make environment`
-- `make verify-setup`
-- `python test_setup.py`
+- `make verify`
+- `make test` (a suíte não depende de MediaPipe nem de câmera)
 - Operações em arquivos, documentação e revisão de código
 
 ## Comportamento atual do projeto
 
-- `test_setup.py` detecta ausência de AVX e emite aviso
-- `Makefile` exibe avisos para TensorFlow, MediaPipe e Keras quando não disponíveis
+- `make verify` avisa quando MediaPipe ou TensorFlow não estão disponíveis, sem falhar
+- Os módulos fazem import condicional e só levantam erro explícito ao tentar usar a funcionalidade indisponível
 - Alguns módulos fazem import condicional e retornam erro explícito ao tentar usar funcionalidade indisponível
 
 ## Como verificar AVX no Linux
@@ -44,9 +44,8 @@ grep -q avx /proc/cpuinfo && echo "AVX disponível" || echo "Sem AVX"
 
 ```bash
 make setup
-source .venv/bin/activate
-make verify-setup
-python test_setup.py
+make verify
+make test
 ```
 
 ## Estratégias recomendadas

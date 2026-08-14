@@ -1,151 +1,205 @@
 #!/usr/bin/env python3
-"""Interface principal do LibrIA para coleta, treino e inferência."""
+"""
+LibrIA — interface de linha de comando
+======================================
 
-import sys
-import os
+Ponto de entrada único para coleta, treino e inferência. Os nomes dos comandos
+são idênticos aos alvos do Makefile, de modo que `make train-temporal` e
+`python main.py train-temporal` fazem exatamente a mesma coisa.
+
+    python main.py --help
+"""
+
 import argparse
+import os
+import sys
 from pathlib import Path
 
 # Configurar o path do projeto para importações corretas
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-# Importações do projeto
-from scripts.collect_dataset import collect_static, collect_temporal
-from src.model_training.libras_model_trainer import LibrasModelTrainer
-from src.model_training.libras_lstm_trainer import LibrasLSTMTrainer
-from src.model_training.libras_embedded_cnn_trainer import LibrasEmbeddedCNNTrainer
-from src.model_training.libras_embedded_bundle_exporter import build_embedded_bundle
-from src.model_training.libras_embedded_temporal_cnn_trainer import LibrasEmbeddedTemporalCNNTrainer
-from src.inference.libras_embedded_runtime import LibrasEmbeddedRuntime
-from src.inference.libras_realtime_classifier import LibrasRealtimeClassifier
-from src.inference.libras_hybrid_realtime_classifier import LibrasHybridRealtimeClassifier
-from src.inference.libras_lstm_realtime_classifier import LibrasLSTMRealtimeClassifier
 from config.settings import (
     COLLECTION_CONFIG,
     EMBEDDED_BUNDLE_CONFIG,
     EMBEDDED_CONFIG,
     EMBEDDED_TEMPORAL_CONFIG,
+    FUNCTIONAL_LABELS,
     LEGACY_STATIC_DATASET_PATH,
+    LEXICAL_LABELS,
     LSTM_CONFIG,
+    STATIC_DATASET_DIR,
     STATIC_LABELS,
     TEMPORAL_DATASET_DIR,
     TEMPORAL_LABELS,
-    STATIC_DATASET_DIR,
     create_directories,
     validate_config,
 )
+from config.vocabulary import UNKNOWN_LABEL
+from scripts.collect_dataset import CaptureContext, collect_static, collect_temporal
+from src.inference.libras_embedded_runtime import LibrasEmbeddedRuntime
+from src.inference.libras_hybrid_realtime_classifier import LibrasHybridRealtimeClassifier
+from src.inference.libras_lstm_realtime_classifier import LibrasLSTMRealtimeClassifier
+from src.inference.libras_realtime_classifier import LibrasRealtimeClassifier
+from src.model_training.libras_embedded_bundle_exporter import build_embedded_bundle
+from src.model_training.libras_embedded_cnn_trainer import LibrasEmbeddedCNNTrainer
+from src.model_training.libras_embedded_temporal_cnn_trainer import LibrasEmbeddedTemporalCNNTrainer
+from src.model_training.libras_lstm_trainer import LibrasLSTMTrainer
+from src.model_training.libras_model_trainer import LibrasModelTrainer
 from utils.helpers import setup_logging
 
+STATIC_MODEL_PATH = './model/model.pickle'
 
-def _has_static_dataset():
+
+# ---------------------------------------------------------------------------
+# Verificações de pré-requisitos
+# ---------------------------------------------------------------------------
+
+def _has_static_dataset() -> bool:
     return os.path.exists(LEGACY_STATIC_DATASET_PATH) or os.path.isdir(STATIC_DATASET_DIR)
 
 
-def _has_temporal_dataset():
-    return os.path.isdir(TEMPORAL_DATASET_DIR) or os.path.isdir('./dataset/sequences')
+def _has_temporal_dataset() -> bool:
+    return os.path.isdir(TEMPORAL_DATASET_DIR)
 
-def _validate_runtime_config():
-    """Valida configuração e prepara diretórios do projeto."""
+
+def _prepare_runtime() -> bool:
+    """Valida a configuração e cria os diretórios do projeto."""
     errors = validate_config()
     if errors:
-        print("Erros de configuração encontrados:")
+        print('Erros de configuração encontrados:')
         for error in errors:
-            print(f"  - {error}")
+            print(f'  - {error}')
         return False
 
     create_directories()
     return True
 
 
-def collect_static_data():
-    """Executa a coleta estática no formato unificado."""
-    print("=== Iniciando Coleta Estática ===")
+def _capture_context(args) -> CaptureContext:
+    return CaptureContext(
+        subject_id=args.subject,
+        camera_id=args.camera_id,
+        environment=args.environment,
+        dominant_hand=args.dominant_hand,
+    )
 
-    if not _validate_runtime_config():
+
+# ---------------------------------------------------------------------------
+# Coleta
+# ---------------------------------------------------------------------------
+
+def collect_static_data(args) -> bool:
+    """Coleta o alfabeto manual estático em dataset/static."""
+    print('=== Coleta estática ===')
+    if not _prepare_runtime():
         return False
 
     try:
         collect_static(
             labels=STATIC_LABELS,
-            samples_per_label=COLLECTION_CONFIG['static_samples_per_label'],
+            samples_per_label=args.samples,
             output_dir=STATIC_DATASET_DIR,
-            camera_index=0,
+            camera_index=args.camera_index,
+            context=_capture_context(args),
         )
-        print("✅ Coleta estática concluída com sucesso!")
+        print('✅ Coleta estática concluída!')
         return True
-    except Exception as e:
-        print(f"❌ Erro durante a coleta estática: {e}")
+    except Exception as error:
+        print(f'❌ Erro durante a coleta estática: {error}')
         return False
 
-def collect_temporal_data():
-    """Executa a coleta temporal no formato unificado."""
-    print("=== Iniciando Coleta Temporal ===")
 
-    if not _validate_runtime_config():
+def _collect_temporal_labels(args, labels, description: str) -> bool:
+    print(f'=== Coleta temporal — {description} ===')
+    if not _prepare_runtime():
         return False
 
     try:
         collect_temporal(
-            labels=TEMPORAL_LABELS,
-            num_sequences=COLLECTION_CONFIG['temporal_samples_per_label'],
+            labels=labels,
+            num_sequences=args.sequences,
             seq_length=LSTM_CONFIG['sequence_length'],
             output_dir=TEMPORAL_DATASET_DIR,
-            camera_index=0,
+            camera_index=args.camera_index,
+            context=_capture_context(args),
         )
-        print("✅ Coleta temporal concluída com sucesso!")
+        print('✅ Coleta temporal concluída!')
         return True
-    except Exception as e:
-        print(f"❌ Erro durante a coleta temporal: {e}")
+    except Exception as error:
+        print(f'❌ Erro durante a coleta temporal: {error}')
         return False
 
-def collect_minimal_dataset():
-    """Executa a coleta estática e temporal no formato unificado."""
-    print("=== Iniciando Coleta do Dataset Mínimo ===")
 
-    if not collect_static_data():
-        return False
-    if not collect_temporal_data():
-        return False
+def collect_temporal_data(args) -> bool:
+    """Coleta as letras temporais (J e Z)."""
+    return _collect_temporal_labels(args, TEMPORAL_LABELS, 'alfabeto (J, Z)')
 
-    print("✅ Dataset mínimo coletado com sucesso!")
+
+def collect_words(args) -> bool:
+    """Coleta o vocabulário lexical e os gestos funcionais."""
+    return _collect_temporal_labels(
+        args, LEXICAL_LABELS + FUNCTIONAL_LABELS, 'palavras e gestos funcionais'
+    )
+
+
+def collect_unknown(args) -> bool:
+    """Coleta amostras negativas para a classe de rejeição."""
+    return _collect_temporal_labels(args, [UNKNOWN_LABEL], 'fora do vocabulário')
+
+
+def collect_all(args) -> bool:
+    """Coleta o dataset mínimo: alfabeto estático e temporal."""
+    print('=== Coleta do dataset mínimo ===')
+    return collect_static_data(args) and collect_temporal_data(args)
+
+
+def dataset_report(args) -> bool:
+    """Relatório de cobertura do dataset."""
+    from scripts.dataset_report import main as report_main
+
+    sys.argv = ['dataset_report']
+    report_main()
     return True
 
-def train_model():
-    """Executa o treinamento do modelo."""
-    print("=== Iniciando Treinamento do Modelo ===")
-    
-    # Verificar se existe dataset processado
-    # Executar treinamento
+
+# ---------------------------------------------------------------------------
+# Treino
+# ---------------------------------------------------------------------------
+
+def train_static_model(args) -> bool:
+    """Treina o Random Forest estático."""
+    print('=== Treino do modelo estático (Random Forest) ===')
+
+    if not _has_static_dataset():
+        print('❌ Dataset estático não encontrado. Rode a coleta estática primeiro.')
+        return False
+
     try:
         trainer = LibrasModelTrainer()
         data, labels = trainer.load_dataset()
         trainer.train_model(data, labels)
-        
-        # Mostrar informações do modelo
+
         model_info = trainer.get_model_info()
         if model_info:
-            print(f"\n🤖 Modelo treinado:")
-            print(f"   Tipo: {model_info['model_type']}")
-            print(f"   Estimadores: {model_info['n_estimators']}")
             accuracy = model_info['training_history'].get('accuracy', 'N/A')
+            print(f"\n🤖 Tipo: {model_info['model_type']} | Estimadores: {model_info['n_estimators']}")
             if isinstance(accuracy, (int, float)):
-                print(f"   Acurácia: {accuracy:.2%}")
-            else:
-                print(f"   Acurácia: {accuracy}")
-        
-        print("✅ Treinamento do modelo concluído com sucesso!")
+                print(f'   Acurácia: {accuracy:.2%}')
+
+        print(f'✅ Modelo estático salvo em {STATIC_MODEL_PATH}')
         return True
-    except Exception as e:
-        print(f"❌ Erro durante o treinamento: {e}")
+    except Exception as error:
+        print(f'❌ Erro durante o treino estático: {error}')
         return False
 
-def train_lstm_model():
-    """Executa o treinamento do modelo LSTM temporal."""
-    print("=== Iniciando Treinamento LSTM ===")
+
+def train_temporal_model(args) -> bool:
+    """Treina a LSTM temporal."""
+    print('=== Treino do modelo temporal (LSTM) ===')
 
     if not _has_temporal_dataset():
-        print("❌ Diretório de sequências não encontrado. Execute a coleta temporal primeiro.")
+        print('❌ Dataset temporal não encontrado. Rode a coleta temporal primeiro.')
         return False
 
     try:
@@ -153,405 +207,272 @@ def train_lstm_model():
         data, labels, label_map = trainer.load_sequence_dataset()
         trainer.train_model(data, labels)
 
-        print(f"\n🧠 Modelo temporal treinado:")
-        print(f"   Sequências: {len(data)}")
-        print(f"   Classes: {list(label_map.values())}")
-        print("✅ Treinamento LSTM concluído com sucesso!")
+        print(f'\n🧠 Sequências: {len(data)} | Classes: {list(label_map.values())}')
+        print(f"✅ Modelo temporal salvo em {LSTM_CONFIG['model_path']}")
         return True
-    except Exception as e:
-        print(f"❌ Erro durante o treinamento LSTM: {e}")
+    except Exception as error:
+        print(f'❌ Erro durante o treino temporal: {error}')
         return False
 
-def train_embedded_model():
-    """Treina uma CNN quantizada estática para deployment embedded a partir de sample_XXX.npy."""
-    print("=== Iniciando Treinamento Embedded Tiny CNN ===")
 
-    if not _has_static_dataset():
-        print("❌ Dataset estático não encontrado. Execute a coleta estática primeiro.")
+def train_all_models(args) -> bool:
+    """Treina os modelos estático e temporal em sequência."""
+    print('=== Treino completo (estático + temporal) ===')
+
+    print('\n📦 Etapa 1/2: modelo estático')
+    if not train_static_model(args):
+        print('❌ Treino interrompido na etapa estática')
+        return False
+
+    print('\n🧠 Etapa 2/2: modelo temporal')
+    if not train_temporal_model(args):
+        print('❌ Treino interrompido na etapa temporal')
+        return False
+
+    print('✅ Treino completo concluído!')
+    return True
+
+
+# ---------------------------------------------------------------------------
+# Inferência
+# ---------------------------------------------------------------------------
+
+def infer_hybrid(args) -> bool:
+    """Inferência híbrida: pipeline temporal com fallback estático."""
+    print('=== Inferência híbrida ===')
+
+    if not os.path.exists(STATIC_MODEL_PATH):
+        print('❌ Modelo estático não encontrado. Rode `train-static` primeiro.')
+        return False
+    if not os.path.exists(LSTM_CONFIG['model_path']):
+        print('❌ Modelo temporal não encontrado. Rode `train-temporal` primeiro.')
         return False
 
     try:
-        trainer = LibrasEmbeddedCNNTrainer(
+        LibrasHybridRealtimeClassifier().start_classification(camera_index=args.camera_index)
+        return True
+    except Exception as error:
+        print(f'❌ Erro durante a inferência híbrida: {error}')
+        return False
+
+
+def infer_static(args) -> bool:
+    """Inferência apenas com o modelo estático."""
+    print('=== Inferência estática ===')
+
+    if not os.path.exists(STATIC_MODEL_PATH):
+        print('❌ Modelo estático não encontrado. Rode `train-static` primeiro.')
+        return False
+
+    try:
+        LibrasRealtimeClassifier().start_classification(record_video=True)
+        return True
+    except Exception as error:
+        print(f'❌ Erro durante a inferência estática: {error}')
+        return False
+
+
+def infer_temporal(args) -> bool:
+    """Inferência apenas com o modelo temporal."""
+    print('=== Inferência temporal ===')
+
+    if not os.path.exists(LSTM_CONFIG['model_path']):
+        print('❌ Modelo temporal não encontrado. Rode `train-temporal` primeiro.')
+        return False
+
+    try:
+        LibrasLSTMRealtimeClassifier().start_classification()
+        return True
+    except Exception as error:
+        print(f'❌ Erro durante a inferência temporal: {error}')
+        return False
+
+
+# ---------------------------------------------------------------------------
+# Embedded (TFLite INT8 / Pico)
+# ---------------------------------------------------------------------------
+
+def embedded_train(args) -> bool:
+    """Treina as CNNs quantizadas estática e temporal e exporta o bundle."""
+    print('=== Treino embedded (estático + temporal + bundle) ===')
+
+    if not _has_static_dataset() or not _has_temporal_dataset():
+        print('❌ Datasets estático e temporal são necessários. Rode a coleta primeiro.')
+        return False
+
+    try:
+        print('\n📦 Etapa 1/3: CNN estática')
+        static_trainer = LibrasEmbeddedCNNTrainer(
             dataset_dir=EMBEDDED_CONFIG['dataset_dir'],
             model_path=EMBEDDED_CONFIG['keras_model_path'],
             tflite_path=EMBEDDED_CONFIG['tflite_model_path'],
             label_map_path=EMBEDDED_CONFIG['label_map_path'],
         )
-        data, labels, label_map = trainer.load_dataset()
-        metrics = trainer.train_model(data, labels)
+        data, labels, label_map = static_trainer.load_dataset()
+        metrics = static_trainer.train_model(data, labels)
+        print(f"   {len(data)} amostras | acurácia {metrics['accuracy']:.2%}")
 
-        print("\n📦 Artefatos embedded gerados:")
-        print(f"   Dataset: {len(data)} amostras")
-        print(f"   Classes: {list(label_map.values())}")
-        print(f"   Input: {EMBEDDED_CONFIG['input_points']}x{EMBEDDED_CONFIG['input_channels']} landmarks")
-        print(f"   Acurácia: {metrics['accuracy']:.2%}")
-        print(f"   Keras: {EMBEDDED_CONFIG['keras_model_path']}")
-        print(f"   TFLite int8: {EMBEDDED_CONFIG['tflite_model_path']}")
-        print("✅ Treinamento embedded concluído com sucesso!")
-        return True
-    except Exception as e:
-        print(f"❌ Erro durante o treinamento embedded: {e}")
-        return False
-
-def train_embedded_temporal_model():
-    """Treina uma CNN temporal quantizada para J/Z a partir de seq_XXX.npy."""
-    print("=== Iniciando Treinamento Embedded Temporal CNN ===")
-
-    if not _has_temporal_dataset():
-        print("❌ Dataset temporal não encontrado. Execute a coleta temporal primeiro.")
-        return False
-
-    try:
-        trainer = LibrasEmbeddedTemporalCNNTrainer(
+        print('\n🎞️ Etapa 2/3: CNN temporal')
+        temporal_trainer = LibrasEmbeddedTemporalCNNTrainer(
             dataset_dir=EMBEDDED_TEMPORAL_CONFIG['dataset_dir'],
             model_path=EMBEDDED_TEMPORAL_CONFIG['keras_model_path'],
             tflite_path=EMBEDDED_TEMPORAL_CONFIG['tflite_model_path'],
             label_map_path=EMBEDDED_TEMPORAL_CONFIG['label_map_path'],
         )
-        data, labels, label_map = trainer.load_dataset()
-        metrics = trainer.train_model(data, labels)
+        data, labels, label_map = temporal_trainer.load_dataset()
+        metrics = temporal_trainer.train_model(data, labels)
+        print(f"   {len(data)} sequências | acurácia {metrics['accuracy']:.2%}")
 
-        print("\n🎞️ Artefatos embedded temporais gerados:")
-        print(f"   Sequências: {len(data)}")
-        print(f"   Classes: {list(label_map.values())}")
-        print(
-            f"   Input: {EMBEDDED_TEMPORAL_CONFIG['sequence_length']}x"
-            f"{EMBEDDED_TEMPORAL_CONFIG['feature_size']}"
-        )
-        print(f"   Acurácia: {metrics['accuracy']:.2%}")
-        print(f"   Keras: {EMBEDDED_TEMPORAL_CONFIG['keras_model_path']}")
-        print(f"   TFLite int8: {EMBEDDED_TEMPORAL_CONFIG['tflite_model_path']}")
-        print("✅ Treinamento embedded temporal concluído com sucesso!")
-        return True
-    except Exception as e:
-        print(f"❌ Erro durante o treinamento embedded temporal: {e}")
+        print('\n🧩 Etapa 3/3: bundle')
+        return embedded_export(args)
+    except Exception as error:
+        print(f'❌ Erro durante o treino embedded: {error}')
         return False
 
-def train_embedded_models():
-    """Treina os modelos embedded estático e temporal em sequência."""
-    print("=== Iniciando Treinamento Embedded Completo ===")
 
-    print("\n📦 Etapa 1/2: treinando modelo embedded estático")
-    static_success = train_embedded_model()
-    if not static_success:
-        print("❌ Treinamento embedded completo interrompido na etapa estática")
-        return False
-
-    print("\n🎞️ Etapa 2/2: treinando modelo embedded temporal")
-    temporal_success = train_embedded_temporal_model()
-    if not temporal_success:
-        print("❌ Treinamento embedded completo interrompido na etapa temporal")
-        return False
-
-    print("\n🧩 Etapa 3/3: exportando bundle embedded combinado")
-    export_success = export_embedded_bundle()
-    if not export_success:
-        print("❌ Treinamento embedded completo interrompido na etapa de export")
-        return False
-
-    print("✅ Treinamento embedded completo concluído com sucesso!")
-    return True
-
-def export_embedded_bundle():
-    """Empacota os dois modelos embedded quantizados com manifesto único."""
-    print("=== Exportando Bundle Embedded ===")
+def embedded_export(args) -> bool:
+    """Empacota modelos quantizados, manifesto e pacote C/C++ do Pico."""
+    print('=== Export do bundle embedded ===')
 
     try:
         manifest = build_embedded_bundle()
-        print("\n📦 Bundle embedded exportado:")
-        print(f"   Diretório: {EMBEDDED_BUNDLE_CONFIG['bundle_dir']}")
-        print(f"   Manifesto: {EMBEDDED_BUNDLE_CONFIG['manifest_path']}")
-        print(f"   Header runtime: {EMBEDDED_BUNDLE_CONFIG['runtime_header_path']}")
+        print(f"   Bundle:  {EMBEDDED_BUNDLE_CONFIG['bundle_dir']}")
         print(f"   Estático: {manifest['static']['model_file']}")
         print(f"   Temporal: {manifest['temporal']['model_file']}")
-        print(f"   Pacote Pico: {manifest['pico_package']['package_dir']}")
-        print(f"   Archive Pico: {manifest['pico_package']['archive_file']}")
-        print("✅ Export do bundle embedded concluído com sucesso!")
+        print(f"   Pico:     {manifest['pico_package']['archive_file']}")
+        print('✅ Bundle embedded exportado!')
         return True
-    except Exception as e:
-        print(f"❌ Erro durante o export embedded: {e}")
+    except Exception as error:
+        print(f'❌ Erro durante o export embedded: {error}')
         return False
 
-def run_embedded_inference_check():
-    """Valida o bundle embedded rodando inferência nos datasets NPY."""
-    print("=== Verificando Runtime Embedded ===")
+
+def embedded_check(args) -> bool:
+    """Roda o runtime embedded sobre os datasets NPY para validar o bundle."""
+    print('=== Verificação do runtime embedded ===')
 
     try:
         runtime = LibrasEmbeddedRuntime(EMBEDDED_BUNDLE_CONFIG['manifest_path'])
         metrics = runtime.evaluate_datasets()
 
-        print("\n🔎 Verificação do bundle embedded:")
-        print(f"   Amostras estáticas: {metrics['static_samples']}")
-        print(f"   Acurácia estática: {metrics['static_accuracy']:.2%}")
-        print(f"   Sequências temporais: {metrics['temporal_sequences']}")
-        print(f"   Acurácia temporal: {metrics['temporal_accuracy']:.2%}")
-        print(f"   Acurácia híbrida: {metrics['hybrid_accuracy']:.2%}")
-        print(f"   Prioridade temporal: {metrics['temporal_priority_classes']}")
-        print("   Contrato de landmarks: MediaPipe continua apenas no host para gerar o dataset; ")
-        print("   o runtime embedded consome os mesmos tensores .npy e não importa MediaPipe.")
-        print("✅ Verificação embedded concluída com sucesso!")
+        print(f"   Amostras estáticas:   {metrics['static_samples']} | acurácia {metrics['static_accuracy']:.2%}")
+        print(f"   Sequências temporais: {metrics['temporal_sequences']} | acurácia {metrics['temporal_accuracy']:.2%}")
+        print(f"   Acurácia híbrida:     {metrics['hybrid_accuracy']:.2%}")
+        print('✅ Verificação embedded concluída!')
         return True
-    except Exception as e:
-        print(f"❌ Erro durante a verificação embedded: {e}")
+    except Exception as error:
+        print(f'❌ Erro durante a verificação embedded: {error}')
         return False
 
-def train_hybrid_models():
-    """Reexecuta o treinamento dos modelos estático e temporal."""
-    print("=== Iniciando Treinamento Híbrido ===")
 
-    if not _has_static_dataset():
-        print("❌ Dataset estático não encontrado. Execute a coleta estática ou o processamento legado primeiro.")
-        return False
+# ---------------------------------------------------------------------------
+# Pipeline completo
+# ---------------------------------------------------------------------------
 
-    if not _has_temporal_dataset():
-        print("❌ Diretório de sequências não encontrado para o modelo temporal. Execute a coleta temporal primeiro.")
-        return False
+def run_pipeline(args) -> bool:
+    """Coleta → treino → inferência."""
+    print('🚀 Pipeline completo do LibrIA')
 
-    print("\n📦 Etapa 1/2: retreinando modelo estático")
-    static_success = train_model()
-    if not static_success:
-        print("❌ Treinamento híbrido interrompido na etapa estática")
-        return False
-
-    print("\n🧠 Etapa 2/2: retreinando modelo temporal")
-    temporal_success = train_lstm_model()
-    if not temporal_success:
-        print("❌ Treinamento híbrido interrompido na etapa temporal")
-        return False
-
-    print("✅ Treinamento híbrido concluído com sucesso!")
-    return True
-
-def run_inference():
-    """Executa a inferência em tempo real."""
-    print("=== Iniciando Inferência em Tempo Real ===")
-    
-    # Verificar se existe modelo treinado
-    if not os.path.exists('./model/model.pickle'):
-        print("❌ Modelo treinado não encontrado. Execute o treinamento primeiro.")
-        return False
-    
-    # Executar inferência
-    try:
-        classifier = LibrasRealtimeClassifier()
-        classifier.start_classification(record_video=True)
-        print("✅ Inferência concluída!")
-        return True
-    except Exception as e:
-        print(f"❌ Erro durante a inferência: {e}")
-        return False
-
-def run_lstm_inference():
-    """Executa a inferência temporal em tempo real."""
-    print("=== Iniciando Inferência Temporal LSTM ===")
-
-    if not os.path.exists('./model/libras_lstm.keras'):
-        print("❌ Modelo LSTM não encontrado. Execute o treinamento LSTM primeiro.")
-        return False
-
-    try:
-        classifier = LibrasLSTMRealtimeClassifier()
-        classifier.start_classification()
-        print("✅ Inferência temporal concluída!")
-        return True
-    except Exception as e:
-        print(f"❌ Erro durante a inferência temporal: {e}")
-        return False
-
-def run_hybrid_inference():
-    """Executa a inferência híbrida em tempo real."""
-    print("=== Iniciando Inferência Híbrida ===")
-
-    if not os.path.exists('./model/model.pickle'):
-        print("❌ Modelo estático não encontrado. Execute o treinamento primeiro.")
-        return False
-
-    if not os.path.exists('./model/libras_lstm.keras'):
-        print("❌ Modelo LSTM não encontrado. Execute o treinamento LSTM primeiro.")
-        return False
-
-    try:
-        classifier = LibrasHybridRealtimeClassifier()
-        classifier.start_classification()
-        print("✅ Inferência híbrida concluída!")
-        return True
-    except Exception as e:
-        print(f"❌ Erro durante a inferência híbrida: {e}")
-        return False
-
-def run_pipeline():
-    """Executa o pipeline completo."""
-    print("🚀 Executando Pipeline Completo do LibrIA")
-    print("=" * 50)
-    
     steps = [
-        ("Coleta do Dataset Mínimo", collect_minimal_dataset),
-        ("Treinamento Híbrido", train_hybrid_models),
-        ("Inferência Híbrida", run_hybrid_inference),
+        ('Coleta do dataset mínimo', collect_all),
+        ('Treino dos modelos', train_all_models),
+        ('Inferência híbrida', infer_hybrid),
     ]
-    
-    for step_name, step_func in steps:
-        print(f"\n📋 {step_name}")
-        print("-" * 30)
-        
-        success = step_func()
-        if not success:
-            print(f"❌ Pipeline interrompido na etapa: {step_name}")
+
+    for name, step in steps:
+        print(f'\n📋 {name}\n' + '-' * 40)
+        if not step(args):
+            print(f'❌ Pipeline interrompido em: {name}')
             return False
-        
-        print(f"✅ {step_name} concluída!")
-    
-    print("\n🎉 Pipeline completo executado com sucesso!")
+
+    print('\n🎉 Pipeline completo executado com sucesso!')
     return True
 
-def show_help():
-    """Mostra a ajuda do sistema."""
-    help_text = """
-        LibrIA - Sistema de Reconhecimento de Libras
-        ============================================
 
-        Este sistema implementa um pipeline completo para reconhecimento de 
-        linguagem de sinais brasileira (Libras) usando visão computacional.
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
 
-        COMANDOS DISPONÍVEIS:
-
-        collect_static   Coletar dataset estático em dataset/static
-        collect_temporal Coletar dataset temporal em dataset/temporal
-        collect_minimal  Coletar o dataset mínimo completo
-        train       Treinar modelo Random Forest
-        train_lstm  Treinar modelo temporal LSTM com dataset/temporal
-        train_embedded Treinar CNN estática com sample_XXX.npy para deployment embedded
-        train_embedded_temporal Treinar CNN temporal com seq_XXX.npy para J e Z
-        train_embedded_all Treinar os dois modelos embedded em sequência
-        export_embedded Empacotar os dois modelos quantizados, metadados e pacote C/C++ para Pico
-        train_hybrid Retreinar os modelos estático e temporal em sequência
-        infer_embedded Verificar o bundle embedded em cima dos datasets NPY
-        infer       Executar reconhecimento em tempo real
-        infer_lstm  Executar reconhecimento temporal com janela deslizante
-        infer_hybrid Executar reconhecimento híbrido com arbitragem
-        all         Executar pipeline completo (collect_minimal → train_hybrid → infer_hybrid)
-        help        Mostrar esta ajuda
-
-        EXEMPLOS DE USO:
-
-        # Executar pipeline completo
-        python main.py all
-
-        # Coleta estática
-        python main.py collect_static
-
-        # Coleta temporal
-        python main.py collect_temporal
-
-        # Coleta mínima completa
-        python main.py collect_minimal
-
-        # Treinar modelo Random Forest
-        python main.py train
-
-        # Treinar modelo temporal LSTM
-        python main.py train_lstm
-
-        # Treinar CNN embedded estática
-        python main.py train_embedded
-
-        # Treinar CNN embedded temporal para J e Z
-        python main.py train_embedded_temporal
-
-        # Treinar pipeline embedded completo
-        python main.py train_embedded_all
-
-        # Exportar bundle embedded combinado e pacote do Pico
-        python main.py export_embedded
-
-        # Verificar runtime embedded com os datasets NPY
-        python main.py infer_embedded
-
-        # Retreinar o modo híbrido
-        python main.py train_hybrid
-
-        # Executar reconhecimento em tempo real
-        python main.py infer
-
-        # Executar reconhecimento temporal
-        python main.py infer_lstm
-
-        # Executar reconhecimento híbrido
-        python main.py infer_hybrid
-
-        ESTRUTURA DO PROJETO:
-
-        scripts/                # Coleta e calibração de câmera
-        src/model_training/     # Treinamento de modelos
-        src/inference/          # Inferência em tempo real
-        config/                 # Configurações do projeto
-        utils/                  # Utilitários e funções auxiliares
-        dataset/                # Dataset estático e temporal
-        model/                  # Modelos treinados
-        output/                 # Saídas (vídeos, screenshots)
-
-        REQUISITOS:
-
-        - Python 3.8+
-        - Webcam funcional
-        - Dependências listadas em requirements.txt
-
-        Para mais informações, consulte o README.md
-        """
-    print(help_text)
+# Mapeia comando → NOME da função, resolvido em run_command. Guardar a função
+# em si congelaria a referência no import: testes que trocam a implementação
+# (e qualquer monkeypatch) seriam ignorados e o comando real rodaria.
+COMMANDS = {
+    'collect': 'collect_all',
+    'collect-static': 'collect_static_data',
+    'collect-temporal': 'collect_temporal_data',
+    'collect-words': 'collect_words',
+    'collect-unknown': 'collect_unknown',
+    'report': 'dataset_report',
+    'train': 'train_all_models',
+    'train-static': 'train_static_model',
+    'train-temporal': 'train_temporal_model',
+    'infer': 'infer_hybrid',
+    'infer-static': 'infer_static',
+    'infer-temporal': 'infer_temporal',
+    'embedded-train': 'embedded_train',
+    'embedded-export': 'embedded_export',
+    'embedded-check': 'embedded_check',
+    'all': 'run_pipeline',
+}
 
 
-def run_command(command: str) -> bool:
-    """Executa um comando e retorna sucesso/falha para controle de exit code."""
-    command_handlers = {
-        'collect_static': collect_static_data,
-        'collect_temporal': collect_temporal_data,
-        'collect_minimal': collect_minimal_dataset,
-        'train': train_model,
-        'train_lstm': train_lstm_model,
-        'train_embedded': train_embedded_model,
-        'train_embedded_temporal': train_embedded_temporal_model,
-        'train_embedded_all': train_embedded_models,
-        'export_embedded': export_embedded_bundle,
-        'train_hybrid': train_hybrid_models,
-        'infer': run_inference,
-        'infer_lstm': run_lstm_inference,
-        'infer_hybrid': run_hybrid_inference,
-        'infer_embedded': run_embedded_inference_check,
-        'all': run_pipeline,
-    }
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description='LibrIA — reconhecimento e tradução de Libras',
+        epilog=(
+            'Os nomes dos comandos são os mesmos dos alvos do Makefile: '
+            '`make train-temporal` == `python main.py train-temporal`. '
+            'Veja `make help` para o menu completo.'
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        'command',
+        choices=sorted(COMMANDS),
+        help='comando a executar (ver descrições em `make help`)',
+    )
 
-    if command == 'help':
-        show_help()
-        return True
+    capture = parser.add_argument_group('metadados da coleta')
+    capture.add_argument('--subject', default=COLLECTION_CONFIG['default_subject_id'],
+                         help='identificador da pessoa que está sinalizando')
+    capture.add_argument('--camera-id', default=COLLECTION_CONFIG['default_camera_id'],
+                         help='identificador da câmera (modelo/apelido)')
+    capture.add_argument('--environment', default=COLLECTION_CONFIG['default_environment'],
+                         help='ambiente da captura (ex.: sala_luz_natural)')
+    capture.add_argument('--dominant-hand', default=COLLECTION_CONFIG['default_dominant_hand'],
+                         choices=['left', 'right', 'desconhecido'],
+                         help='mão dominante da pessoa')
 
-    handler = command_handlers.get(command)
-    if handler is None:
-        show_help()
+    options = parser.add_argument_group('opções de execução')
+    options.add_argument('--camera-index', type=int, default=0, help='índice da webcam')
+    options.add_argument('--samples', type=int, default=COLLECTION_CONFIG['static_samples_per_label'],
+                         help='amostras estáticas por classe')
+    options.add_argument('--sequences', type=int, default=COLLECTION_CONFIG['temporal_samples_per_label'],
+                         help='sequências temporais por classe')
+
+    return parser
+
+
+def run_command(command: str, args=None) -> bool:
+    """Executa um comando e devolve sucesso/falha para o exit code."""
+    handler_name = COMMANDS.get(command)
+    if handler_name is None:
         return False
 
-    result = handler()
+    handler = globals()[handler_name]
+
+    if args is None:
+        args = build_parser().parse_args([command])
+
+    result = handler(args)
     return True if result is None else bool(result)
 
-def main():
-    """Função principal."""
-    # Configurar logging
-    setup_logging()
-    
-    # Configurar parser de argumentos
-    parser = argparse.ArgumentParser(
-        description="LibrIA - Sistema de Reconhecimento de Libras",
-        add_help=False
-    )
-    parser.add_argument('command', nargs='?', default='help',
-                       choices=['collect_static', 'collect_temporal', 'collect_minimal', 'train', 'train_lstm', 'train_embedded', 'train_embedded_temporal', 'train_embedded_all', 'export_embedded', 'train_hybrid', 'infer', 'infer_lstm', 'infer_hybrid', 'infer_embedded', 'all', 'help'],
-                       help='Comando a ser executado')
-    
-    # Parse argumentos
-    args = parser.parse_args()
-    
-    success = run_command(args.command)
-    sys.exit(0 if success else 1)
 
-if __name__ == "__main__":
+def main():
+    setup_logging()
+    args = build_parser().parse_args()
+    sys.exit(0 if run_command(args.command, args) else 1)
+
+
+if __name__ == '__main__':
     main()

@@ -8,7 +8,7 @@ import numpy as np
 from sklearn.metrics import accuracy_score, classification_report
 from sklearn.model_selection import train_test_split
 
-from config.settings import EMBEDDED_TEMPORAL_CONFIG, TEMPORAL_DATASET_DIR, LEGACY_TEMPORAL_DATASET_DIR
+from config.settings import EMBEDDED_TEMPORAL_CONFIG, TEMPORAL_DATASET_DIR
 from src.utils.plots import plot_training_history
 
 try:
@@ -62,17 +62,7 @@ class LibrasEmbeddedTemporalCNNTrainer:
         self.training_history: Dict[str, object] = {}
 
     def load_dataset(self) -> Tuple[np.ndarray, np.ndarray, Dict[int, str]]:
-        # Se o diretório configurado existe mas está vazio, tente o diretório legado
         dataset_dir = self.dataset_dir
-        if os.path.isdir(dataset_dir):
-            try:
-                entries = [e for e in os.listdir(dataset_dir) if e and not e.startswith('.')]
-            except OSError:
-                entries = []
-
-            if not entries and os.path.isdir(LEGACY_TEMPORAL_DATASET_DIR):
-                dataset_dir = LEGACY_TEMPORAL_DATASET_DIR
-
         if not os.path.isdir(dataset_dir):
             raise FileNotFoundError(f'Diretório temporal embedded não encontrado: {dataset_dir}')
 

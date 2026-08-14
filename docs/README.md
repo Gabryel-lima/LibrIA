@@ -1,66 +1,63 @@
-# Documentação - LibrIA
+# Documentação — LibrIA
 
-Índice da pasta `docs/` com foco no fluxo atual do projeto.
+Índice da pasta `docs/`.
 
 ## Leitura recomendada
 
 | Objetivo | Documento |
-|----------|-----------|
-| Entender a arquitetura por diagramas | [ARCHITECTURE.md](ARCHITECTURE.md) |
-| Setup local | [DEVELOPMENT.md](DEVELOPMENT.md) |
-| Datasets e artefatos | [DATASETS.md](DATASETS.md) |
+|:---------|:----------|
+| Vocabulário, metadados e avaliação por pessoa | [FASE1_RECONHECIMENTO.md](FASE1_RECONHECIMENTO.md) |
+| Pipeline temporal, segmentação e `SignToken` | [FASE2_TEMPORAL.md](FASE2_TEMPORAL.md) |
+| Arquitetura por diagramas | [ARCHITECTURE.md](ARCHITECTURE.md) |
+| Formatos de dataset e artefatos | [DATASETS.md](DATASETS.md) |
+| Setup de desenvolvimento | [DEVELOPMENT.md](DEVELOPMENT.md) |
 | CPUs sem AVX | [AVX_COMPATIBILITY.md](AVX_COMPATIBILITY.md) |
-| Atualizações recentes | [ATUALIZACOES.md](ATUALIZACOES.md) |
-| Processo de PR | [PULL_REQUEST_GUIDE.md](PULL_REQUEST_GUIDE.md) |
+| Processo de Pull Request | [PULL_REQUEST_GUIDE.md](PULL_REQUEST_GUIDE.md) |
+| Fórmulas da arquitetura (PDF) | [latex/model_architecture_equations.pdf](latex/model_architecture_equations.pdf) |
 
-## O que mudou nesta rodada
-
-- Dataset documentado com artefatos espelhados `_mirror.npy` para coleta estática e temporal
-- Fluxo híbrido documentado com comparação original + espelhado antes da arbitragem
-- Guias de desenvolvimento e datasets atualizados com plots persistidos em `training_plots/`
-- README principal e índices atualizados para refletir exit code confiável em `main.py`
+O plano arquitetural que orienta as fases fica em
+[`.github/plans/atualização_projeto.md`](../.github/plans/atualização_projeto.md).
 
 ## Estrutura da pasta
 
 ```text
 docs/
+├── README.md                   este índice
+├── FASE1_RECONHECIMENTO.md
+├── FASE2_TEMPORAL.md
 ├── ARCHITECTURE.md
-├── README.md
-├── ATUALIZACOES.md
-├── AVX_COMPATIBILITY.md
 ├── DATASETS.md
 ├── DEVELOPMENT.md
+├── AVX_COMPATIBILITY.md
 ├── PULL_REQUEST_GUIDE.md
-├── video_format_changes.md
-└── guides/
-    └── README.md
+├── guides/
+└── latex/
 ```
 
-## Comandos mais citados na documentação
+## Comandos citados na documentação
+
+Todo alvo do Makefile tem um comando de mesmo nome no `main.py`
+(`make train-temporal` == `python main.py train-temporal`).
 
 ```bash
-make setup
-make verify-setup
-make collect-static
-make collect-temporal
-make collect-minimal-dataset
-make train
-make infer
-make train-lstm
-make infer-lstm
-make train-hybrid
-make infer-hybrid
-make train-embedded-all
-make export-embedded
-make infer-embedded
-make capture-calibration
+make setup            # ambiente
+make verify           # validação do ambiente
+make collect          # dataset mínimo (alfabeto estático + J/Z)
+make collect-words    # palavras e gestos funcionais
+make collect-unknown  # classe de rejeição
+make report           # cobertura do dataset
+make train            # modelos estático + temporal
+make infer            # inferência híbrida
+make embedded-train   # CNNs quantizadas + bundle
+make embedded-check   # validação do bundle
+make test             # suíte de testes
 ```
+
+Lista completa: `make help`.
 
 ## Referências na raiz
 
 - [../README.md](../README.md)
 - [../CHANGELOG.md](../CHANGELOG.md)
 - [../CONTRIBUTING.md](../CONTRIBUTING.md)
-- [../DOCUMENTATION_INDEX.md](../DOCUMENTATION_INDEX.md)
-
-Última atualização: 2026-03-17
+- [../ROADMAP.md](../ROADMAP.md)

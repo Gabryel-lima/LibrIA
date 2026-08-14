@@ -24,7 +24,7 @@ git clone https://github.com/Gabryel-lima/LibrIA.git
 cd LibrIA
 make setup
 source .venv/bin/activate
-make verify-setup
+make verify
 ```
 
 ### Manual
@@ -36,7 +36,7 @@ python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 pip install -r requirements-dev.txt
-python test_setup.py
+python -m unittest discover -s tests -t .
 ```
 
 ## Comandos de rotina
@@ -51,13 +51,13 @@ make environment
 Ou diretamente:
 
 ```bash
-python test_setup.py
-python -m unittest tests.test_embedded_bundle tests.test_embedded_cnn_trainer tests.test_static_dataset_loader tests.test_lstm_dataset_loader tests.test_hybrid_realtime_classifier tests.test_main_command_exit_code
-black src/ main.py
-flake8 src/ main.py --max-line-length=119 --exclude=__pycache__
+python -m unittest discover -s tests -t .          # suite completa
+python -m unittest tests.test_temporal_pipeline    # um modulo so
+black src/ scripts/ config/ main.py
+flake8 src/ scripts/ config/ main.py --max-line-length=119 --exclude=__pycache__
 ```
 
-Se o comando vier de `main.py`, o processo agora encerra com `0` em sucesso e `1` em falha. Isso permite usar `make train-hybrid`, `python main.py train_hybrid` e comandos similares em automações sem parsear texto do terminal.
+Se o comando vier de `main.py`, o processo agora encerra com `0` em sucesso e `1` em falha. Isso permite usar `make train`, `python main.py train` e comandos similares em automações sem parsear texto do terminal.
 
 ## Fluxos principais para desenvolvimento
 
@@ -80,9 +80,9 @@ Observação prática:
 ### 2. Pipeline temporal host
 
 ```bash
-make collect-temporal SEQUENCE_LABELS=J\ Z SEQUENCE_COUNT=30 SEQUENCE_LENGTH=30
-make train-lstm
-make infer-lstm
+make collect-temporal SUBJECT=ana SEQUENCES=30
+make train-temporal
+make infer-temporal
 ```
 
 Artefatos principais:
@@ -98,21 +98,21 @@ Observação prática:
 ### 3. Pipeline híbrido host
 
 ```bash
-make collect-minimal-dataset
-make train-hybrid
-make infer-hybrid
+make collect
+make train
+make infer
 ```
 
 Notas de comportamento:
-- `make train-hybrid` falha com status não nulo se o dataset estático ou temporal estiver ausente, ou se alguma das duas etapas de treino falhar.
-- `make infer-hybrid` testa a hipótese original e a hipótese espelhada nas trilhas estática e temporal antes da arbitragem final.
+- `make train` falha com status não nulo se o dataset estático ou temporal estiver ausente, ou se alguma das duas etapas de treino falhar.
+- `make infer` testa a hipótese original e a hipótese espelhada nas trilhas estática e temporal antes da arbitragem final.
 
 ### 4. Pipeline embedded
 
 ```bash
-make train-embedded-all
-make export-embedded
-make infer-embedded
+make embedded-train
+make embedded-export
+make embedded-check
 ```
 
 Artefatos principais:
@@ -127,9 +127,9 @@ Artefatos principais:
 ### 5. Calibração de câmera
 
 ```bash
-make generate-checkerboard
-make show-checkerboard
-make capture-calibration
+make checkerboard
+make checkerboard-show
+make calibrate-capture
 ```
 
 ## Estrutura relevante para desenvolvimento
@@ -183,7 +183,7 @@ Rode primeiro:
 
 ```bash
 make collect-temporal
-make train-lstm
+make train-temporal
 ```
 
 ### `Nenhuma sequência válida encontrada`
@@ -195,18 +195,18 @@ Verifique se os `.npy` em `dataset/temporal/` têm shape compatível com `LSTM_C
 Rode primeiro:
 
 ```bash
-make train-embedded-all
+make embedded-train
 ```
 
 ou, se os `.tflite` já existirem:
 
 ```bash
-make export-embedded
+make embedded-export
 ```
 
 ## Checklist antes de fazer PR
 
-- [ ] Rodei `make verify-setup`
+- [ ] Rodei `make verify`
 - [ ] Rodei os testes relevantes para a mudança
 - [ ] Mantive a documentação alinhada ao fluxo real do código
 - [ ] Atualizei `CHANGELOG.md` quando a mudança alterou comportamento visível

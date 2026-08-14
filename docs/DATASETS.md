@@ -69,7 +69,7 @@ Esses dados são auxiliares e não fazem parte do fluxo principal documentado.
 Coleta recomendada:
 
 ```bash
-make collect-temporal SEQUENCE_LABELS=J\ Z SEQUENCE_COUNT=30 SEQUENCE_LENGTH=30
+make collect-temporal SUBJECT=ana SEQUENCES=30
 ```
 
 Estrutura gerada:
@@ -100,7 +100,7 @@ No padrão atual isso significa:
 (30, 21, 3)
 ```
 
-A coleta temporal salva a sequência original e sua versão espelhada no mesmo diretório. Os trainers temporais também aceitam `LEGACY_TEMPORAL_DATASET_DIR` como fallback quando o diretório principal configurado está presente, mas vazio.
+A coleta temporal salva a sequência original e sua versão espelhada no mesmo diretório. O diretório legado `dataset/sequences/` foi descontinuado: `dataset/temporal/` é o único caminho temporal.
 
 Uso por pipeline:
 
@@ -118,17 +118,35 @@ O modo padrão atual é `wrist_relative`.
 
 ## 4. Manifestos e metadados
 
-Cada subconjunto pode manter um `manifest.json` com:
+### Metadados por amostra
 
-- `mode`
-- `feature_mode`
-- `feature_dimension`
-- `sample_target`
-- `sequence_length`
-- `camera_calibrated`
-- `counts`
+Cada `.npy` tem um `.json` irmão de mesmo nome, gravado na coleta:
 
-Esse arquivo é auxiliar e não é a fonte principal de treino.
+```json
+{
+  "label": "OI", "modality": "temporal", "sign_type": "lexical",
+  "subject_id": "ana", "camera_id": "c920", "environment": "sala_luz_natural",
+  "dominant_hand": "right", "capture_hand": "right",
+  "duration_seconds": 1.7, "quality": 0.94,
+  "feature_mode": "wrist_relative", "feature_dimension": 63,
+  "mirrored": false, "schema_version": 1
+}
+```
+
+São esses campos que permitem dividir treino/validação/teste **por pessoa** e
+medir métricas por classe e por ambiente. A amostra espelhada herda os
+metadados com `mirrored: true` e a lateralidade invertida.
+
+Datasets antigos sem `.json` continuam válidos — quem só lê landmarks ignora os
+metadados. Use `make report` para ver a cobertura.
+
+Detalhes em [FASE1_RECONHECIMENTO.md](FASE1_RECONHECIMENTO.md).
+
+### Manifesto por subconjunto
+
+Cada subconjunto mantém um `manifest.json` com `mode`, `feature_mode`,
+`feature_dimension`, `sample_target`, `sequence_length`, `camera_calibrated` e
+`counts`. Esse arquivo é auxiliar e não é a fonte principal de treino.
 
 ## 5. Artefatos de modelos
 
@@ -161,8 +179,8 @@ model/libras_lstm_labels.pickle
 Execução:
 
 ```bash
-make train-lstm
-make infer-lstm
+make train-temporal
+make infer-temporal
 ```
 
 Artefato visual adicional:
@@ -186,7 +204,7 @@ model/libria_embedded_temporal_cnn_labels.json
 Execução:
 
 ```bash
-make train-embedded-all
+make embedded-train
 ```
 
 Artefatos visuais adicionais:
@@ -218,8 +236,8 @@ model/embedded_bundle/
 Execução:
 
 ```bash
-make export-embedded
-make infer-embedded
+make embedded-export
+make embedded-check
 ```
 
 O pacote `pico_package/` ja sai preparado para exportacao ao RP2040/Pico e inclui arrays C/C++ com os modelos quantizados, manifesto, header de configuracao e runtime skeleton.
@@ -238,9 +256,9 @@ Esses arquivos são opcionais, mas quando presentes podem ser usados para corrig
 Fluxo recomendado:
 
 ```bash
-make generate-checkerboard
-make show-checkerboard
-make capture-calibration
+make checkerboard
+make checkerboard-show
+make calibrate-capture
 ```
 
 ## 7. Modelos e pesos adicionais já versionados
@@ -267,7 +285,7 @@ Esses arquivos não substituem automaticamente o fluxo principal documentado. Us
 - [ ] Tenho dados em `dataset/static/` ou em `dataset/temporal/`
 - [ ] Entendo que arquivos `_mirror.npy` são parte do dataset atual
 - [ ] Sei qual `FEATURE_MODE` está ativo
-- [ ] Rodei `make verify-setup`
+- [ ] Rodei `make verify`
 - [ ] Treinei o modelo correspondente antes de inferir
 
 Ultima atualizacao: 2026-03-17

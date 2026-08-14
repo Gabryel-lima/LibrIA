@@ -56,11 +56,14 @@ python -m scripts.collect_dataset temporal --vocabulary lexical \
 python -m scripts.collect_dataset temporal --vocabulary unknown --subject pessoa_01
 ```
 
-Ou via Make:
+Ou via Make, que cobre os mesmos casos com alvos dedicados:
 
 ```bash
-make collect-temporal CAPTURE_SUBJECT=pessoa_01 CAPTURE_ENVIRONMENT=sala \
-  CAPTURE_CAMERA_ID=webcam_c920 CAPTURE_DOMINANT_HAND=right
+make collect-temporal SUBJECT=pessoa_01 ENVIRONMENT=sala \
+  CAMERA_ID=webcam_c920 DOMINANT_HAND=right
+
+make collect-words   SUBJECT=pessoa_01   # vocabulário lexical + gestos funcionais
+make collect-unknown SUBJECT=pessoa_01   # amostras fora do vocabulário
 ```
 
 **Sem `--subject` não há divisão por pessoa possível.** A coleta avisa quando o
@@ -115,7 +118,7 @@ certeza.
 ## 5. Relatório de cobertura
 
 ```bash
-make dataset-report          # ou: python -m scripts.dataset_report --json out.json
+make report          # ou: python -m scripts.dataset_report --json out.json
 ```
 
 Mostra, por modalidade: total de amostras, cobertura de metadados, pessoas,
@@ -130,7 +133,7 @@ O código está pronto; o que resta é trabalho de coleta:
 - [ ] Coletar amostras de `DESCONHECIDO` (gestos fora do vocabulário).
 - [ ] Coletar ao menos 3 pessoas — mínimo para treino/validação/teste sem vazamento.
 - [ ] Variar mão, velocidade, iluminação, distância e câmera.
-- [ ] Rodar `make dataset-report` e conferir cobertura por classe e por pessoa.
+- [ ] Rodar `make report` e conferir cobertura por classe e por pessoa.
 - [ ] Anotar metadados dos dados legados (hoje 0% de cobertura em `dataset/static`).
 
 Para treinar com o vocabulário ampliado, aponte

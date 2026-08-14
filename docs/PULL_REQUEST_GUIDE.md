@@ -371,7 +371,7 @@ pytest tests/ -v
 pytest tests/ --cov=src --cov-report=html
 
 # Teste específico
-pytest tests/test_inference.py::test_realtime -v
+python -m unittest tests.test_temporal_pipeline -v
 
 # Testes rápidos
 pytest -m "not slow" -v

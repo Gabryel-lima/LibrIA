@@ -37,13 +37,13 @@ Leitura complementar:
 flowchart LR
     A[Usuario] --> B[Makefile]
     A --> C[main.py]
-    B --> D[collect-static]
-    B --> E[collect-temporal]
-    B --> F[train]
-    B --> G[train-lstm]
-    B --> H[train-embedded-all]
-    B --> I[export-embedded]
-    B --> J[infer-embedded]
+    B --> D[collect]
+    B --> E[collect-words]
+    B --> F[report]
+    B --> G[train]
+    B --> H[infer]
+    B --> I[embedded-train]
+    B --> J[embedded-check]
     C --> D
     C --> E
     C --> F
@@ -52,6 +52,9 @@ flowchart LR
     C --> I
     C --> J
 ```
+
+Os alvos do Makefile e os comandos do `main.py` têm os mesmos nomes:
+`make train-temporal` == `python main.py train-temporal`.
 
 Sequencia desta etapa:
 - Voltar: [1. Visao geral do projeto](#1-visao-geral-do-projeto)

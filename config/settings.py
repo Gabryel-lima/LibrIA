@@ -28,7 +28,6 @@ OUTPUT_DIR = './output'
 STATIC_DATASET_DIR = os.path.join(DATASET_DIR, 'static')
 TEMPORAL_DATASET_DIR = os.path.join(DATASET_DIR, 'temporal')
 LEGACY_STATIC_DATASET_PATH = os.path.join(DATASET_DIR, 'data.pickle')
-LEGACY_TEMPORAL_DATASET_DIR = os.path.join(DATASET_DIR, 'sequences')
 
 # Configurações de Coleta de Dados
 DATASET_SIZE = int(os.getenv('LIBRIA_DATASET_SIZE', '150'))
@@ -69,8 +68,7 @@ CAMERA_CONFIG = {
     'dist_coeffs_path': './config/dist_coeffs.npy',
 }
 
-# Configurações do modelo temporal
-SEQUENCES_DIR = './dataset/sequences'
+# Configurações de coleta
 COLLECTION_CONFIG = {
     'static_samples_per_label': 30,
     'temporal_samples_per_label': 30,
@@ -253,7 +251,6 @@ def create_directories():
         TEMPORAL_DATASET_DIR,
         MODEL_DIR,
         OUTPUT_DIR,
-        SEQUENCES_DIR,
     ]
     
     for directory in directories:

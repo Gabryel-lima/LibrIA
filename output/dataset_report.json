@@ -144,17 +144,26 @@
     "modality": "temporal",
     "metadata_coverage": {
       "dataset_dir": "./dataset/temporal",
-      "total_samples": 0,
+      "total_samples": 60,
       "annotated_samples": 0,
       "coverage": 0.0,
       "subjects": [],
       "environments": [],
       "cameras": [],
-      "per_label": {}
+      "per_label": {
+        "J": {
+          "total": 30,
+          "annotated": 0
+        },
+        "Z": {
+          "total": 30,
+          "annotated": 0
+        }
+      }
     },
     "vocabulary_counts": {
-      "J": 0,
-      "Z": 0,
+      "J": 30,
+      "Z": 30,
       "OI": 0,
       "TUDO_BEM": 0,
       "OBRIGADO": 0,
@@ -180,7 +189,6 @@
       "ENTENDER",
       "ESPACO",
       "EU",
-      "J",
       "NAO",
       "NOME",
       "OBRIGADO",
@@ -189,8 +197,7 @@
       "POR_FAVOR",
       "SIM",
       "TUDO_BEM",
-      "VOCE",
-      "Z"
+      "VOCE"
     ],
     "split": null,
     "split_error": null
