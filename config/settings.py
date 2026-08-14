@@ -170,6 +170,34 @@ HYBRID_INFERENCE_CONFIG = {
     'overlay_history_size': 5,
 }
 
+# Pipeline temporal robusto (Fase 2): buffer, movimento, segmentação,
+# suavização e supressão de duplicatas. Ver src/inference/temporal_pipeline.py.
+TEMPORAL_PIPELINE_CONFIG = {
+    # Detecção de movimento (energia média por landmark, entre 0 e ~1).
+    'motion_smoothing': 0.6,
+    'motion_start_threshold': 0.012,
+    'motion_end_threshold': 0.006,  # menor que o de início: histerese.
+    # Segmentação
+    'min_start_frames': 2,
+    'min_end_frames': 5,
+    'min_segment_frames': 8,
+    'min_duration_seconds': 0.2,
+    'max_duration_seconds': 4.0,
+    'max_absent_frames': 5,
+    # Suavização e deduplicação
+    'smoothing_window': 5,
+    'duplicate_window_seconds': 1.0,
+    # Emissão
+    'emit_partial_tokens': True,
+    'partial_interval_frames': 5,
+    'temporal_confidence_threshold': LSTM_CONFIG['confidence_threshold'],
+    'static_confidence_threshold': INFERENCE_CONFIG['static_confidence_threshold'],
+    'static_interval_frames': INFERENCE_CONFIG['prediction_interval'],
+    # Após um sinal temporal, a mão volta ao repouso passando por poses que o
+    # modelo estático leria como letras. Silencia o fallback nesse intervalo.
+    'static_cooldown_seconds': HYBRID_INFERENCE_CONFIG['prediction_cooldown_seconds'],
+}
+
 EMBEDDED_BUNDLE_CONFIG = {
     'bundle_dir': './model/embedded_bundle',
     'manifest_path': './model/embedded_bundle/embedded_bundle.json',

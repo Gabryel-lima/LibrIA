@@ -25,7 +25,8 @@ from utils.helpers import (
     preprocess_frame,
 )
 
-from .prediction_merger import PredictionEvent, PredictionMerger
+from .sign_token import SignToken
+from .temporal_pipeline import TemporalPipeline
 
 try:
     import mediapipe as mp
@@ -82,20 +83,22 @@ class LibrasHybridRealtimeClassifier:
         self._validate_temporal_metadata()
 
         self.camera_calibration = self._load_camera_calibration()
-        self.sequence_buffer: Deque[np.ndarray] = deque(maxlen=self.sequence_length)
-        self.sequence_timestamps: Deque[float] = deque(maxlen=self.sequence_length)
-        self.frame_index = 0
         self.alphabet_dict = {i: chr(65 + i) for i in range(26)}
-        self.last_static_candidate: Optional[PredictionEvent] = None
-        self.last_temporal_candidate: Optional[PredictionEvent] = None
-        self.last_output: Optional[PredictionEvent] = None
+        self.static_features: Optional[np.ndarray] = None
+        self.last_partial: Optional[SignToken] = None
+        self.token_history: Deque[SignToken] = deque(
+            maxlen=HYBRID_INFERENCE_CONFIG['overlay_history_size']
+        )
 
-        self.merger = PredictionMerger(
-            temporal_priority_classes=HYBRID_INFERENCE_CONFIG['temporal_priority_classes'],
-            temporal_confidence_threshold=HYBRID_INFERENCE_CONFIG['temporal_confidence_threshold'],
-            static_confidence_threshold=HYBRID_INFERENCE_CONFIG['static_confidence_threshold'],
-            cooldown_seconds=HYBRID_INFERENCE_CONFIG['prediction_cooldown_seconds'],
-            history_size=HYBRID_INFERENCE_CONFIG['overlay_history_size'],
+        # O reconhecimento temporal deixou de ser janela fixa: o pipeline só
+        # consulta o LSTM quando há um sinal delimitado por movimento, e o
+        # modelo estático responde enquanto a mão está parada.
+        self.pipeline = TemporalPipeline(
+            temporal_predictor=self._predict_sequence,
+            label_map=self.temporal_label_map,
+            sequence_length=self.sequence_length,
+            static_predictor=self._predict_static_features,
+            config={'static_interval_frames': self.prediction_interval},
         )
 
         self.mp_hands = mp.solutions.hands
@@ -183,9 +186,15 @@ class LibrasHybridRealtimeClassifier:
             CAMERA_CONFIG['dist_coeffs_path'],
         )
 
-    def _predict_static(self, features: np.ndarray, timestamp: float) -> Optional[PredictionEvent]:
-        if self.frame_index % self.prediction_interval != 0:
-            return None
+    def _predict_static_features(self, features: np.ndarray) -> Tuple[str, float]:
+        """Prediz uma letra estática, testando também a versão espelhada (TTA).
+
+        O pipeline entrega as features temporais. Quando os dois modelos usam
+        modos de feature diferentes, usamos as features estáticas extraídas do
+        mesmo quadro em vez de alimentar o modelo com o vetor errado.
+        """
+        if self.static_features is not None:
+            features = self.static_features
 
         prediction = self.static_model.predict([features])[0]
         try:
@@ -204,15 +213,7 @@ class LibrasHybridRealtimeClassifier:
             prediction = mirrored_prediction
             confidence = mirrored_confidence
 
-        token = self._static_prediction_to_token(prediction)
-        return PredictionEvent(
-            token=token,
-            confidence=confidence,
-            source='static',
-            start_time=timestamp,
-            end_time=timestamp,
-            frame_index=self.frame_index,
-        )
+        return self._static_prediction_to_token(prediction), confidence
 
     def _static_prediction_to_token(self, prediction) -> str:
         """Normalize static model prediction to a single-letter token.
@@ -251,40 +252,25 @@ class LibrasHybridRealtimeClassifier:
         # Fallback
         return '?'
 
-    def _predict_temporal(self) -> Optional[PredictionEvent]:
-        if len(self.sequence_buffer) < self.sequence_length:
-            return None
+    def _predict_sequence(self, sequence: np.ndarray) -> np.ndarray:
+        """Prediz sobre uma sequência, testando também a versão espelhada (TTA).
 
-        input_sequence = np.expand_dims(np.asarray(self.sequence_buffer, dtype=np.float32), axis=0)
-        probabilities = self.temporal_model.predict(input_sequence, verbose=0)[0]
-        label_idx = int(np.argmax(probabilities))
-        confidence = float(probabilities[label_idx])
+        Devolve a distribuição de probabilidades — quem decide o rótulo é o
+        pipeline, que ainda vai suavizá-la junto com as demais janelas.
+        """
+        sequence_array = np.asarray(sequence, dtype=np.float32)
+        probabilities = self.temporal_model.predict(
+            np.expand_dims(sequence_array, axis=0), verbose=0
+        )[0]
 
-        mirrored_sequence = self._mirror_sequence(np.asarray(self.sequence_buffer, dtype=np.float32))
         mirrored_probabilities = self.temporal_model.predict(
-            np.expand_dims(mirrored_sequence, axis=0),
+            np.expand_dims(self._mirror_sequence(sequence_array), axis=0),
             verbose=0,
         )[0]
-        mirrored_label_idx = int(np.argmax(mirrored_probabilities))
-        mirrored_confidence = float(mirrored_probabilities[mirrored_label_idx])
 
-        if mirrored_confidence > confidence:
-            label_idx = mirrored_label_idx
-            confidence = mirrored_confidence
-
-        token = self.temporal_label_map.get(label_idx, str(label_idx))
-        return PredictionEvent(
-            token=token,
-            confidence=confidence,
-            source='temporal',
-            start_time=float(self.sequence_timestamps[0]),
-            end_time=float(self.sequence_timestamps[-1]),
-            frame_index=self.frame_index,
-        )
-
-    def _append_temporal_features(self, features: np.ndarray, timestamp: float):
-        self.sequence_buffer.append(features)
-        self.sequence_timestamps.append(timestamp)
+        if float(np.max(mirrored_probabilities)) > float(np.max(probabilities)):
+            return mirrored_probabilities
+        return probabilities
 
     def _mirror_features(self, features: np.ndarray, feature_mode: Optional[str] = None) -> np.ndarray:
         mode = feature_mode or getattr(self, 'feature_mode', FEATURE_MODE)
@@ -325,42 +311,37 @@ class LibrasHybridRealtimeClassifier:
 
     def _draw_overlay(self, frame: np.ndarray) -> np.ndarray:
         cv.putText(frame, 'LibrIA - Inferencia Hibrida', (10, 30), cv.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
+
+        estado = 'SINALIZANDO' if self.pipeline.is_signing else 'aguardando'
         cv.putText(
             frame,
-            f'Buffer temporal: {len(self.sequence_buffer)}/{self.sequence_length}',
+            f'{estado} | movimento: {self.pipeline.last_energy:.3f}',
             (10, 60),
             cv.FONT_HERSHEY_SIMPLEX,
             0.6,
-            (255, 0, 0), # Quem foi o gênio que inverteu o padrão RGB?
+            (0, 200, 0) if self.pipeline.is_signing else (200, 200, 200),
             2,
         )
 
-        # if self.last_output is not None:
-        #     cv.putText(
-        #         frame,
-        #         f'Saida: {self.last_output.token} [{self.last_output.source}] {self.last_output.confidence:.2%}',
-        #         (10, 95),
-        #         cv.FONT_HERSHEY_SIMPLEX,
-        #         0.7,
-        #         (255, 0, 0), # Quem foi o gênio que inverteu o padrão RGB?
-        #         2,
-        #     )
-
-        if self.last_temporal_candidate is not None:
+        if self.last_partial is not None and self.pipeline.is_signing:
             cv.putText(
                 frame,
-                f'Temporal: {self.last_temporal_candidate.token} {self.last_temporal_candidate.confidence:.2%}',
+                f'Parcial: {self.last_partial.label} {self.last_partial.confidence:.0%}',
                 (10, 95),
                 cv.FONT_HERSHEY_SIMPLEX,
                 0.55,
-                (255, 0, 0), # Quem foi o gênio que inverteu o padrão RGB?
+                (200, 200, 0),
                 2,
             )
 
-        if self.last_static_candidate is not None:
+        if self.token_history:
+            confirmados = ' '.join(
+                token.label if not token.is_rejected else '?'
+                for token in self.token_history
+            )
             cv.putText(
                 frame,
-                f'Estatico: {self.last_static_candidate.token} {self.last_static_candidate.confidence:.2%}',
+                f'Tokens: {confirmados}',
                 (10, 125),
                 cv.FONT_HERSHEY_SIMPLEX,
                 0.55,
@@ -385,7 +366,8 @@ class LibrasHybridRealtimeClassifier:
                 timestamp = time.time()
                 results = self.hands.process(cv.cvtColor(frame, cv.COLOR_BGR2RGB))
 
-                if results.multi_hand_landmarks:
+                hand_present = bool(results.multi_hand_landmarks)
+                if hand_present:
                     hand_landmarks = results.multi_hand_landmarks[0]
                     self.mp_drawing.draw_landmarks(
                         frame,
@@ -394,26 +376,25 @@ class LibrasHybridRealtimeClassifier:
                         self.mp_drawing_styles.get_default_hand_landmarks_style(),
                         self.mp_drawing_styles.get_default_hand_connections_style(),
                     )
-                    static_features, temporal_features = self._extract_features(hand_landmarks.landmark)
+                    self.static_features, temporal_features = self._extract_features(
+                        hand_landmarks.landmark
+                    )
                 else:
-                    static_features = np.zeros(self.static_feature_dimension, dtype=np.float32)
-                    temporal_features = np.zeros(self.temporal_feature_dimension, dtype=np.float32)
+                    self.static_features = None
+                    temporal_features = None
 
-                self._append_temporal_features(temporal_features, timestamp)
+                token = self.pipeline.process_frame(
+                    temporal_features,
+                    timestamp,
+                    hand_present=hand_present,
+                )
 
-                static_event = self._predict_static(static_features, timestamp)
-                if static_event is not None:
-                    self.last_static_candidate = static_event
-                    merged_event = self.merger.submit(static_event)
-                    if merged_event is not None:
-                        self.last_output = merged_event
-
-                temporal_event = self._predict_temporal()
-                if temporal_event is not None:
-                    self.last_temporal_candidate = temporal_event
-                    merged_event = self.merger.submit(temporal_event)
-                    if merged_event is not None:
-                        self.last_output = merged_event
+                if token is not None:
+                    if token.state == 'partial':
+                        self.last_partial = token
+                    else:
+                        self.token_history.append(token)
+                        self.last_partial = None
 
                 frame = self._draw_overlay(frame)
                 cv.imshow('LibrIA - Inferencia Hibrida', frame)

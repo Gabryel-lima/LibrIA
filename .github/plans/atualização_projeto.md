@@ -53,7 +53,7 @@ Separar o produto em quatro camadas:
 
 ## Fases recomendadas
 
-### Fase 1 — Consolidar o reconhecimento de sinais
+### Fase 1 — Consolidar o reconhecimento de sinais ✅
 
 * Definir claramente o vocabulário inicial de Libras.
 * Separar:
@@ -76,7 +76,7 @@ Separar o produto em quatro camadas:
 * Medir precisão, recall, matriz de confusão, latência e taxa de rejeição por classe.
 * Criar uma classe explícita de **"não reconhecido"** ou **"fora do vocabulário"**.
 
-### Fase 2 — Reconhecimento temporal robusto
+### Fase 2 — Reconhecimento temporal robusto ✅
 
 * Substituir o reconhecimento baseado somente em janela fixa por um pipeline com:
 
