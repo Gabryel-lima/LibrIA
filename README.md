@@ -35,7 +35,13 @@ cd LibrIA
 make setup                      # cria o venv e instala as dependências
 make verify                     # confere se o ambiente está utilizável
 
-# Coleta — sempre identifique quem está sinalizando
+make report                     # o que já existe e o que falta por classe
+make sources                    # bases públicas de Libras que cobrem as lacunas
+
+# Ingestão de base externa — cobre classes inteiras sem gravar nada
+make ingest SOURCE_DIR=data/archives/minds-libras MODALITY=temporal
+
+# Coleta — só o que sobrou, e sempre identifique quem está sinalizando
 make collect SUBJECT=ana ENVIRONMENT=sala_luz_natural CAMERA_ID=c920 DOMINANT_HAND=right
 
 make train                      # treina os modelos estático e temporal
@@ -56,6 +62,9 @@ Makefile no dia a dia; o `main.py` existe para quem não usa `make`.
 
 | Comando | O que faz |
 |:--------|:----------|
+| `make sources` | Catálogo de bases públicas de Libras que podem alimentar o dataset |
+| `make fetch SOURCE=<chave>` | Baixa uma base com download automatizável |
+| `make ingest SOURCE_DIR=<dir>` | Converte a base baixada em amostras do dataset (sem webcam) |
 | `make collect` | Dataset mínimo: alfabeto estático (24 letras) + J/Z |
 | `make collect-static` | Só o alfabeto manual estático |
 | `make collect-temporal` | Só as letras temporais (J, Z) |
@@ -85,6 +94,23 @@ Makefile no dia a dia; o `main.py` existe para quem não usa `make`.
 ```bash
 make collect-words SUBJECT=bruno ENVIRONMENT=escritorio SEQUENCES=40
 ```
+
+A coleta é dirigida por lacunas: classes que já atingiram a meta (`SAMPLES` /
+`SEQUENCES`) são puladas, venham elas da webcam ou de uma base externa. O plano
+é impresso antes de a câmera abrir. Para regravar mesmo assim, use
+`python main.py collect-static --all-labels`.
+
+### Variáveis de dados externos
+
+| Variável | Para quê |
+|:---------|:---------|
+| `SOURCE` | Chave da base em `make fetch` (ex.: `minds-libras`) |
+| `SOURCE_DIR` | Diretório da base já baixada, uma pasta por sinal |
+| `SOURCE_NAME` | Vira `source_dataset` nos metadados de cada amostra |
+| `MODALITY` | `temporal` (padrão) ou `static` |
+| `LABEL_MAP` | JSON `{termo_da_base: LABEL_LIBRIA}` para casar o vocabulário |
+
+Detalhes e as bases catalogadas em [docs/DATASETS.md](docs/DATASETS.md#9-dados-externos-sem-coleta-manual).
 
 ### Setup, embedded, câmera e desenvolvimento
 
@@ -234,7 +260,9 @@ partida, não uma medição.
 ### Ampliar o vocabulário
 
 1. Acrescente entradas em `_LEXICAL_ENTRIES` (`config/vocabulary.py`).
-2. Colete com `make collect-words SUBJECT=...`.
+2. Veja se uma base pública já cobre o sinal (`make sources`) e ingira
+   (`make ingest ... LABEL_MAP=...`). Só grave com `make collect-words
+   SUBJECT=...` o que sobrar.
 3. Aponte `LSTM_CONFIG['allowed_classes']` para `TEMPORAL_VOCABULARY_LABELS` e
    deixe `require_all_allowed_classes = False`, para treinar com as classes já
    coletadas em vez de falhar nas que ainda faltam.

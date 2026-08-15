@@ -2,7 +2,6 @@
 """Coleta unificada de dataset estático e temporal para o LibrIA."""
 
 import argparse
-import json
 import os
 import time
 from dataclasses import dataclass
@@ -26,7 +25,14 @@ from config.settings import (
     TEMPORAL_VOCABULARY_LABELS,
 )
 from config.vocabulary import MODALITY_STATIC, MODALITY_TEMPORAL, UNKNOWN_LABEL, get_sign_type
-from src.dataset.sample_metadata import UNSPECIFIED, SampleMetadata, write_metadata
+from src.dataset.coverage import resolve_labels_to_collect
+from src.dataset.landmark_storage import (
+    next_sample_index as _next_sample_index,
+    persist_sample as _persist_sample,
+    storage_shape as _storage_shape,
+    write_manifest,
+)
+from src.dataset.sample_metadata import UNSPECIFIED, SampleMetadata
 from utils.helpers import extract_landmarks_by_mode, load_camera_calibration, preprocess_frame
 
 try:
@@ -100,31 +106,6 @@ def _load_optional_calibration() -> Optional[Dict[str, np.ndarray]]:
     )
 
 
-def _storage_shape(features: np.ndarray) -> np.ndarray:
-    array = np.asarray(features, dtype=np.float32)
-    if FEATURE_MODE == 'wrist_relative' and array.size == FEATURE_DIMENSION and FEATURE_DIMENSION % 3 == 0:
-        return array.reshape(-1, 3)
-    return array
-
-
-def _mirror_landmark_sample(sample: np.ndarray) -> np.ndarray:
-    mirrored = np.asarray(sample, dtype=np.float32).copy()
-
-    if mirrored.ndim == 2 and mirrored.shape[1] == 3:
-        if FEATURE_MODE == 'wrist_relative':
-            mirrored[:, 0] = -mirrored[:, 0]
-        else:
-            mirrored[:, 0] = 1.0 - mirrored[:, 0]
-        return mirrored
-
-    flat = mirrored.reshape(-1)
-    if FEATURE_MODE == 'wrist_relative':
-        flat[0::3] = -flat[0::3]
-    else:
-        flat[0::3] = 1.0 - flat[0::3]
-    return flat.reshape(mirrored.shape)
-
-
 def _build_metadata(
     label: str,
     modality: str,
@@ -151,41 +132,6 @@ def _build_metadata(
     )
 
 
-def _persist_sample(
-    label_dir: str,
-    base_name: str,
-    sample_array: np.ndarray,
-    metadata: Optional[SampleMetadata],
-    save_mirrored: bool = True,
-    skip_existing_mirror: bool = False,
-) -> int:
-    """Grava a amostra, sua versão espelhada e os metadados de ambas.
-
-    Retorna quantos arquivos ``.npy`` foram criados.
-    """
-    written = 0
-
-    sample_path = os.path.join(label_dir, f'{base_name}.npy')
-    np.save(sample_path, sample_array)
-    written += 1
-    if metadata is not None:
-        write_metadata(sample_path, metadata)
-
-    if not save_mirrored:
-        return written
-
-    mirrored_path = os.path.join(label_dir, f'{base_name}_mirror.npy')
-    if skip_existing_mirror and os.path.exists(mirrored_path):
-        return written
-
-    np.save(mirrored_path, _mirror_landmark_sample(sample_array))
-    written += 1
-    if metadata is not None:
-        write_metadata(mirrored_path, metadata.mirrored_copy(f'{base_name}.npy'))
-
-    return written
-
-
 def _handedness_score(results) -> Optional[float]:
     if not getattr(results, 'multi_handedness', None):
         return None
@@ -198,41 +144,15 @@ def _handedness_label(results) -> Optional[str]:
     return str(results.multi_handedness[0].classification[0].label)
 
 
-def _next_sample_index(label_dir: str, prefix: str) -> int:
-    existing_indices = []
-    for filename in os.listdir(label_dir):
-        if not filename.startswith(prefix) or not filename.endswith('.npy'):
-            continue
-        stem = os.path.splitext(filename)[0]
-        suffix = stem.split('_')[-1]
-        if suffix.isdigit():
-            existing_indices.append(int(suffix))
-    return max(existing_indices, default=-1) + 1
-
-
 def _write_manifest(mode: str, labels: List[str], output_dir: str, sample_target: int, sequence_length: Optional[int]):
-    manifest_path = os.path.join(output_dir, 'manifest.json')
-    samples = {}
-    for label in labels:
-        label_dir = os.path.join(output_dir, label)
-        if not os.path.isdir(label_dir):
-            samples[label] = 0
-            continue
-        samples[label] = len([name for name in os.listdir(label_dir) if name.endswith('.npy')])
-
-    payload = {
-        'mode': mode,
-        'feature_mode': FEATURE_MODE,
-        'feature_dimension': FEATURE_DIMENSION,
-        'sample_target': sample_target,
-        'sequence_length': sequence_length,
-        'camera_calibrated': _load_optional_calibration() is not None,
-        'labels': labels,
-        'counts': samples,
-        'updated_at': time.strftime('%Y-%m-%dT%H:%M:%S'),
-    }
-    with open(manifest_path, 'w', encoding='utf-8') as file_obj:
-        json.dump(payload, file_obj, indent=2, ensure_ascii=True)
+    write_manifest(
+        mode,
+        labels,
+        output_dir,
+        sample_target,
+        sequence_length,
+        camera_calibrated=_load_optional_calibration() is not None,
+    )
 
 
 def _extract_valid_sample(results) -> Optional[np.ndarray]:
@@ -330,8 +250,18 @@ def collect_static(
     output_dir: str,
     camera_index: int,
     context: Optional[CaptureContext] = None,
+    only_missing: bool = True,
 ):
     context = context or DEFAULT_CAPTURE_CONTEXT
+
+    # Gravar de novo o que já está em disco (coletado aqui ou ingerido de uma
+    # base externa) não melhora o modelo e custa a sessão inteira da pessoa.
+    labels = resolve_labels_to_collect(
+        output_dir, labels, samples_per_label, only_missing, MODALITY_STATIC
+    )
+    if not labels:
+        return
+
     calibration = _load_optional_calibration()
     hands = _build_hands()
     draw_utils = mp.solutions.drawing_utils
@@ -480,8 +410,16 @@ def collect_temporal(
     output_dir: str,
     camera_index: int,
     context: Optional[CaptureContext] = None,
+    only_missing: bool = True,
 ):
     context = context or DEFAULT_CAPTURE_CONTEXT
+
+    labels = resolve_labels_to_collect(
+        output_dir, labels, num_sequences, only_missing, MODALITY_TEMPORAL
+    )
+    if not labels:
+        return
+
     calibration = _load_optional_calibration()
     hands = _build_hands()
     draw_utils = mp.solutions.drawing_utils
@@ -613,6 +551,8 @@ def main():
                         help='Mão dominante da pessoa')
     parser.add_argument('--no-metadata', action='store_true',
                         help='Não gravar o JSON de metadados junto das amostras')
+    parser.add_argument('--all-labels', action='store_true',
+                        help='Coleta todas as labels, inclusive as que já atingiram a meta')
     args = parser.parse_args()
 
     context = CaptureContext(
@@ -634,7 +574,14 @@ def main():
             label.upper()
             for label in (args.labels or _resolve_vocabulary_labels(args.vocabulary, MODALITY_STATIC))
         ]
-        collect_static(labels, args.samples_per_label, STATIC_DATASET_DIR, args.camera_index, context)
+        collect_static(
+            labels,
+            args.samples_per_label,
+            STATIC_DATASET_DIR,
+            args.camera_index,
+            context,
+            only_missing=not args.all_labels,
+        )
 
     if args.mode in {'temporal', 'all'}:
         labels = [
@@ -648,6 +595,7 @@ def main():
             TEMPORAL_DATASET_DIR,
             args.camera_index,
             context,
+            only_missing=not args.all_labels,
         )
 
 

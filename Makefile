@@ -15,6 +15,7 @@
 
 .PHONY: help setup install-cpu install-gpu install-dev verify environment dirs \
 	collect collect-static collect-temporal collect-words collect-unknown report \
+	sources fetch ingest ingest-static \
 	train train-static train-temporal infer infer-static infer-temporal all \
 	embedded-train embedded-export embedded-check \
 	checkerboard checkerboard-show calibrate-capture calibrate \
@@ -45,6 +46,17 @@ SEQUENCES ?= 30
 CAPTURE_ARGS = --subject $(SUBJECT) --camera-id $(CAMERA_ID) \
 	--environment $(ENVIRONMENT) --dominant-hand $(DOMINANT_HAND) \
 	--camera-index $(CAMERA) --samples $(SAMPLES) --sequences $(SEQUENCES)
+
+# --- Dados externos --------------------------------------------------------
+# Toda classe que uma base pública cobre é uma sessão de webcam que ninguém
+# precisa fazer. Ver config/data_sources.py e `make sources`.
+SOURCE ?=
+SOURCE_DIR ?=
+SOURCE_NAME ?= $(notdir $(SOURCE_DIR))
+MODALITY ?= temporal
+LABEL_MAP ?=
+INGEST_ARGS = --modality $(MODALITY) --source-name $(SOURCE_NAME) \
+	$(if $(LABEL_MAP),--label-map $(LABEL_MAP),)
 
 # --- Calibração de câmera -------------------------------------------------
 CALIBRATION_IMAGES ?= calibration/*.jpg
@@ -93,7 +105,7 @@ help: ## 📖 Mostra este menu
 	@echo "$(BOLD)$(BLUE)╚═══════════════════════════════════════════════════════════════╝$(NC)"
 	@echo ""
 	@echo "$(BOLD)$(GREEN)● PIPELINE — o caminho principal$(NC)"
-	@grep -E '^(collect|report|train|infer|all)[a-z-]*:.*?##' $(MAKEFILE_LIST) \
+	@grep -E '^(sources|fetch|ingest|collect|report|train|infer|all)[a-z-]*:.*?##' $(MAKEFILE_LIST) \
 		| awk 'BEGIN {FS = ":.*?## "} {printf "  $(GREEN)%-18s$(NC) %s\n", $$1, $$2}'
 	@echo ""
 	@echo "$(BOLD)$(BLUE)● SETUP$(NC)"
@@ -112,10 +124,15 @@ help: ## 📖 Mostra este menu
 	@grep -E '^(test|lint|format|clean|freeze)[a-z-]*:.*?##' $(MAKEFILE_LIST) \
 		| awk 'BEGIN {FS = ":.*?## "} {printf "  $(CYAN)%-18s$(NC) %s\n", $$1, $$2}'
 	@echo ""
-	@echo "$(BOLD)Coleta — sempre identifique a pessoa:$(NC)"
+	@echo "$(BOLD)Antes de gravar, veja o que já existe pronto:$(NC)"
+	@echo "  $(CYAN)make report$(NC)   o que falta por classe    $(CYAN)make sources$(NC)  bases públicas de Libras"
+	@echo "  $(CYAN)make ingest SOURCE_DIR=data/archives/<base> MODALITY=temporal$(NC)"
+	@echo ""
+	@echo "$(BOLD)Coleta — só o que falta, e sempre identifique a pessoa:$(NC)"
 	@echo "  $(CYAN)make collect SUBJECT=ana ENVIRONMENT=sala CAMERA_ID=c920 DOMINANT_HAND=right$(NC)"
 	@echo ""
 	@echo "$(BOLD)Variáveis:$(NC) SUBJECT CAMERA_ID ENVIRONMENT DOMINANT_HAND CAMERA SAMPLES SEQUENCES"
+	@echo "$(BOLD)Dados externos:$(NC) SOURCE SOURCE_DIR SOURCE_NAME MODALITY LABEL_MAP"
 	@echo "$(BOLD)GPU:$(NC) $(GPU_STATUS)"
 	@echo ""
 
@@ -195,9 +212,36 @@ collect-unknown: dirs ## 📷 Coleta amostras fora do vocabulário (classe de re
 	@echo "$(YELLOW)→ Coleta de negativos | pessoa: $(SUBJECT)$(NC)"
 	@$(VENV_PYTHON) main.py collect-unknown $(CAPTURE_ARGS)
 
-report: dirs ## 📊 Cobertura do dataset: vocabulário, metadados e divisão por pessoa
+report: dirs ## 📊 Cobertura do dataset: o que falta, de onde veio, divisão por pessoa
 	$(require_venv)
 	@$(VENV_PYTHON) -m scripts.dataset_report --json output/dataset_report.json
+
+################################################################################
+# PIPELINE — DADOS EXTERNOS (evita coleta manual)
+################################################################################
+
+sources: ## 🌐 Lista bases públicas de Libras que podem alimentar o dataset
+	$(require_venv)
+	@$(VENV_PYTHON) -m scripts.fetch_sources --list
+
+fetch: dirs ## ⬇️  Baixa uma base com download automático (make fetch SOURCE=minds-libras)
+	$(require_venv)
+	@if [ -z "$(SOURCE)" ]; then \
+		echo "$(RED)✗ Informe a fonte: make fetch SOURCE=<chave> (veja 'make sources')$(NC)"; exit 1; \
+	fi
+	@$(VENV_PYTHON) -m scripts.fetch_sources $(SOURCE) --output data/archives/$(SOURCE)
+
+ingest: dirs ## 📥 Converte uma base baixada em amostras do dataset (sem webcam)
+	$(require_venv)
+	@if [ -z "$(SOURCE_DIR)" ]; then \
+		echo "$(RED)✗ Informe a base: make ingest SOURCE_DIR=data/archives/<base>$(NC)"; exit 1; \
+	fi
+	@echo "$(YELLOW)→ Ingestão $(MODALITY) | base: $(SOURCE_NAME) | origem: $(SOURCE_DIR)$(NC)"
+	@$(VENV_PYTHON) -m scripts.ingest_dataset $(SOURCE_DIR) $(INGEST_ARGS) \
+		--json output/ingest_report.json
+
+ingest-static: ## 📥 Ingestão no fluxo estático (atalho de MODALITY=static)
+	@$(MAKE) --no-print-directory ingest MODALITY=static
 
 ################################################################################
 # PIPELINE — TREINO

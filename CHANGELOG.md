@@ -8,6 +8,17 @@ e esse projeto adere ao [Semantic Versioning](https://semver.org/lang/pt_BR/).
 ## [Não Lançado]
 
 ### Added
+- **Dados externos sem coleta manual**: catálogo de bases públicas de Libras em
+  `config/data_sources.py` (`make sources`), download automatizável do MINDS-Libras
+  via API do Zenodo (`make fetch SOURCE=...`) e ingestão de vídeos/imagens para o
+  formato do dataset em `src/dataset/video_ingest.py` (`make ingest`). A ingestão
+  reamostra sequências para o comprimento da LSTM, filtra pelo vocabulário, é
+  idempotente (`.ingest_state.json`) e grava proveniência (`source_dataset`,
+  `source_uri`, `license`) nos metadados de cada amostra
+- **Coleta dirigida por lacunas**: `src/dataset/coverage.py` calcula o que falta por
+  classe; `make collect` imprime o plano e pula as classes que já atingiram a meta
+  (use `--all-labels` para forçar). `make report` passa a mostrar o que falta, a
+  origem das amostras e as classes com origem única
 - **Fase 1 — vocabulário e avaliação**: `config/vocabulary.py` como fonte única do
   vocabulário (famílias `alphabet`, `lexical`, `functional` e a classe de rejeição
   `DESCONHECIDO`); metadados por amostra em `src/dataset/sample_metadata.py`
@@ -20,7 +31,7 @@ e esse projeto adere ao [Semantic Versioning](https://semver.org/lang/pt_BR/).
   (`partial`/`final`/`rejected`) em `src/inference/`
 - Coleta com metadados de sessão: `make collect SUBJECT=... ENVIRONMENT=...`
 - Alvos `collect-words`, `collect-unknown` e `report`
-- `make test` roda a suíte de testes de verdade (143 testes)
+- `make test` roda a suíte de testes de verdade (174 testes)
 - Pipeline unificado com coleta em `dataset/static/` e `dataset/temporal/`
 - Treinamento LSTM via `main.py train_lstm` e inferência temporal via `main.py infer_lstm`
 - Scripts de calibração de câmera e geração/exibição de tabuleiro

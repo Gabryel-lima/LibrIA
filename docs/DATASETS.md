@@ -279,13 +279,92 @@ Esses arquivos não substituem automaticamente o fluxo principal documentado. Us
 - O bundle embedded nao depende de MediaPipe em runtime.
 - No dispositivo, o firmware precisa apenas reproduzir o mesmo layout de landmarks normalizados e o mesmo ROI controlado.
 
-## 9. Checklist rápido
+## 9. Dados externos sem coleta manual
+
+Gravar na webcam é o modo mais caro de conseguir um sinal: custa uma sessão por
+classe e amarra o dataset a uma pessoa, uma câmera e um ambiente. Por isso o
+fluxo principal tenta, nesta ordem:
+
+```text
+make report   →  o que falta por classe
+make sources  →  alguma base pública cobre isso?
+make fetch    →  baixa (quando o acesso é automatizável)
+make ingest   →  vira .npy + .json, igual à coleta
+make collect  →  só o que sobrou (as classes completas são puladas)
+```
+
+### Catálogo de fontes
+
+`config/data_sources.py` é a fonte única do catálogo; `make sources` o imprime
+com licença, tamanho e forma de acesso. Em resumo:
+
+| Chave | Base | Modalidade | Acesso | Por que importa |
+|:------|:-----|:-----------|:-------|:----------------|
+| `minds-libras` | [MINDS-Libras](https://zenodo.org/record/2667329) (UFMG) | temporal | download direto | 20 sinais × 5 repetições × **12 sinalizantes** — a variação entre pessoas que uma webcam só não dá |
+| `v-librasil` | [V-LIBRASIL](https://libras.cin.ufpe.br/) (UFPE) | temporal | conta na plataforma | 1364 termos, 3 intérpretes — cobre o vocabulário lexical inteiro e permite ampliá-lo |
+| `ufop-libras` | [LIBRAS-UFOP](https://www.repositorio.ufop.br/handle/123456789/14751) | temporal | mediante solicitação | 56 sinais em **pares mínimos**: mede os erros que importam, não a acurácia média |
+| `ines-dicionario` | [Dicionário INES](https://www.ines.gov.br/dicionario-de-libras/) | temporal | verificar termos de uso | referência de forma dos sinais antes de gravar |
+| `libras-alphabet-roboflow` | [Alfabeto em Libras](https://universe.roboflow.com/search?q=alfabeto+libras) | estática | conta na plataforma | milhares de imagens do alfabeto com mãos e iluminações diferentes |
+| `bsl-alphabet-dataset` | [Brazilian Sign Language Alphabet](https://biankatpas.github.io/Brazilian-Sign-Language-Alphabet-Dataset/) | estática | ver repositório | 4411 imagens do alfabeto |
+| `wlasl` | [WLASL](https://dxli94.github.io/WLASL/) | temporal | C-UDA | **ASL, não Libras**: só para pré-treino; nunca para reportar acurácia em Libras |
+
+Licença é parte do catálogo: nada com `requires_agreement` é baixado
+automaticamente, e a licença declarada vai para o `.json` de cada amostra.
+
+### Ingestão
+
+```bash
+# uma pasta por sinal dentro do diretório de origem
+make ingest SOURCE_DIR=data/archives/v-librasil MODALITY=temporal \
+    SOURCE_NAME=v-librasil LABEL_MAP=data/label_maps/v-librasil.json
+```
+
+O que a ingestão faz com cada arquivo:
+
+1. Deriva o rótulo do caminho — pasta (padrão), nome do arquivo
+   (`--label-from filename`) ou regex (`--label-regex '(?P<label>...)'`), e
+   normaliza (`"Tudo bem?"` → `TUDO_BEM`).
+2. Descarta o que não está em `config/vocabulary.py` e **lista os termos
+   descartados** no fim, para você decidir se vale mapeá-los.
+3. Extrai landmarks com MediaPipe frame a frame; vídeos temporais são
+   reamostrados uniformemente para `LSTM_CONFIG['sequence_length']` passos,
+   então o fps da origem não importa.
+4. Rejeita clipes com poucos frames válidos (`--min-detection-ratio`) e grava a
+   fração detectada em `quality`.
+5. Grava `seq_XXX.npy` / `sample_XXX.npy` + espelho + `.json`, exatamente como a
+   coleta por webcam.
+
+A ingestão é **idempotente**: cada arquivo processado fica registrado em
+`.ingest_state.json` dentro do dataset, então rodar de novo não duplica amostras
+nem reprocessa vídeo. Um arquivo que mudar de tamanho é reprocessado.
+
+Use `--subject-pattern 'Sinalizador(?P<subject>\d+)'` sempre que a origem
+identificar a pessoa: é isso que mantém a divisão treino/validação/teste por
+pessoa válida quando o dataset mistura webcam e base externa.
+
+### Proveniência nos metadados
+
+Amostras ingeridas ganham três campos extras no `.json`:
+
+```json
+{
+  "source_dataset": "minds-libras",
+  "source_uri": "https://zenodo.org/record/2667329",
+  "license": "Creative Commons (ver registro no Zenodo)"
+}
+```
+
+`make report` agrega por origem e sinaliza classes que vêm de uma **única**
+origem — cobertas no papel, mas ainda expostas a viés de pessoa e câmera.
+
+## 10. Checklist rápido
 
 - [ ] Escolhi o fluxo: estático ou temporal
 - [ ] Tenho dados em `dataset/static/` ou em `dataset/temporal/`
 - [ ] Entendo que arquivos `_mirror.npy` são parte do dataset atual
 - [ ] Sei qual `FEATURE_MODE` está ativo
+- [ ] Conferi `make report` e `make sources` antes de gravar qualquer coisa
 - [ ] Rodei `make verify`
 - [ ] Treinei o modelo correspondente antes de inferir
 
-Ultima atualizacao: 2026-03-17
+Ultima atualizacao: 2026-08-14

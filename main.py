@@ -35,7 +35,7 @@ from config.settings import (
     create_directories,
     validate_config,
 )
-from config.vocabulary import UNKNOWN_LABEL
+from config.vocabulary import MODALITY_STATIC, MODALITY_TEMPORAL, UNKNOWN_LABEL
 from scripts.collect_dataset import CaptureContext, collect_static, collect_temporal
 from src.inference.libras_embedded_runtime import LibrasEmbeddedRuntime
 from src.inference.libras_hybrid_realtime_classifier import LibrasHybridRealtimeClassifier
@@ -64,7 +64,14 @@ def _has_temporal_dataset() -> bool:
 
 
 def _prepare_runtime() -> bool:
-    """Valida a configuração e cria os diretórios do projeto."""
+    """Cria os diretórios do projeto e valida a configuração.
+
+    A criação vem antes da validação porque ``validate_config`` cobra a
+    existência de ``DATA_DIR`` — validar primeiro reprovava um checkout limpo
+    por um diretório que o próprio passo seguinte criaria.
+    """
+    create_directories()
+
     errors = validate_config()
     if errors:
         print('Erros de configuração encontrados:')
@@ -72,7 +79,6 @@ def _prepare_runtime() -> bool:
             print(f'  - {error}')
         return False
 
-    create_directories()
     return True
 
 
@@ -83,6 +89,11 @@ def _capture_context(args) -> CaptureContext:
         environment=args.environment,
         dominant_hand=args.dominant_hand,
     )
+
+
+def _only_missing(args) -> bool:
+    """Gravar de novo o que já está em disco é o desperdício mais comum."""
+    return not getattr(args, 'all_labels', False)
 
 
 # ---------------------------------------------------------------------------
@@ -102,6 +113,7 @@ def collect_static_data(args) -> bool:
             output_dir=STATIC_DATASET_DIR,
             camera_index=args.camera_index,
             context=_capture_context(args),
+            only_missing=_only_missing(args),
         )
         print('✅ Coleta estática concluída!')
         return True
@@ -123,6 +135,7 @@ def _collect_temporal_labels(args, labels, description: str) -> bool:
             output_dir=TEMPORAL_DATASET_DIR,
             camera_index=args.camera_index,
             context=_capture_context(args),
+            only_missing=_only_missing(args),
         )
         print('✅ Coleta temporal concluída!')
         return True
@@ -160,6 +173,75 @@ def dataset_report(args) -> bool:
 
     sys.argv = ['dataset_report']
     report_main()
+    return True
+
+
+# ---------------------------------------------------------------------------
+# Dados externos — o caminho que evita gravar de novo o que já existe
+# ---------------------------------------------------------------------------
+
+def list_sources(args) -> bool:
+    """Catálogo de bases públicas de Libras que podem alimentar o dataset."""
+    from scripts.fetch_sources import main as sources_main
+
+    argv = ['--list']
+    if args.modality:
+        argv += ['--modality', args.modality]
+    return sources_main(argv) == 0
+
+
+def fetch_source(args) -> bool:
+    """Baixa uma base externa com download automatizável."""
+    from scripts.fetch_sources import main as sources_main
+
+    if not args.source:
+        print('❌ Informe a fonte: --source <chave>. Veja `python main.py sources`.')
+        return False
+
+    argv = [args.source]
+    if args.dry_run:
+        argv.append('--dry-run')
+    return sources_main(argv) == 0
+
+
+def ingest_dataset(args) -> bool:
+    """Converte uma base externa em amostras do dataset (sem webcam)."""
+    print('=== Ingestão de base externa ===')
+    if not _prepare_runtime():
+        return False
+
+    if not args.source_dir:
+        print('❌ Informe o diretório da base: --source-dir <caminho>.')
+        print('   Baixe uma base primeiro: `python main.py sources`.')
+        return False
+
+    from src.dataset.video_ingest import IngestOptions, ingest_directory, load_label_map
+    from config.data_sources import get_source
+
+    source_name = args.source_name or os.path.basename(os.path.normpath(args.source_dir))
+    catalog_entry = get_source(source_name)
+
+    try:
+        report = ingest_directory(
+            args.source_dir,
+            IngestOptions(
+                source_name=source_name,
+                modality=args.modality or MODALITY_TEMPORAL,
+                source_uri=catalog_entry.url if catalog_entry else '',
+                license=catalog_entry.license if catalog_entry else '',
+                default_subject=source_name,
+                dry_run=args.dry_run,
+            ),
+            label_map=load_label_map(args.label_map),
+            progress=print,
+        )
+    except Exception as error:
+        print(f'❌ Erro durante a ingestão: {error}')
+        return False
+
+    print()
+    print(report.summary())
+    print('\nRode `make report` para ver a cobertura atualizada.')
     return True
 
 
@@ -402,6 +484,9 @@ COMMANDS = {
     'collect-temporal': 'collect_temporal_data',
     'collect-words': 'collect_words',
     'collect-unknown': 'collect_unknown',
+    'sources': 'list_sources',
+    'fetch': 'fetch_source',
+    'ingest': 'ingest_dataset',
     'report': 'dataset_report',
     'train': 'train_all_models',
     'train-static': 'train_static_model',
@@ -443,7 +528,24 @@ def build_parser() -> argparse.ArgumentParser:
                          choices=['left', 'right', 'desconhecido'],
                          help='mão dominante da pessoa')
 
+    external = parser.add_argument_group('dados externos (sources/fetch/ingest)')
+    external.add_argument('--source', default=None,
+                          help='chave da base externa a baixar (ver `sources`)')
+    external.add_argument('--source-dir', default=None,
+                          help='diretório da base já baixada, uma pasta por sinal')
+    external.add_argument('--source-name', default=None,
+                          help='nome gravado em source_dataset nos metadados')
+    external.add_argument('--modality', default=None,
+                          choices=[MODALITY_STATIC, MODALITY_TEMPORAL],
+                          help='fluxo de destino da ingestão')
+    external.add_argument('--label-map', default=None,
+                          help='JSON {termo_da_base: LABEL_LIBRIA}')
+    external.add_argument('--dry-run', action='store_true',
+                          help='mostra o que seria baixado/ingerido sem gravar nada')
+
     options = parser.add_argument_group('opções de execução')
+    options.add_argument('--all-labels', action='store_true',
+                         help='coleta todas as classes, inclusive as que já atingiram a meta')
     options.add_argument('--camera-index', type=int, default=0, help='índice da webcam')
     options.add_argument('--samples', type=int, default=COLLECTION_CONFIG['static_samples_per_label'],
                          help='amostras estáticas por classe')

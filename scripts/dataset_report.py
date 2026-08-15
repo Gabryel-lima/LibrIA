@@ -6,10 +6,21 @@ import json
 import os
 from typing import Dict, List
 
-from config.settings import EVALUATION_CONFIG, STATIC_DATASET_DIR, TEMPORAL_DATASET_DIR
+from config.settings import (
+    COLLECTION_CONFIG,
+    EVALUATION_CONFIG,
+    STATIC_DATASET_DIR,
+    TEMPORAL_DATASET_DIR,
+)
 from config.vocabulary import MODALITY_STATIC, MODALITY_TEMPORAL, get_labels
+from src.dataset.coverage import dataset_gaps
 from src.dataset.sample_metadata import collect_dataset_metadata, metadata_coverage
 from src.evaluation.dataset_splits import SPLIT_NAMES, split_metadata_by_person
+
+TARGET_PER_LABEL = {
+    MODALITY_STATIC: COLLECTION_CONFIG['static_samples_per_label'],
+    MODALITY_TEMPORAL: COLLECTION_CONFIG['temporal_samples_per_label'],
+}
 
 
 def _vocabulary_coverage(dataset_dir: str, modality: str) -> Dict[str, int]:
@@ -51,6 +62,9 @@ def _report_for(dataset_dir: str, modality: str, allow_empty_splits: bool) -> Di
         'metadata_coverage': coverage,
         'vocabulary_counts': vocabulary,
         'missing_labels': sorted(label for label, count in vocabulary.items() if count == 0),
+        # O que ainda falta e de onde veio o que já existe: é isso que decide se
+        # a próxima sessão é de webcam ou de ingestão (`make sources`).
+        'gaps': dataset_gaps(dataset_dir, get_labels(modality=modality), TARGET_PER_LABEL[modality]),
         'split': split_summary,
         'split_error': split_error,
     }
@@ -70,6 +84,26 @@ def _print_report(report: Dict[str, object]) -> None:
 
     missing: List[str] = report['missing_labels']
     print(f"Labels do vocabulário sem amostras ({len(missing)}): {', '.join(missing) or '-'}")
+
+    gaps = report['gaps']
+    origens = sorted({
+        origin
+        for counts in gaps['sources_per_label'].values()
+        for origin in counts
+    })
+    print(f"Origens das amostras: {', '.join(origens) or '-'}")
+
+    pending = gaps['pending_labels']
+    if pending:
+        detalhe = ', '.join(f'{label}(-{count})' for label, count in sorted(pending.items()))
+        print(f"Faltando para a meta de {gaps['target_per_label']}/classe ({len(pending)}): {detalhe}")
+        print("  → antes de gravar, veja se alguma base pública cobre: make sources")
+    else:
+        print(f"Meta de {gaps['target_per_label']} amostras por classe atingida.")
+
+    single = gaps['single_source_labels']
+    if single:
+        print(f"Classes com uma única origem ({len(single)}): risco de viés de pessoa/câmera.")
 
     if report['split_error']:
         print(f"Divisão por pessoa indisponível: {report['split_error']}")

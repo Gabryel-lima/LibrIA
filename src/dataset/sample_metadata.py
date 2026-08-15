@@ -71,6 +71,12 @@ class SampleMetadata:
     sequence_length: Optional[int] = None
     mirrored: bool = False
     source_sample: Optional[str] = None
+    # Proveniência: preenchidos quando a amostra veio de uma base externa em vez
+    # da webcam (ver config/data_sources.py). Permitem medir acurácia por origem
+    # e saber o que pode ou não ser redistribuído.
+    source_dataset: Optional[str] = None
+    source_uri: Optional[str] = None
+    license: Optional[str] = None
     created_at: str = field(default_factory=lambda: time.strftime('%Y-%m-%dT%H:%M:%S'))
     schema_version: int = METADATA_SCHEMA_VERSION
 
