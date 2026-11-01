@@ -7,6 +7,14 @@ e esse projeto adere ao [Semantic Versioning](https://semver.org/lang/pt_BR/).
 
 ## [Não Lançado]
 
+### Security
+- Dependências atualizadas para corrigir advisories de segurança: keras 3.15.0,
+  Pillow 13.0.0, python-dotenv 1.2.4, pytest 9.0.3, black 26.10.1, pylint 4.0.9,
+  notebook 7.6.3 e jupyterlab 4.6.4. Ambiente completo: de 87 advisories para 1
+  (protobuf, bloqueado por TensorFlow 2.16.1 e MediaPipe). Detalhes em `docs/SEGURANCA.md`.
+- `.github/dependabot.yml` corrigido: o ecossistema vazio impedia a abertura de PRs
+  de atualização. Agora cobre `pip` e `github-actions`.
+
 ### Added
 - **Dados externos sem coleta manual**: catálogo de bases públicas de Libras em
   `config/data_sources.py` (`make sources`), download automatizável do MINDS-Libras
