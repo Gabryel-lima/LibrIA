@@ -19,7 +19,7 @@ Legenda: ✅ concluído (com código no repositório) · 🟡 parcial · ⬜ nã
 - [x] Camada 2 de robustez: calibração de câmera (`scripts/calibrate_camera.py`)
 - [x] Espelhamento esquerda/direita em datasets estáticos e temporais, com backfill de `frame_XXX.png` legados
 - [x] Pipeline temporal robusto sobre o modelo LSTM (`src/inference/temporal_pipeline.py`)
-- [x] Código de treino das CNNs embarcadas e do exportador de bundle (`src/model_training/libras_embedded_*`). **A exportação TFLite int8 está quebrada hoje**, então nenhum `.tflite` é gerado (ver `docs/SEGURANCA.md`)
+- [x] Código de treino das CNNs embarcadas e do exportador de bundle (`src/model_training/libras_embedded_*`). A exportação TFLite int8 foi corrigida (via SavedModel, `src/model_training/tflite_export.py`) e coberta por teste; **ainda não foi rodada com o dataset real**, então não há `.tflite` nem métricas do modelo real
 - [x] Cobertura de dataset e relatório de lacunas (`src/dataset/coverage.py`, `make report`)
 - [x] Ingestão de datasets externos em vídeo (`src/dataset/video_ingest.py`, `make ingest`)
 - [x] Metadados de proveniência por amostra (`src/dataset/sample_metadata.py`)
@@ -34,11 +34,11 @@ Legenda: ✅ concluído (com código no repositório) · 🟡 parcial · ⬜ nã
 
 - [ ] **App Android para testar o modelo no celular** ⬜
   - Plano em `.github/plans/android_plan.md` (fases F0–F5). Sem código ainda.
-  - Depende de gerar os `.tflite` localmente (`make embedded-train`), o que exige o dataset local, TensorFlow e **a correção da exportação int8** (hoje o conversor aborta; a correção via SavedModel foi verificada, mas não aplicada).
+  - Depende de gerar os `.tflite` localmente (`make embedded-train`), o que exige o dataset local e TensorFlow. A exportação int8, que abortava, foi corrigida e testada com dados sintéticos; falta rodar com o dataset real e registrar as métricas.
   - Prioridade: Alta
 
 - [ ] **Runtime embarcado para Raspberry Pi / Pico (C++)** ⬜ (depois do Android)
-  - O exportador de bundle existe no código, mas depende da exportação int8, que hoje quebra; `src/interfaces/libria_embedded_runtime.cpp` ainda tem os TODOs de `Init`, `PredictStatic` e `PredictTemporal` (retornam predição inválida)
+  - O exportador de bundle existe e funciona com dados sintéticos; `src/interfaces/libria_embedded_runtime.cpp` ainda tem os TODOs de `Init`, `PredictStatic` e `PredictTemporal` (retornam predição inválida)
   - Prioridade: Média, após o Android
 
 - [ ] **Segurança de dependências: itens abertos** 🟡
@@ -59,8 +59,8 @@ Legenda: ✅ concluído (com código no repositório) · 🟡 parcial · ⬜ nã
   - Prioridade: Média
 
 - [ ] **Tests Expansion** - Aumentar cobertura para 85%+ 🟡
-  - 174 testes passam (`pytest tests`); a cobertura ainda não é medida
-  - Nenhum teste importa TensorFlow, Keras ou Pillow: a suíte não detecta quebra nessas bibliotecas
+  - 176 testes passam (`pytest tests`; 2 deles exigem TensorFlow e são pulados sem ele); a cobertura ainda não é medida
+  - Só a exportação TFLite int8 exercita o TensorFlow (`tests/test_tflite_export.py`). Treino e inferência com modelos reais, Pillow e torch continuam sem teste
   - Estimado: 2 semanas
   - Prioridade: Alta
 
@@ -76,7 +76,7 @@ Legenda: ✅ concluído (com código no repositório) · 🟡 parcial · ⬜ nã
 
 - [ ] **Model Compression** - Otimizar para edge devices 🟡
   - TF Lite, ONNX support
-  - Status: Planning. O código de quantização int8 existe, mas a exportação está quebrada (ver acima); não há suporte a ONNX.
+  - Status: Planning. A quantização int8 funciona (exportação corrigida, testada com dados sintéticos); não há suporte a ONNX.
 
 - [ ] **Comparação de modelos com protocolo único** ⬜
   - Random Forest, LSTM, CNN e um futuro Transformer avaliados com o mesmo split por pessoa e as mesmas métricas por classe

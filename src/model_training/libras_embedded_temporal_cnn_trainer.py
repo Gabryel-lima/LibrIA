@@ -9,6 +9,7 @@ from sklearn.metrics import accuracy_score, classification_report
 from sklearn.model_selection import train_test_split
 
 from config.settings import EMBEDDED_TEMPORAL_CONFIG, TEMPORAL_DATASET_DIR
+from src.model_training.tflite_export import export_int8_tflite
 from src.utils.plots import plot_training_history
 
 try:
@@ -207,16 +208,12 @@ class LibrasEmbeddedTemporalCNNTrainer:
             json.dump(metadata, file_obj, ensure_ascii=True, indent=2)
 
     def _export_tflite_int8(self, representative_data: np.ndarray):
-        converter = tf.lite.TFLiteConverter.from_keras_model(self.model)
-        converter.optimizations = [tf.lite.Optimize.DEFAULT]
-        converter.representative_dataset = lambda: self._representative_dataset(representative_data)
-        converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
-        converter.inference_input_type = tf.int8
-        converter.inference_output_type = tf.int8
-
-        tflite_model = converter.convert()
-        with open(self.tflite_path, 'wb') as file_obj:
-            file_obj.write(tflite_model)
+        # Via SavedModel: from_keras_model aborta o processo com Keras 3 + TF 2.16.
+        export_int8_tflite(
+            self.model,
+            lambda: self._representative_dataset(representative_data),
+            self.tflite_path,
+        )
 
 
 def main():

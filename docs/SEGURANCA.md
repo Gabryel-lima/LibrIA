@@ -40,8 +40,8 @@ Mudanças no repositório:
 ## Validação
 
 - **Resolução**: a árvore completa de `requirements-dev.txt` resolve em Python 3.11 e 3.12.
-- **Testes**: `pytest tests` passa com 174 testes em Python 3.11 e 3.12 (TensorFlow 2.16.1 real, Keras 3.15.0, Pillow 13.0.0). Esses ambientes **não** tinham o `torch` instalado.
-- **Limite importante**: nenhum teste do projeto importa TensorFlow, Keras, Pillow ou torch. Os 174 testes passariam mesmo se essas bibliotecas estivessem quebradas. A validação das subidas foi feita com scripts de fumaça, não com a suíte.
+- **Testes**: `pytest tests` passa com 176 testes em Python 3.11 e 3.12 (TensorFlow 2.16.1 real, Keras 3.15.0, Pillow 13.0.0); sem TensorFlow, 2 deles são pulados. Esses ambientes **não** tinham o `torch` instalado.
+- **Limite importante**: quase nenhum teste do projeto exercita TensorFlow, Keras, Pillow ou torch. A exceção é `tests/test_tflite_export.py` (exportação TFLite int8, em subprocesso). Os demais testes passariam mesmo com essas bibliotecas quebradas. A validação das subidas foi feita com scripts de fumaça.
 - **Keras 3.13.2 → 3.15.0**: `model/libras_lstm.keras` carrega nas duas versões e produz a mesma saída para a mesma entrada. O treino de um modelo pequeno (`fit`) também roda.
 - **torch 2.13.0 + torchvision 0.28.0 + Pillow 13.0.0** (instalados, com `pip check` limpo): `import`, `transforms.ToPILImage()`, um pipeline `ToPILImage → Resize → ToTensor` e um forward de `nn.Linear` funcionam.
 - **Não verificado — código que usa torch**: `src/models/transformer-gpt/` (experimental) não pôde ser importado fora do seu diretório (`No module named 'models'`), e `src/ASLnet.py` e `src/cam.py` já estavam quebrados (ver "Problemas encontrados"). O efeito da subida do torch (2.5 → 2.13, versão major) nesse código **não foi testado**.
@@ -68,7 +68,7 @@ Mudanças no repositório:
 
 Estes não foram causados pelas atualizações. Foram verificados no baseline (antes das mudanças).
 
-1. **Exportação TFLite int8 quebra** (`LibrasEmbeddedCNNTrainer._export_tflite_int8` e a versão temporal). `tf.lite.TFLiteConverter.from_keras_model` aborta o processo com `LLVM ERROR: Failed to infer result type(s)`, mesmo sem quantização, com Keras 3.13.2 e 3.15.0. A exportação via SavedModel funciona e gera o int8 corretamente, verificada com as duas versões do Keras (`model.export(dir)` + `TFLiteConverter.from_saved_model(dir)`). Isso bloqueia `make embedded-train` e, por consequência, o app Android previsto em `.github/plans/android_plan.md`.
+1. **Exportação TFLite int8 abortava — corrigida.** `TFLiteConverter.from_keras_model` abortava o processo com `LLVM ERROR: Failed to infer result type(s)` (Keras 3.13.2 e 3.15.0, TensorFlow 2.16.1), mesmo sem quantização. Correção: exportar via SavedModel e converter com `from_saved_model` (`src/model_training/tflite_export.py`, usado pelos dois trainers). Verificado de ponta a ponta com dados sintéticos em Python 3.11 e 3.12: `train_model` dos dois trainers → `build_embedded_bundle` → `LibrasEmbeddedRuntime`, com o int8 concordando 100% com o Keras em float. **Limites:** os dados sintéticos são separáveis (provam a mecânica, não a qualidade do modelo) e `make embedded-train` com o dataset real não foi executado. Regressão coberta por `tests/test_tflite_export.py`, que falha no código antigo.
 2. **`model/best_temporal_model.h5` não carrega** com Keras 3.13.2 nem 3.15.0: `Unrecognized keyword arguments passed to LSTM: {'time_major': False}`. Não sei se o arquivo é usado; o caminho configurado é `model/libras_lstm.keras`.
 3. **`src/ASLnet.py` e `src/cam.py` não importam**: `src/ASLnet.py` importa `src.backup_tests.camBackup`, módulo que não existe no repositório (foi removido no commit "remove unused test files"), e ambos usam `from conf import ...`, que só funciona com a pasta `src/` no caminho.
 

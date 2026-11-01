@@ -7,6 +7,14 @@ e esse projeto adere ao [Semantic Versioning](https://semver.org/lang/pt_BR/).
 
 ## [Não Lançado]
 
+### Fixed
+- Exportação TFLite int8 dos trainers embedded (estático e temporal): o
+  `TFLiteConverter.from_keras_model` abortava o processo com `LLVM ERROR: Failed to
+  infer result type(s)` (Keras 3 + TensorFlow 2.16), o que impedia gerar qualquer
+  `.tflite`. Agora a exportação passa por SavedModel (`src/model_training/tflite_export.py`).
+  Teste de regressão em `tests/test_tflite_export.py`. Verificado com dados sintéticos;
+  ainda não executado com o dataset real.
+
 ### Changed
 - Workflows do GitHub Actions (`tests`, `release`, `label`, `stale`) desativados por
   enquanto: o código original foi mantido comentado em `.github/workflows/*.yml` e

@@ -25,7 +25,7 @@ Fora do escopo agora:
 | Modelo estático de produção | Random Forest (`model/model.pickle`) | Não roda direto no Android. Não será portado. |
 | Modelo estático embarcado | CNN int8 (`make embedded-train` gera `model/libria_embedded_cnn_int8.tflite`) | **Usar este.** Entrada `(21, 3)`, `wrist_relative`. |
 | Modelo temporal embarcado | CNN int8 (`libria_embedded_temporal_cnn_int8.tflite`), entrada `(30, 63)` | Usar este. Só classes **J e Z** (`allowed_classes`). |
-| Arquivos `.tflite` no repositório | **Ausentes**. Só existem `.h5`, `.keras` e `.pickle` | Precisam ser gerados localmente. **Bloqueado** pelo bug de exportação int8 (ver `docs/SEGURANCA.md`, item 1). |
+| Arquivos `.tflite` no repositório | **Ausentes**. Só existem `.h5`, `.keras` e `.pickle` | Precisam ser gerados localmente, com TensorFlow e o dataset. A exportação int8 foi corrigida (ver `docs/SEGURANCA.md`, item 1), mas ainda não foi rodada com o dataset real. |
 | Dataset de treino | `dataset/static` e `dataset/temporal` não estão versionados | Sem o dataset local, não há como gerar os `.tflite`. |
 | Métricas dos modelos embarcados | Não encontradas no repositório | Não sabemos a acurácia do modelo que vai para o celular. Medir antes de confiar. |
 | Runtime embarcado em Python | `src/inference/libras_embedded_runtime.py` faz a inferência com TFLite, mas **não tem** a máquina de estados temporal | A segmentação (`TemporalPipeline`) precisa ser portada. |
@@ -142,7 +142,7 @@ Detecção de mão: MediaPipe Hand Landmarker. O núcleo do MediaPipe é C++, ma
 ### F0 — Pré-requisitos (bloqueante)
 - Ter o dataset local em `dataset/static/` e `dataset/temporal/`.
 - Ter TensorFlow instalado, com Python 3.11 ou 3.12 (`tensorflow==2.16.1` não tem wheel para Python 3.13).
-- **Corrigir a exportação TFLite int8**: `from_keras_model` aborta o processo. A correção verificada é exportar via `model.export()` e converter com `TFLiteConverter.from_saved_model()` (ver `docs/SEGURANCA.md`). Sem isso, não há `.tflite`.
+- **Exportação TFLite int8: corrigida** (via SavedModel, `src/model_training/tflite_export.py`, com teste de regressão). Verificada com dados sintéticos em Python 3.11 e 3.12; falta rodá-la com o dataset real.
 - Rodar `make embedded-train` e `make embedded-export`. Isso gera os `.tflite` e o `embedded_bundle.json`.
 - Rodar `make embedded-check`. Se falhar, o bundle não serve. Parar aqui.
 - Registrar as métricas dos dois modelos embarcados. Sem isso, não há o que testar no celular.
@@ -187,7 +187,7 @@ Detecção de mão: MediaPipe Hand Landmarker. O núcleo do MediaPipe é C++, ma
 
 | Risco | Probabilidade | Mitigação |
 |---|---|---|
-| Exportação TFLite int8 quebrada | **Certa** (reproduzida) | Correção via SavedModel, em F0. |
+| Exportação TFLite int8 quebrada | Era certa; **corrigida** | Falta validar com o dataset real em F0. |
 | `z` do MediaPipe Android diferente do Python | Média (hipótese não verificada) | Fixtures de F1 detectam logo. |
 | Perda de acurácia pela quantização int8 | Média | Comparar acurácia float vs int8 no `embedded-check`. |
 | Bug de memória no núcleo C++ | Média | ASan/UBSan no host (F1); testes antes do build Android. |
@@ -215,7 +215,7 @@ Detecção de mão: MediaPipe Hand Landmarker. O núcleo do MediaPipe é C++, ma
 
 1. Confirmar a escolha de C++ para o núcleo e de Kotlin ou Java para a UI (seção 5).
 2. Confirmar que o dataset local existe e onde está (F0).
-3. Aplicar a correção da exportação TFLite int8 e gerar o bundle (F0).
+3. Gerar o bundle com o dataset real (`make embedded-train`; a exportação int8 já foi corrigida) e rodar `embedded-check` (F0).
 4. Só então começar F1.
 
 Perguntas em aberto:
