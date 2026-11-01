@@ -41,7 +41,7 @@ seaborn==0.13.2
 sounddevice==0.5.2
 
 # Utilities
-joblib==1.4.2
+joblib==1.6.0
 python-dotenv==1.2.4
 tqdm==4.67.1
 
