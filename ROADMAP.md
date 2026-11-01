@@ -2,63 +2,94 @@
 
 Visão geral do desenvolvimento do LibrIA. Atualizado trimestralmente.
 
+Legenda: ✅ concluído (com código no repositório) · 🟡 parcial · ⬜ não iniciado
+
 ## ✅ Concluído (v1.0.0)
 
 - [x] Coleta de dados de gestos de Libras
-- [x] Processamento e normalização de landmarks
-- [x] Modelo Random Forest com 99% de acurácia
+- [x] Processamento e normalização de landmarks (`wrist_relative` e `bounding_box`)
+- [x] Modelo Random Forest (`src/model_training/libras_model_trainer.py`; a acurácia de 99% citada na versão anterior deste roadmap não foi reverificada)
 - [x] Inferência em tempo real via webcam
 - [x] Documentação básica
 - [x] Testes unitários
 
-## 🚧 Em Desenvolvimento (v1.1.0 - Q2 2026)
+## ✅ Concluído desde a v1.0.0
 
-- [ ] **Face Recognition** - Reconhecimento de expressões faciais
+- [x] Camada 1 de robustez: features `wrist_relative` (padrão) e `bounding_box` (legado)
+- [x] Camada 2 de robustez: calibração de câmera (`scripts/calibrate_camera.py`)
+- [x] Espelhamento esquerda/direita em datasets estáticos e temporais, com backfill de `frame_XXX.png` legados
+- [x] Pipeline temporal com LSTM e CNN embarcada (`src/inference/temporal_pipeline.py`)
+- [x] Cobertura de dataset e relatório de lacunas (`src/dataset/coverage.py`, `make report`)
+- [x] Ingestão de datasets externos em vídeo (`src/dataset/video_ingest.py`, `make ingest`)
+- [x] Metadados de proveniência por amostra (`src/dataset/sample_metadata.py`)
+- [x] Divisão de dados por pessoa, para evitar vazamento entre treino/validação/teste (`src/evaluation/dataset_splits.py`)
+
+## 🚧 Em Desenvolvimento (v1.1.0 — prazo original Q2 2026, atrasado)
+
+- [ ] **Coleta para fechar a FASE 1** 🟡
+  - Código pronto; falta a coleta em si (≥3 pessoas, variação de mão, luz, distância e câmera, e cobertura por classe conferida com `make report`)
+  - Detalhes em `docs/FASE1_RECONHECIMENTO.md`, seção 6
+  - Prioridade: Alta
+
+- [ ] **Runtime embarcado (C++)** 🟡
+  - Exportação do bundle existe; `src/interfaces/libria_embedded_runtime.cpp` ainda tem os TODOs de `Init`, `PredictStatic` e `PredictTemporal` (retornam predição inválida)
+  - Prioridade: Alta
+
+- [ ] **Face Recognition** - Reconhecimento de expressões faciais ⬜
+  - Sem código no repositório
   - Estimado: 4-6 semanas
   - Prioridade: Alta
 
-- [ ] **Multi-hand Support** - Melhorar detecção com múltiplas mãos
+- [ ] **Multi-hand Support** - Melhorar detecção com múltiplas mãos ⬜
+  - Os classificadores usam `max_num_hands=1`; nenhum tratamento de múltiplas mãos
   - Estimado: 2-3 semanas
   - Prioridade: Média
 
-- [ ] **Tests Expansion** - Aumentar cobertura para 85%+
+- [ ] **Tests Expansion** - Aumentar cobertura para 85%+ 🟡
+  - 174 testes passam (`pytest tests`); a cobertura ainda não é medida
   - Estimado: 2 semanas
   - Prioridade: Alta
 
-## 📋 Planejado (v1.2.0 - Q3 2026)
+## 📋 Planejado (v1.2.0 — Q3 2026)
 
-- [ ] **Web Interface** - Interface web interativa
+- [ ] **Web Interface** - Interface web interativa ⬜
   - Tecnologia: FastAPI + React
   - Status: Planning
 
-- [ ] **TensorFlow Integration** - Suporte opcional para TensorFlow
+- [ ] **TensorFlow Integration** - Suporte opcional para TensorFlow ⬜
   - Alternativa ao Random Forest
   - Status: Proposal
 
-- [ ] **Model Compression** - Otimizar para edge devices
+- [ ] **Model Compression** - Otimizar para edge devices 🟡
   - TF Lite, ONNX support
-  - Status: Planning
+  - Status: Planning. O bundle embarcado já é quantizado, mas não há suporte a ONNX.
+
+- [ ] **Comparação de modelos com protocolo único** ⬜
+  - Random Forest, LSTM, CNN e um futuro Transformer avaliados com o mesmo split por pessoa e as mesmas métricas por classe
+  - Origem: `.github/plans/libras_robustez_3_camadas.md`, prioridade 4
 
 ## 🎯 Futura (v2.0.0)
 
-- [ ] **Mobile App** - Aplicativo mobile nativo
+- [ ] **Mobile App** - Aplicativo mobile nativo ⬜
   - iOS + Android
-  
-- [ ] **Real-time Translation** - Tradução em tempo real Libras ↔ Português
 
-- [ ] **Community Dataset** - Crowdsourcing de dados de novos gestos
+- [ ] **Real-time Translation** - Tradução em tempo real Libras ↔ Português ⬜
 
-- [ ] **Plugin System** - Sistema de plugins para extensões
+- [ ] **Community Dataset** - Crowdsourcing de dados de novos gestos ⬜
+
+- [ ] **Plugin System** - Sistema de plugins para extensões ⬜
 
 ## 📊 Milestones
 
-| Milestone | Data | Versão |
-|-----------|------|--------|
-| Alpha Release | 2025-06 | v0.1.0 |
-| Beta Release | 2025-09 | v0.5.0 |
-| v1.0.0 | 2026-02 | v1.0.0 |
-| v1.1.0 | 2026-05 | v1.1.0 |
-| v1.2.0 | 2026-08 | v1.2.0 |
+| Milestone | Data | Versão | Situação |
+|-----------|------|--------|----------|
+| Alpha Release | 2025-06 | v0.1.0 | ✅ |
+| Beta Release | 2025-09 | v0.5.0 | ✅ |
+| v1.0.0 | 2026-02 | v1.0.0 | ✅ |
+| v1.1.0 | 2026-05 | v1.1.0 | ⚠️ atrasado |
+| v1.2.0 | 2026-08 | v1.2.0 | ⚠️ atrasado |
+
+As datas de Alpha e Beta foram mantidas como registro histórico. Não verifiquei tags de release para confirmá-las.
 
 ## 🎓 Community Goals
 
@@ -76,6 +107,6 @@ Sua opinião importa! Como você gostaria que o LibrIA evoluísse?
 
 ---
 
-**Última atualização**: 2026-02-16
+**Última atualização**: 2026-11-01
 
 Para mais detalhes, veja [GitHub Projects](https://github.com/Gabryel-lima/LibrIA/projects)
