@@ -153,13 +153,16 @@ $(VENV_DIR):
 	@$(VENV_PIP) install --upgrade pip setuptools wheel --quiet
 
 install-cpu: ## 💾 Instala dependências (CPU)
-	@$(VENV_PIP) install -r requirements.txt && echo "$(GREEN)✓ Instalação CPU completa$(NC)"
+	@./scripts/pip_preflight.sh $(VENV_PIP) 3000 $(VENV_DIR)
+	@$(VENV_PIP) install --no-cache-dir -r requirements.txt && echo "$(GREEN)✓ Instalação CPU completa$(NC)"
 
 install-gpu: ## 🚀 Instala dependências com CUDA
-	@$(VENV_PIP) install -r requirements.txt -r requirements-gpu.txt && echo "$(GREEN)✓ Instalação GPU completa$(NC)"
+	@./scripts/pip_preflight.sh $(VENV_PIP) 8000 $(VENV_DIR)
+	@$(VENV_PIP) install --no-cache-dir -r requirements.txt -r requirements-gpu.txt && echo "$(GREEN)✓ Instalação GPU completa$(NC)"
 
 install-dev: ## 📚 Instala dependências de desenvolvimento
-	@$(VENV_PIP) install -r requirements-dev.txt --quiet && echo "$(GREEN)✓ Dependências dev instaladas$(NC)"
+	@./scripts/pip_preflight.sh $(VENV_PIP) 1000 $(VENV_DIR)
+	@$(VENV_PIP) install --no-cache-dir -r requirements-dev.txt --quiet && echo "$(GREEN)✓ Dependências dev instaladas$(NC)"
 
 verify: ## ✓ Verifica se o ambiente está utilizável
 	$(require_venv)
