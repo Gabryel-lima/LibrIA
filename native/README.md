@@ -73,7 +73,7 @@ libria::TemporalPipeline pipeline(
     /* temporal */ [&](const float* seq, std::size_t frames, std::size_t dim, std::vector<double>& probs) {
         run_temporal_model(seq, frames, dim, probs);   // ex.: TFLite int8
     },
-    /* label_map */ {{0, "J"}, {1, "Z"}},
+    /* label_map */ { {0, "J"}, {1, "Z"} },  // o espaço entre as chaves evita o Liquid do GitHub Pages
     /* sequence_length */ 30,
     /* feature_dim */ libria::kFeatureDimension,
     /* static */ [&](const float* features, std::size_t dim) {
