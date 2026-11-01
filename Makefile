@@ -25,7 +25,8 @@
 # VARIÁVEIS
 # ============================================================================
 
-PYTHON := python3
+# TensorFlow 2.16.1 e numpy 1.26.4 não têm wheels para Python 3.13+; use 3.11 ou 3.12.
+PYTHON ?= python3.11
 VENV_DIR := .venv
 VENV_PYTHON := $(VENV_DIR)/bin/python
 VENV_PIP := $(VENV_DIR)/bin/pip

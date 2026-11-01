@@ -1,5 +1,5 @@
 # LibrIA - Reconhecimento de Libras
-# Core Dependencies - Compatible with Python 3.11+
+# Core Dependencies - Python 3.11 ou 3.12 (tensorflow==2.16.1 não tem wheels para 3.13+)
 # Production-ready with GPU (CUDA) support
 
 # ⚠️  NOTE: TensorFlow and PyTorch require AVX CPU support

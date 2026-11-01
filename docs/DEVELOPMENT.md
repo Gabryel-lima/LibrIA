@@ -10,7 +10,7 @@ Guia de setup, rotina local e pontos de atenção para quem vai mexer no código
 
 ## Pré-requisitos
 
-- Python 3.11+
+- Python 3.11 ou 3.12 (3.13+ não é suportado pelo TensorFlow 2.16.1)
 - Git
 - Webcam para fluxos de coleta e inferência
 - CPU com suporte AVX para usar MediaPipe e TensorFlow com menos restrições

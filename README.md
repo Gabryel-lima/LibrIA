@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)
+![Python](https://img.shields.io/badge/Python-3.11%20|%203.12-blue.svg)
 ![OpenCV](https://img.shields.io/badge/OpenCV-4.11+-green.svg)
 ![MediaPipe](https://img.shields.io/badge/MediaPipe-0.10+-orange.svg)
 ![Scikit-learn](https://img.shields.io/badge/Scikit--learn-1.6+-red.svg)
@@ -48,7 +48,7 @@ make train                      # treina os modelos estático e temporal
 make infer                      # inferência híbrida em tempo real ('q' para sair)
 ```
 
-`make help` lista todos os comandos. Pré-requisitos: Python 3.11+, webcam e uma
+`make help` lista todos os comandos. Pré-requisitos: Python 3.11 ou 3.12 (não use 3.13+: o TensorFlow 2.16.1 não tem wheels), webcam e uma
 CPU com suporte a AVX (necessário para o MediaPipe — veja
 [docs/AVX_COMPATIBILITY.md](docs/AVX_COMPATIBILITY.md) se a sua não tiver).
 
