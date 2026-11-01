@@ -32,8 +32,10 @@ Legenda: ✅ concluído (com código no repositório) · 🟡 parcial · ⬜ nã
   - Detalhes em `docs/FASE1_RECONHECIMENTO.md`, seção 6
   - Prioridade: Alta
 
-- [ ] **App Android para testar o modelo no celular** ⬜
-  - Plano em `.github/plans/android_plan.md` (fases F0–F5). Sem código ainda.
+- [ ] **App Android para testar o modelo no celular** 🟡
+  - Plano em `.github/plans/android_plan.md` (fases F0–F5).
+  - F1 concluída: núcleo C++ em `native/libria_core`, com paridade bit a bit contra o pipeline Python (`make native-test`).
+  - F2 em andamento: ponte JNI e API Kotlin verificadas na JVM (`make native-bridge-test`); app Android (Kotlin, CameraX, MediaPipe) escrito, mas ainda não compilado (o ambiente bloqueia o Android SDK).
   - Depende de gerar os `.tflite` localmente (`make embedded-train`), o que exige o dataset local e TensorFlow. A exportação int8, que abortava, foi corrigida e testada com dados sintéticos; falta rodar com o dataset real e registrar as métricas.
   - Prioridade: Alta
 
@@ -44,8 +46,10 @@ Legenda: ✅ concluído (com código no repositório) · 🟡 parcial · ⬜ nã
 - [ ] **Segurança de dependências: itens abertos** 🟡
   - Resolvido: 106 → 1 advisory na árvore completa (ver `docs/SEGURANCA.md`)
   - Aberto: protobuf 4.25.9 (exige migrar TensorFlow e MediaPipe, que fixam `protobuf<5`)
-  - Aberto: `requirements-gpu.txt` ainda fixa CUDA 12.4, desalinhado do `torch 2.13` (CUDA 13)
-  - Aberto: fechar o PR #18 do Dependabot (propõe uma combinação torch/torchvision insolúvel)
+  - Feito: `requirements-gpu.txt` alinhado (`tensorflow[and-cuda]==2.16.1`; o torch 2.13 já traz o próprio CUDA). Não testado em GPU
+  - Decisão pendente: remover os modelos legados `best_temporal_model.h5` e `temporal_cnn_model.h5` (sem uso, contrato 16 × 42 incompatível com o pipeline atual)
+  - Feito: PR #18 do Dependabot fechado sem merge (propunha uma combinação torch/torchvision insolúvel)
+  - Feito: numpy de volta a 1.26.4 (o bump para 2.5.4 no #22 era incompatível com o TensorFlow 2.16.1); o Dependabot ignora majors do numpy
   - Prioridade: Média
 
 - [ ] **Face Recognition** - Reconhecimento de expressões faciais ⬜

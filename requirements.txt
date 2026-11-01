@@ -32,7 +32,7 @@ opencv-contrib-python==4.11.0.86
 Pillow==13.0.0
 
 # Numerical & Scientific
-numpy==2.5.4
+numpy==1.26.4  # tensorflow==2.16.1 exige numpy<2; não subir para 2.x antes de migrar o TensorFlow
 scipy==1.15.1
 pandas==2.2.3
 seaborn==0.13.2

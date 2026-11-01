@@ -19,6 +19,7 @@
 	train train-static train-temporal infer infer-static infer-temporal all \
 	embedded-train embedded-export embedded-check \
 	checkerboard checkerboard-show calibrate-capture calibrate \
+	native-test native-fixtures native-bridge-test \
 	test lint format clean clean-all freeze
 
 # ============================================================================
@@ -115,6 +116,10 @@ help: ## 📖 Mostra este menu
 	@echo ""
 	@echo "$(BOLD)$(MAGENTA)● EMBEDDED — TFLite INT8 e Raspberry Pi Pico$(NC)"
 	@grep -E '^embedded-[a-z]*:.*?##' $(MAKEFILE_LIST) \
+		| awk 'BEGIN {FS = ":.*?## "} {printf "  $(MAGENTA)%-18s$(NC) %s\n", $$1, $$2}'
+	@echo ""
+	@echo "$(BOLD)$(MAGENTA)● NÚCLEO NATIVO — C++ do app Android$(NC)"
+	@grep -E '^native-[a-z]*:.*?##' $(MAKEFILE_LIST) \
 		| awk 'BEGIN {FS = ":.*?## "} {printf "  $(MAGENTA)%-18s$(NC) %s\n", $$1, $$2}'
 	@echo ""
 	@echo "$(BOLD)$(YELLOW)● CÂMERA — calibração$(NC)"
@@ -318,6 +323,26 @@ calibrate-capture: ## 📷 Captura fotos do tabuleiro pela webcam e calibra
 calibrate: ## 🎥 Calibra a câmera a partir de imagens já capturadas
 	$(require_venv)
 	@$(VENV_PYTHON) -m scripts.calibrate_camera $(CALIBRATION_IMAGES) --cols $(CALIBRATION_COLS) --rows $(CALIBRATION_ROWS)
+
+################################################################################
+# NÚCLEO NATIVO (C++) — base do app Android, testado no host
+################################################################################
+
+NATIVE_DIR := native/libria_core
+NATIVE_BUILD := $(NATIVE_DIR)/build
+
+native-test: ## 🧩 Compila o núcleo C++ (ASan/UBSan, -Werror) e roda a paridade com o Python
+	@command -v cmake >/dev/null 2>&1 || { echo "$(RED)✗ cmake ausente$(NC)"; exit 1; }
+	@cmake -S $(NATIVE_DIR) -B $(NATIVE_BUILD) -DCMAKE_BUILD_TYPE=Debug -DLIBRIA_SANITIZE=ON -DLIBRIA_WERROR=ON
+	@cmake --build $(NATIVE_BUILD)
+	@cd $(NATIVE_BUILD) && ctest --output-on-failure
+
+native-fixtures: ## 🧩 Regenera native/fixtures a partir do pipeline Python
+	$(require_venv)
+	@$(VENV_PYTHON) -m scripts.export_parity_fixtures
+
+native-bridge-test: ## 🧩 Testa a ponte JNI e a API Kotlin na JVM (Gradle; não precisa de Android SDK)
+	@cd android && ./gradlew :libria-bridge:test --console=plain
 
 ################################################################################
 # DESENVOLVIMENTO

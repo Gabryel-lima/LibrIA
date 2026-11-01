@@ -8,6 +8,11 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    ignore:
+      # tensorflow==2.16.1 exige numpy<2 (o bump para 2.5.4 deixou o requirements
+      # insolúvel). Liberar quando o TensorFlow for migrado.
+      - dependency-name: "numpy"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
