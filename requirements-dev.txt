@@ -16,7 +16,7 @@ pylint==4.0.9
 
 # Documentation
 sphinx==7.2.6
-sphinx-rtd-theme==2.0.0
+sphinx-rtd-theme==3.1.0
 
 # Development Tools
 ipython==9.17.1
