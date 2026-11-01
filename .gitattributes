@@ -10,3 +10,6 @@
 # git commit -m "Normalize line endings"
 tests/yolov3.weights filter=lfs diff=lfs merge=lfs -text
 tests/coco.names filter=lfs diff=lfs merge=lfs -text
+# Scripts do Gradle Wrapper: .bat precisa de CRLF no Windows; o script shell, de LF.
+*.bat text eol=crlf
+gradlew text eol=lf
