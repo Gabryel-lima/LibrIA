@@ -33,4 +33,4 @@ Adicionar suporte consistente a mão esquerda/direita no pipeline híbrido, espe
 - [x] `pytest tests/test_hybrid_realtime_classifier.py -q`
 - [x] `pytest tests -q`
 
-> Verificado em 2026-11-01: 174 passed. Ambiente sem TensorFlow; os caminhos Keras não foram exercitados.
+> Verificado em 2026-11-01: 174 passed, em Python 3.11 e 3.12. Esses testes não importam TensorFlow nem Keras: cobrem a lógica de espelhamento e de carga de dataset, mas não o treino nem a inferência com os modelos reais.

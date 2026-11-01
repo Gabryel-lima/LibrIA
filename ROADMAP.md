@@ -18,7 +18,8 @@ Legenda: ✅ concluído (com código no repositório) · 🟡 parcial · ⬜ nã
 - [x] Camada 1 de robustez: features `wrist_relative` (padrão) e `bounding_box` (legado)
 - [x] Camada 2 de robustez: calibração de câmera (`scripts/calibrate_camera.py`)
 - [x] Espelhamento esquerda/direita em datasets estáticos e temporais, com backfill de `frame_XXX.png` legados
-- [x] Pipeline temporal com LSTM e CNN embarcada (`src/inference/temporal_pipeline.py`)
+- [x] Pipeline temporal robusto sobre o modelo LSTM (`src/inference/temporal_pipeline.py`)
+- [x] Código de treino das CNNs embarcadas e do exportador de bundle (`src/model_training/libras_embedded_*`). **A exportação TFLite int8 está quebrada hoje**, então nenhum `.tflite` é gerado (ver `docs/SEGURANCA.md`)
 - [x] Cobertura de dataset e relatório de lacunas (`src/dataset/coverage.py`, `make report`)
 - [x] Ingestão de datasets externos em vídeo (`src/dataset/video_ingest.py`, `make ingest`)
 - [x] Metadados de proveniência por amostra (`src/dataset/sample_metadata.py`)
@@ -33,12 +34,19 @@ Legenda: ✅ concluído (com código no repositório) · 🟡 parcial · ⬜ nã
 
 - [ ] **App Android para testar o modelo no celular** ⬜
   - Plano em `.github/plans/android_plan.md` (fases F0–F5). Sem código ainda.
-  - Depende de gerar os `.tflite` localmente (`make embedded-train`), o que exige o dataset local e TensorFlow.
+  - Depende de gerar os `.tflite` localmente (`make embedded-train`), o que exige o dataset local, TensorFlow e **a correção da exportação int8** (hoje o conversor aborta; a correção via SavedModel foi verificada, mas não aplicada).
   - Prioridade: Alta
 
 - [ ] **Runtime embarcado para Raspberry Pi / Pico (C++)** ⬜ (depois do Android)
-  - Exportação do bundle existe; `src/interfaces/libria_embedded_runtime.cpp` ainda tem os TODOs de `Init`, `PredictStatic` e `PredictTemporal` (retornam predição inválida)
+  - O exportador de bundle existe no código, mas depende da exportação int8, que hoje quebra; `src/interfaces/libria_embedded_runtime.cpp` ainda tem os TODOs de `Init`, `PredictStatic` e `PredictTemporal` (retornam predição inválida)
   - Prioridade: Média, após o Android
+
+- [ ] **Segurança de dependências: itens abertos** 🟡
+  - Resolvido: 106 → 1 advisory na árvore completa (ver `docs/SEGURANCA.md`)
+  - Aberto: protobuf 4.25.9 (exige migrar TensorFlow e MediaPipe, que fixam `protobuf<5`)
+  - Aberto: `requirements-gpu.txt` ainda fixa CUDA 12.4, desalinhado do `torch 2.13` (CUDA 13)
+  - Aberto: fechar o PR #18 do Dependabot (propõe uma combinação torch/torchvision insolúvel)
+  - Prioridade: Média
 
 - [ ] **Face Recognition** - Reconhecimento de expressões faciais ⬜
   - Sem código no repositório
@@ -52,6 +60,7 @@ Legenda: ✅ concluído (com código no repositório) · 🟡 parcial · ⬜ nã
 
 - [ ] **Tests Expansion** - Aumentar cobertura para 85%+ 🟡
   - 174 testes passam (`pytest tests`); a cobertura ainda não é medida
+  - Nenhum teste importa TensorFlow, Keras ou Pillow: a suíte não detecta quebra nessas bibliotecas
   - Estimado: 2 semanas
   - Prioridade: Alta
 
@@ -67,7 +76,7 @@ Legenda: ✅ concluído (com código no repositório) · 🟡 parcial · ⬜ nã
 
 - [ ] **Model Compression** - Otimizar para edge devices 🟡
   - TF Lite, ONNX support
-  - Status: Planning. O bundle embarcado já é quantizado, mas não há suporte a ONNX.
+  - Status: Planning. O código de quantização int8 existe, mas a exportação está quebrada (ver acima); não há suporte a ONNX.
 
 - [ ] **Comparação de modelos com protocolo único** ⬜
   - Random Forest, LSTM, CNN e um futuro Transformer avaliados com o mesmo split por pessoa e as mesmas métricas por classe
@@ -77,6 +86,7 @@ Legenda: ✅ concluído (com código no repositório) · 🟡 parcial · ⬜ nã
 
 - [ ] **Mobile App** - Aplicativo mobile nativo ⬜
   - iOS + Android
+  - O app de teste Android (v1.1, acima) é um precursor, não o produto final
 
 - [ ] **Real-time Translation** - Tradução em tempo real Libras ↔ Português ⬜
 

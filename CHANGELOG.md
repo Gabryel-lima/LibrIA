@@ -8,10 +8,13 @@ e esse projeto adere ao [Semantic Versioning](https://semver.org/lang/pt_BR/).
 ## [Não Lançado]
 
 ### Security
-- Dependências atualizadas para corrigir advisories de segurança: keras 3.15.0,
-  Pillow 13.0.0, python-dotenv 1.2.4, pytest 9.0.3, black 26.10.1, pylint 4.0.9,
-  notebook 7.6.3 e jupyterlab 4.6.4. Ambiente completo: de 87 advisories para 1
-  (protobuf, bloqueado por TensorFlow 2.16.1 e MediaPipe). Detalhes em `docs/SEGURANCA.md`.
+- Dependências atualizadas para corrigir advisories de segurança: torch 2.13.0 e
+  torchvision 0.28.0 (par obrigatório; as faixas antigas travavam o torch 2.5.1),
+  keras 3.15.0, Pillow 13.0.0, python-dotenv 1.2.4, pytest 9.0.3, black 26.10.1,
+  pylint 4.0.9, notebook 7.6.3 e jupyterlab 4.6.4. Árvore completa resolvida:
+  de 106 advisories em 10 pacotes para 1 (protobuf, bloqueado por TensorFlow 2.16.1
+  e MediaPipe). O código que usa torch (transformer experimental) não foi testado
+  com a nova versão. Detalhes em `docs/SEGURANCA.md`.
 - `.github/dependabot.yml` corrigido: o ecossistema vazio impedia a abertura de PRs
   de atualização. Agora cobre `pip` e `github-actions`.
 

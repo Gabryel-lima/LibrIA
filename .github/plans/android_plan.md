@@ -76,7 +76,9 @@ Parâmetros em `TEMPORAL_PIPELINE_CONFIG` (`config/settings.py`):
 
 ## 4. Arquitetura: núcleo nativo em C++, interface em Java/Kotlin
 
-**Decisão do usuário (2026-11-01):** o processamento de performance fica em uma linguagem nativa. Java/Kotlin fica só com a interface e o ciclo de vida do Android. A linguagem nativa escolhida é C++ (ver alternativas abaixo).
+**Direção do usuário (2026-11-01):** o processamento de performance deve ficar em uma linguagem nativa, e não em Python nem diretamente em Java, com Java/Kotlin só na interface e no ciclo de vida do Android. O usuário citou C++, C e Go como candidatas e pediu a mais indicada para esse propósito.
+
+**Recomendação (a confirmar pelo usuário): C++.** A escolha da linguagem **ainda não foi confirmada**; a seção 4.2 compara as alternativas.
 
 ### 4.1 Camadas
 
@@ -96,21 +98,22 @@ Parâmetros em `TEMPORAL_PIPELINE_CONFIG` (`config/settings.py`):
 └───────────────────────────────────────────────┘
 ```
 
-Detecção de mão: MediaPipe Hand Landmarker. A biblioteca nativa do MediaPipe também é C++; avaliar se o núcleo chama o MediaPipe diretamente ou se recebe os landmarks da camada Java. Essa escolha fica para a F2 e é medida ali.
+Detecção de mão: MediaPipe Hand Landmarker. O núcleo do MediaPipe é C++, mas o caminho suportado no Android é a API Java/Kotlin dos Tasks. Logo, o cenário mais provável é: **a câmera e o MediaPipe ficam do lado Java**, e o núcleo C++ recebe só os 63 floats de landmarks por quadro. Chamar o MediaPipe direto do C++ é possível, mas não é o caminho simples; avaliar na F2 e medir.
 
 ### 4.2 Por que C++ e não as alternativas
 
 | Opção | Prós | Contras | Veredito |
 |---|---|---|---|
-| **C++** | API oficial do TFLite e do MediaPipe é C++; NDK e CMake são o caminho padrão; controle explícito de memória e de cópias; RAII sem custo; o núcleo `src/interfaces/` já é C++ | Risco de bugs de memória (mitigado com ASan/UBSan no build de host); build com NDK mais trabalhoso | **Recomendado** |
+| **C++** | o TFLite tem API C++ (e C), e o núcleo do MediaPipe é C++; NDK e CMake são o caminho padrão; controle explícito de memória e de cópias; RAII sem custo; o núcleo `src/interfaces/` já é C++ | Risco de bugs de memória (mitigado com ASan/UBSan no build de host); build com NDK mais trabalhoso | **Recomendado** |
 | **C puro** | Mínimo de runtime; ABI estável | Sem RAII, mais código para gerenciar memória e strings; a API C do TFLite é mais limitada que a C++ | Só se C++ causar problema concreto |
 | **Rust** | Segurança de memória sem GC; bom suporte a NDK | Bindings de TFLite e MediaPipe menos maduros; mais uma linguagem no projeto | Alternativa válida; custo de integração maior |
-| **Go** (`gomobile`) | Produtividade | Runtime com GC e overhead de chamada entre Go e Java a cada quadro; bindings de TFLite/MediaPipe fracos; pausas de GC no caminho de tempo real | **Não recomendado** para o caminho quente |
+| **Go** (`gomobile`) | Produtividade | Runtime com GC e overhead de chamada entre Go e Java a cada quadro; bindings de TFLite/MediaPipe fracos (avaliação deste plano, não medida); pausas de GC no caminho de tempo real | **Não recomendado** para o caminho quente |
 | **Java/Kotlin puro** | Mais simples, integração direta | Sem controle de memória fino; GC no caminho de inferência; é justamente o que se quer evitar | Só para a UI |
 
 ### 4.3 Ressalvas honestas sobre o ganho de performance
 
-- **O ganho de C++ vem menos da linguagem e mais do caminho dos dados.** A maior parte do custo por quadro costuma ser cópia de imagem, alocação e troca entre threads. Isso se resolve com buffers pré-alocados, acesso direto ao frame da câmera e delegate da TFLite (GPU ou NNAPI). Escolher C++ sem isso não basta.
+- **O ganho de C++ vem menos da linguagem e mais do caminho dos dados.** A maior parte do custo por quadro costuma ser cópia de imagem, alocação e troca entre threads. Isso se resolve com buffers pré-alocados, acesso direto ao frame da câmera e delegate do TFLite/LiteRT (GPU ou de fabricante; a NNAPI foi marcada como descontinuada a partir do Android 15, **verificar na documentação atual**). Escolher C++ sem isso não basta.
+- **O núcleo C++ processa pouco dado se o MediaPipe ficar do lado Java.** Nesse cenário (seção 4.1), o C++ recebe 63 floats por quadro e roda duas CNNs pequenas; o caminho pesado (câmera → imagem → MediaPipe) fica fora dele. O ganho esperado do núcleo C++ é então **modesto**, e o argumento mais forte para ele passa a ser o reuso com o Pico e a paridade testável no host. Se o objetivo for ganho grande de latência, o ponto a otimizar é o caminho da câmera e do MediaPipe, não a linguagem do núcleo.
 - **Não sabemos se o gargalo está na inferência.** Os modelos são CNNs pequenas (sobre 21 pontos e uma janela de 30 quadros). O custo pode estar no MediaPipe, na câmera ou na cópia. Medir em F2 antes de otimizar.
 - **Controle de memória é um custo também.** Com C++ quem gerencia é o programador. Por isso o núcleo tem testes no host (Linux) com ASan/UBSan, antes de qualquer build Android.
 - **Reuso com o Pico:** o núcleo de features e segmentação não depende de Android. Para o Raspberry Pi/Pico, a mesma lógica C++ serve, trocando apenas o backend de inferência (TFLite Micro no Pico). Isso é uma vantagem concreta de C++ sobre Kotlin neste projeto.
@@ -127,11 +130,11 @@ Detecção de mão: MediaPipe Hand Landmarker. A biblioteca nativa do MediaPipe 
 | Decisão | Opções | Recomendação | Status |
 |---|---|---|---|
 | Qual modelo estático no celular | (a) CNN int8 embarcada; (b) portar o Random Forest; (c) converter o LSTM | **(a)** | Recomendado |
-| Detector de mão | (a) MediaPipe Hand Landmarker; (b) detector próprio | **(a)**, mesmo algoritmo do host | Recomendado |
-| Linguagem do núcleo de processamento | C++; C; Rust; Go | **C++** (seção 4.2) | **Decidido pelo usuário; a validar com benchmark em F2** |
+| Detector de mão | (a) MediaPipe Hand Landmarker (Tasks); (b) detector próprio | **(a)**. O host usa a API legada `mp.solutions.hands` (mediapipe 0.10.14); o Android usa a API Tasks, com modelo e pipeline que podem diferir. **Semelhante, não idêntico**: a paridade é medida em F1. | Recomendado |
+| Linguagem do núcleo de processamento | C++; C; Rust; Go | **C++** (seção 4.2) | **Recomendada; aguarda confirmação do usuário e validação por benchmark em F2** |
 | Linguagem da UI | Kotlin; Java | Kotlin (ou Java, se preferido) | Em aberto |
 | Framework de UI | Compose; Views | Compose | Recomendado |
-| Onde mora a lógica de features e segmentação | Núcleo C++ | **Núcleo C++**, validado por fixtures | Decidido com a linguagem |
+| Onde mora a lógica de features e segmentação | Núcleo C++ | **Núcleo C++**, validado por fixtures | Depende da confirmação da linguagem |
 | Fonte de verdade dos parâmetros | Hardcoded no núcleo; ou lido do `embedded_bundle.json` | **Ler do manifesto** sempre que possível | Recomendado |
 
 ## 6. Fases
@@ -157,6 +160,7 @@ Detecção de mão: MediaPipe Hand Landmarker. A biblioteca nativa do MediaPipe 
 ### F2 — Esqueleto do app e benchmark
 - Projeto Android com CameraX, a ponte JNI, o núcleo C++ compilado via NDK, e overlay dos 21 pontos.
 - Sem inferência ainda. Só mostra a mão detectada e o FPS.
+- Escolher o artefato de runtime (TFLite ou o LiteRT, que é o nome atual) e **confirmar que ele executa os `.tflite` gerados pelo TensorFlow 2.16.1**. Não foi verificado.
 - **Medir antes de otimizar**: tempo por quadro separado em captura, MediaPipe, features, inferência e cópias. Esse benchmark decide se a escolha de C++ se justifica para o gargalo real.
 
 **Critério de saída:** roda em um celular real, com o benchmark por etapa registrado. A meta de FPS (inicialmente 15) é uma hipótese, a ser confirmada pela medição.
@@ -197,7 +201,7 @@ Detecção de mão: MediaPipe Hand Landmarker. A biblioteca nativa do MediaPipe 
 ## 8. Ambiente de build
 
 - Container atual: Java, Gradle e Python 3.11/3.12 existem, mas **sem Android SDK nem NDK**. Não compila APK aqui.
-- O núcleo C++ pode ser compilado e testado no host deste tipo de container, desde que haja um compilador C++ e CMake. Verificar antes de depender disso.
+- Verificado em 2026-11-01: este container tem `g++`, `clang++`, `cmake`, `make` e `ninja`. O núcleo C++ pode ser compilado e testado aqui, sem Android.
 - Build Android: (a) Android Studio na sua máquina, com NDK; ou (b) CI no GitHub Actions com `setup-android` e NDK. A opção (a) é mais rápida para iterar; a (b) garante que o build não depende de uma máquina específica.
 
 ## 9. Critério de sucesso geral
