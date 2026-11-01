@@ -9,4 +9,4 @@
 # A versão anterior deste arquivo fixava as bibliotecas CUDA 12.4 / cuDNN 9 do
 # torch 2.5.1: não serviam ao torch 2.13 (que traz as próprias) e conflitavam
 # com o cuDNN 8.9 que o TensorFlow 2.16.1 exige. Ver docs/SEGURANCA.md.
-tensorflow[and-cuda]==2.16.1
+tensorflow[and-cuda]==2.21.0
