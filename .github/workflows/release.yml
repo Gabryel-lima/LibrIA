@@ -1,24 +1,46 @@
-name: Release
+# ============================================================================
+# WORKFLOW DESATIVADO (2026-11-01) a pedido do mantenedor.
+#
+# O codigo original esta comentado no fim deste arquivo, sem nenhuma alteracao.
+# Para reativar: apague o stub logo abaixo e remova o prefixo "# " do bloco
+# "CODIGO ORIGINAL". O stub existe so para o arquivo continuar sendo um workflow
+# valido para o GitHub; ele roda apenas por disparo manual (workflow_dispatch).
+# ============================================================================
+name: Release (desativado)
 
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_dispatch:
 
 jobs:
-  release:
+  desativado:
     runs-on: ubuntu-latest
-    
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Create Release
-      uses: actions/create-release@latest
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
-        body_path: ./CHANGELOG.md
-        draft: false
-        prerelease: false
+      - run: echo "Workflow desativado. Veja o comentario no topo do arquivo."
+
+# ============================================================================
+# CODIGO ORIGINAL (comentado)
+# ============================================================================
+# name: Release
+#
+# on:
+#   push:
+#     tags:
+#       - 'v*'
+#
+# jobs:
+#   release:
+#     runs-on: ubuntu-latest
+#     
+#     steps:
+#     - uses: actions/checkout@v4
+#     
+#     - name: Create Release
+#       uses: actions/create-release@latest
+#       env:
+#         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#       with:
+#         tag_name: ${{ github.ref }}
+#         release_name: Release ${{ github.ref }}
+#         body_path: ./CHANGELOG.md
+#         draft: false
+#         prerelease: false

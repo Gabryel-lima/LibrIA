@@ -27,8 +27,10 @@ Adicionar suporte consistente a mão esquerda/direita no pipeline híbrido, espe
 5. VERIFY: executar suíte de testes alvo e revisar diffs.
 
 ## 5. ✅ Verification Standards
-- [ ] `pytest tests/test_collect_dataset.py -q`
-- [ ] `pytest tests/test_static_dataset_loader.py -q`
-- [ ] `pytest tests/test_lstm_dataset_loader.py -q`
-- [ ] `pytest tests/test_hybrid_realtime_classifier.py -q`
-- [ ] `pytest tests -q`
+- [x] `pytest tests/test_collect_dataset.py -q`
+- [x] `pytest tests/test_static_dataset_loader.py -q`
+- [x] `pytest tests/test_lstm_dataset_loader.py -q`
+- [x] `pytest tests/test_hybrid_realtime_classifier.py -q`
+- [x] `pytest tests -q`
+
+> Verificado em 2026-11-01: 174 passed, em Python 3.11 e 3.12. Esses testes não importam TensorFlow nem Keras: cobrem a lógica de espelhamento e de carga de dataset, mas não o treino nem a inferência com os modelos reais.

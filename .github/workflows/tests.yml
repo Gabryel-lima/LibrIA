@@ -1,42 +1,64 @@
-name: Tests and Quality
+# ============================================================================
+# WORKFLOW DESATIVADO (2026-11-01) a pedido do mantenedor.
+#
+# O codigo original esta comentado no fim deste arquivo, sem nenhuma alteracao.
+# Para reativar: apague o stub logo abaixo e remova o prefixo "# " do bloco
+# "CODIGO ORIGINAL". O stub existe so para o arquivo continuar sendo um workflow
+# valido para o GitHub; ele roda apenas por disparo manual (workflow_dispatch).
+# ============================================================================
+name: Tests and Quality (desativado)
 
 on:
-  push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main, develop ]
+  workflow_dispatch:
 
 jobs:
-  test:
+  desativado:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ['3.11', '3.12']
-
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ matrix.python-version }}
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements-dev.txt
-    
-    - name: Lint with pylint
-      run: |
-        pylint src/ --disable=too-few-public-methods --exit-zero
-      continue-on-error: true
-    
-    - name: Format check with black
-      run: |
-        black --check src/ --line-length 100
-      continue-on-error: true
-    
-    - name: Type check with mypy
-      run: |
-        mypy src/ --ignore-missing-imports
-      continue-on-error: true
+      - run: echo "Workflow desativado. Veja o comentario no topo do arquivo."
+
+# ============================================================================
+# CODIGO ORIGINAL (comentado)
+# ============================================================================
+# name: Tests and Quality
+#
+# on:
+#   push:
+#     branches: [ main, develop ]
+#   pull_request:
+#     branches: [ main, develop ]
+#
+# jobs:
+#   test:
+#     runs-on: ubuntu-latest
+#     strategy:
+#       matrix:
+#         python-version: ['3.11', '3.12']
+#
+#     steps:
+#     - uses: actions/checkout@v4
+#     
+#     - name: Set up Python ${{ matrix.python-version }}
+#       uses: actions/setup-python@v4
+#       with:
+#         python-version: ${{ matrix.python-version }}
+#     
+#     - name: Install dependencies
+#       run: |
+#         python -m pip install --upgrade pip
+#         pip install -r requirements-dev.txt
+#     
+#     - name: Lint with pylint
+#       run: |
+#         pylint src/ --disable=too-few-public-methods --exit-zero
+#       continue-on-error: true
+#     
+#     - name: Format check with black
+#       run: |
+#         black --check src/ --line-length 100
+#       continue-on-error: true
+#     
+#     - name: Type check with mypy
+#       run: |
+#         mypy src/ --ignore-missing-imports
+#       continue-on-error: true
