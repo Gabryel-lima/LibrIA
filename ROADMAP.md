@@ -31,9 +31,14 @@ Legenda: ✅ concluído (com código no repositório) · 🟡 parcial · ⬜ nã
   - Detalhes em `docs/FASE1_RECONHECIMENTO.md`, seção 6
   - Prioridade: Alta
 
-- [ ] **Runtime embarcado (C++)** 🟡
-  - Exportação do bundle existe; `src/interfaces/libria_embedded_runtime.cpp` ainda tem os TODOs de `Init`, `PredictStatic` e `PredictTemporal` (retornam predição inválida)
+- [ ] **App Android para testar o modelo no celular** ⬜
+  - Plano em `.github/plans/android_plan.md` (fases F0–F5). Sem código ainda.
+  - Depende de gerar os `.tflite` localmente (`make embedded-train`), o que exige o dataset local e TensorFlow.
   - Prioridade: Alta
+
+- [ ] **Runtime embarcado para Raspberry Pi / Pico (C++)** ⬜ (depois do Android)
+  - Exportação do bundle existe; `src/interfaces/libria_embedded_runtime.cpp` ainda tem os TODOs de `Init`, `PredictStatic` e `PredictTemporal` (retornam predição inválida)
+  - Prioridade: Média, após o Android
 
 - [ ] **Face Recognition** - Reconhecimento de expressões faciais ⬜
   - Sem código no repositório
