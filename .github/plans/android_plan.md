@@ -1,7 +1,7 @@
 # Plano — App Android para testar o modelo no celular
 
 Status: **planejado, não iniciado**. Este documento só define o plano. Nenhum código de app foi escrito.
-Criado em 2026-11-01.
+Criado em 2026-11-01. Atualizado em 2026-11-01: núcleo de processamento em C++ (seção 4).
 
 ## 1. Objetivo e escopo
 
@@ -14,7 +14,7 @@ Dentro do escopo:
 - Registro local dos resultados para comparação posterior com o host.
 
 Fora do escopo agora:
-- Raspberry Pi / Pico (fica para depois, reutilizando o bundle e o runtime C++ já existentes).
+- Raspberry Pi / Pico. Fica para depois, reutilizando o núcleo C++ (seção 4).
 - Vocabulário lexical e funcional (depende da coleta da FASE 1).
 - Publicação na Play Store.
 
@@ -25,12 +25,12 @@ Fora do escopo agora:
 | Modelo estático de produção | Random Forest (`model/model.pickle`) | Não roda direto no Android. Não será portado. |
 | Modelo estático embarcado | CNN int8 (`make embedded-train` gera `model/libria_embedded_cnn_int8.tflite`) | **Usar este.** Entrada `(21, 3)`, `wrist_relative`. |
 | Modelo temporal embarcado | CNN int8 (`libria_embedded_temporal_cnn_int8.tflite`), entrada `(30, 63)` | Usar este. Só classes **J e Z** (`allowed_classes`). |
-| Arquivos `.tflite` no repositório | **Ausentes**. Só existem `.h5`, `.keras` e `.pickle` | Precisam ser gerados localmente, com TensorFlow instalado e o dataset local. |
+| Arquivos `.tflite` no repositório | **Ausentes**. Só existem `.h5`, `.keras` e `.pickle` | Precisam ser gerados localmente. **Bloqueado** pelo bug de exportação int8 (ver `docs/SEGURANCA.md`, item 1). |
 | Dataset de treino | `dataset/static` e `dataset/temporal` não estão versionados | Sem o dataset local, não há como gerar os `.tflite`. |
 | Métricas dos modelos embarcados | Não encontradas no repositório | Não sabemos a acurácia do modelo que vai para o celular. Medir antes de confiar. |
-| Runtime embarcado em Python | `src/inference/libras_embedded_runtime.py` faz a inferência com TFLite, mas **não tem** a máquina de estados temporal | A segmentação de sinais (`TemporalPipeline`) precisa ser portada. |
-| Runtime C++ (`src/interfaces/`) | Stubs com `TODO` | Não é usado no Android. Serve de base para o Pico depois. |
-| Ambiente de build deste container | Java e Gradle presentes; **sem Android SDK** | APK não pode ser compilado aqui. Build na máquina do desenvolvedor ou em CI. |
+| Runtime embarcado em Python | `src/inference/libras_embedded_runtime.py` faz a inferência com TFLite, mas **não tem** a máquina de estados temporal | A segmentação (`TemporalPipeline`) precisa ser portada. |
+| Runtime C++ (`src/interfaces/`) | Stubs com `TODO` (`Init`, `PredictStatic`, `PredictTemporal`) | É o ponto de partida do núcleo C++ (seção 4). |
+| Ambiente de build deste container | Java, Gradle e Python 3.11/3.12 presentes; **sem Android SDK/NDK** | APK não pode ser compilado aqui. Build na máquina do desenvolvedor ou em CI. |
 
 ## 3. Contrato que o app precisa reproduzir
 
@@ -43,15 +43,15 @@ O app é um **segundo consumidor** do pipeline Python. Se ele divergir, o teste 
 3. Dividir pelo maior módulo do vetor (`max_distance`), se for > 0.
 4. Achatar em vetor de 63 floats.
 
-Hipótese a verificar: o MediaPipe Android (Hand Landmarker) devolve `z` na mesma escala que o Python. Não está garantido. A paridade numérica (fase F1) é quem confirma.
+Hipótese a verificar: o MediaPipe Android (Hand Landmarker) devolve `z` na mesma escala que o Python. Não está garantido. A paridade numérica (F1) é quem confirma.
 
 ### 3.2 Entrada do modelo estático (`libras_embedded_runtime.py`)
 
 - Tensor `(21, 3)` em float32, depois **quantizado** para int8 com a fórmula do wrapper:
   `q = round(x / scale + zero_point)`, com clip ao intervalo do dtype.
-- Saída: float int8, desquantizada com `(q - zero_point) * scale` e normalizada para soma 1.
+- Saída: int8, desquantizada com `(q - zero_point) * scale` e normalizada para soma 1.
 
-No Android, usar a API do TFLite com a mesma fórmula. Não confiar na conversão automática do interpreter sem testar.
+Usar a API do TFLite com a mesma fórmula. Não confiar na conversão automática do interpreter sem testar.
 
 ### 3.3 Entrada do modelo temporal
 
@@ -72,51 +72,103 @@ Parâmetros em `TEMPORAL_PIPELINE_CONFIG` (`config/settings.py`):
 - Suavização de janela 5 e supressão de duplicatas em 1.0 s.
 - Enquanto a mão se move (sinal temporal em curso), o estático fica silenciado; cooldown de 0.5 s após um sinal temporal.
 
-**Decisão**: portar esta máquina de estados para Kotlin, com os mesmos nomes de parâmetros. Não reinventar. A validação é por fixtures (fase F1).
+**Decisão**: portar esta máquina de estados para **C++** (núcleo, seção 4), com os mesmos nomes de parâmetros. Não reinventar. A validação é por fixtures (F1).
 
-## 4. Decisões de arquitetura (com recomendação)
+## 4. Arquitetura: núcleo nativo em C++, interface em Java/Kotlin
 
-| Decisão | Opções | Recomendação | Motivo |
+**Decisão do usuário (2026-11-01):** o processamento de performance fica em uma linguagem nativa. Java/Kotlin fica só com a interface e o ciclo de vida do Android. A linguagem nativa escolhida é C++ (ver alternativas abaixo).
+
+### 4.1 Camadas
+
+```
+┌───────────────────────────────────────────────┐
+│ UI Android (Kotlin ou Java)                    │  tela, overlay, botões, permissões
+│  - CameraX entrega frames                      │  NÃO roda inferência
+│  - desenha o resultado recebido                │
+└───────────────┬───────────────────────────────┘
+                │ JNI (uma chamada por quadro, sem alocação)
+┌───────────────▼───────────────────────────────┐
+│ Núcleo nativo (C++)                            │  thread de trabalho própria
+│  - features wrist_relative (seção 3.1)         │
+│  - MotionDetector + TemporalPipeline (3.5)     │
+│  - inferência TFLite (3.2, 3.3) + regra (3.4)  │
+│  - buffers pré-alocados, sem alocação por quadro│
+└───────────────────────────────────────────────┘
+```
+
+Detecção de mão: MediaPipe Hand Landmarker. A biblioteca nativa do MediaPipe também é C++; avaliar se o núcleo chama o MediaPipe diretamente ou se recebe os landmarks da camada Java. Essa escolha fica para a F2 e é medida ali.
+
+### 4.2 Por que C++ e não as alternativas
+
+| Opção | Prós | Contras | Veredito |
 |---|---|---|---|
-| Qual modelo estático no celular | (a) CNN int8 embarcada; (b) portar o Random Forest; (c) converter o LSTM | **(a)** | É o que o bundle já exporta. O RF não tem caminho limpo para Android. |
-| Detector de mão | (a) MediaPipe Hands/Hand Landmarker Android; (b) detector próprio | **(a)** | Mesmo algoritmo do host, o que facilita a paridade. |
-| Linguagem e UI | Kotlin + Jetpack Compose + CameraX; ou Flutter; ou React Native | **Kotlin + Compose + CameraX** | Melhor suporte oficial a MediaPipe e TFLite. Menos camadas para depurar. |
-| Onde mora a lógica de features e segmentação | No app (Kotlin) | **No app**, validada por fixtures | Latência e funcionamento offline. |
-| Fonte de verdade dos parâmetros | Hardcoded no app; ou lido do `embedded_bundle.json` | **Ler do manifesto** sempre que possível | Evita divergência quando o modelo for retreinado. |
+| **C++** | API oficial do TFLite e do MediaPipe é C++; NDK e CMake são o caminho padrão; controle explícito de memória e de cópias; RAII sem custo; o núcleo `src/interfaces/` já é C++ | Risco de bugs de memória (mitigado com ASan/UBSan no build de host); build com NDK mais trabalhoso | **Recomendado** |
+| **C puro** | Mínimo de runtime; ABI estável | Sem RAII, mais código para gerenciar memória e strings; a API C do TFLite é mais limitada que a C++ | Só se C++ causar problema concreto |
+| **Rust** | Segurança de memória sem GC; bom suporte a NDK | Bindings de TFLite e MediaPipe menos maduros; mais uma linguagem no projeto | Alternativa válida; custo de integração maior |
+| **Go** (`gomobile`) | Produtividade | Runtime com GC e overhead de chamada entre Go e Java a cada quadro; bindings de TFLite/MediaPipe fracos; pausas de GC no caminho de tempo real | **Não recomendado** para o caminho quente |
+| **Java/Kotlin puro** | Mais simples, integração direta | Sem controle de memória fino; GC no caminho de inferência; é justamente o que se quer evitar | Só para a UI |
 
-## 5. Fases
+### 4.3 Ressalvas honestas sobre o ganho de performance
+
+- **O ganho de C++ vem menos da linguagem e mais do caminho dos dados.** A maior parte do custo por quadro costuma ser cópia de imagem, alocação e troca entre threads. Isso se resolve com buffers pré-alocados, acesso direto ao frame da câmera e delegate da TFLite (GPU ou NNAPI). Escolher C++ sem isso não basta.
+- **Não sabemos se o gargalo está na inferência.** Os modelos são CNNs pequenas (sobre 21 pontos e uma janela de 30 quadros). O custo pode estar no MediaPipe, na câmera ou na cópia. Medir em F2 antes de otimizar.
+- **Controle de memória é um custo também.** Com C++ quem gerencia é o programador. Por isso o núcleo tem testes no host (Linux) com ASan/UBSan, antes de qualquer build Android.
+- **Reuso com o Pico:** o núcleo de features e segmentação não depende de Android. Para o Raspberry Pi/Pico, a mesma lógica C++ serve, trocando apenas o backend de inferência (TFLite Micro no Pico). Isso é uma vantagem concreta de C++ sobre Kotlin neste projeto.
+- **Kotlin ou Java na UI:** o código Java é aceito. Kotlin é a linguagem recomendada pelo Google para Android e compila para o mesmo bytecode; a diferença para este projeto é pequena. Escolher Java é válido se for a preferência do time.
+
+### 4.4 Threading e ponte JNI
+
+- A UI nunca espera inferência. A thread principal só recebe o último resultado pronto.
+- O núcleo roda em uma thread de trabalho própria. Frames entram por um buffer de tamanho fixo; se o núcleo estiver ocupado, o quadro antigo é descartado (não se enfileira).
+- A ponte JNI é fina: uma chamada por quadro, passando um ponteiro para o buffer, sem alocar objetos Java no caminho.
+
+## 5. Decisões de arquitetura (com recomendação)
+
+| Decisão | Opções | Recomendação | Status |
+|---|---|---|---|
+| Qual modelo estático no celular | (a) CNN int8 embarcada; (b) portar o Random Forest; (c) converter o LSTM | **(a)** | Recomendado |
+| Detector de mão | (a) MediaPipe Hand Landmarker; (b) detector próprio | **(a)**, mesmo algoritmo do host | Recomendado |
+| Linguagem do núcleo de processamento | C++; C; Rust; Go | **C++** (seção 4.2) | **Decidido pelo usuário; a validar com benchmark em F2** |
+| Linguagem da UI | Kotlin; Java | Kotlin (ou Java, se preferido) | Em aberto |
+| Framework de UI | Compose; Views | Compose | Recomendado |
+| Onde mora a lógica de features e segmentação | Núcleo C++ | **Núcleo C++**, validado por fixtures | Decidido com a linguagem |
+| Fonte de verdade dos parâmetros | Hardcoded no núcleo; ou lido do `embedded_bundle.json` | **Ler do manifesto** sempre que possível | Recomendado |
+
+## 6. Fases
 
 ### F0 — Pré-requisitos (bloqueante)
 - Ter o dataset local em `dataset/static/` e `dataset/temporal/`.
-- Ter TensorFlow instalado (o `requirements-dev.txt` pina `tensorflow==2.16.1`, que não tem wheel para Python 3.13; usar Python 3.11 ou 3.12).
+- Ter TensorFlow instalado, com Python 3.11 ou 3.12 (`tensorflow==2.16.1` não tem wheel para Python 3.13).
+- **Corrigir a exportação TFLite int8**: `from_keras_model` aborta o processo. A correção verificada é exportar via `model.export()` e converter com `TFLiteConverter.from_saved_model()` (ver `docs/SEGURANCA.md`). Sem isso, não há `.tflite`.
 - Rodar `make embedded-train` e `make embedded-export`. Isso gera os `.tflite` e o `embedded_bundle.json`.
 - Rodar `make embedded-check`. Se falhar, o bundle não serve. Parar aqui.
 - Registrar as métricas dos dois modelos embarcados. Sem isso, não há o que testar no celular.
 
 **Critério de saída:** `embedded-check` passa; métricas por classe registradas.
 
-### F1 — Fixtures de paridade (Python → Android)
+### F1 — Fixtures de paridade e núcleo C++ no host
 - Script no host que gera um JSON com: sequências de landmarks de exemplo, features `wrist_relative` esperadas, probabilidades esperadas dos dois modelos e o token final.
-- O app terá testes unitários que consomem esses fixtures.
+- Implementar o núcleo C++ (features, `MotionDetector`, `TemporalPipeline`, regra híbrida) como biblioteca **independente de Android**, compilada e testada no host com CMake e CTest.
+- Testes com ASan e UBSan no build de host.
 - Tolerância numérica definida antes (ex.: diferença máxima de 1e-4 nas features, e igualdade do token final).
 
-**Critério de saída:** testes unitários de features e de classificação passam com os fixtures.
+**Critério de saída:** testes do núcleo C++ passam no host contra os fixtures, sem sanitizer reclamando.
 
-### F2 — Esqueleto do app
-- Projeto Android com CameraX, MediaPipe Hand Landmarker e overlay dos 21 pontos.
+### F2 — Esqueleto do app e benchmark
+- Projeto Android com CameraX, a ponte JNI, o núcleo C++ compilado via NDK, e overlay dos 21 pontos.
 - Sem inferência ainda. Só mostra a mão detectada e o FPS.
+- **Medir antes de otimizar**: tempo por quadro separado em captura, MediaPipe, features, inferência e cópias. Esse benchmark decide se a escolha de C++ se justifica para o gargalo real.
 
-**Critério de saída:** roda em um celular real, detecta a mão a pelo menos 15 FPS. (Número a confirmar; é uma meta inicial, não medida.)
+**Critério de saída:** roda em um celular real, com o benchmark por etapa registrado. A meta de FPS (inicialmente 15) é uma hipótese, a ser confirmada pela medição.
 
 ### F3 — Inferência estática no celular
-- Carregar o `.tflite` estático, aplicar a quantização e mostrar a letra com confiança.
+- Carregar o `.tflite` estático no núcleo C++, aplicar a quantização e devolver a letra com confiança à UI.
 - Respeitar o limiar de 0.75.
 
 **Critério de saída:** para as letras do dataset, o app reproduz as probabilidades dos fixtures dentro da tolerância.
 
 ### F4 — Pipeline temporal (J e Z)
-- Portar `MotionDetector` e `TemporalPipeline` para Kotlin.
-- Carregar o `.tflite` temporal e aplicar a regra híbrida da seção 3.4.
+- Carregar o `.tflite` temporal e aplicar a regra híbrida da seção 3.4, dentro do núcleo C++.
 
 **Critério de saída:** para vídeos gravados de J e Z, o app emite os mesmos tokens que o Python no mesmo vídeo.
 
@@ -127,36 +179,43 @@ Parâmetros em `TEMPORAL_PIPELINE_CONFIG` (`config/settings.py`):
 
 **Critério de saída:** métricas por classe e taxa de rejeição registradas, separadas por pessoa.
 
-## 6. Riscos
+## 7. Riscos
 
 | Risco | Probabilidade | Mitigação |
 |---|---|---|
+| Exportação TFLite int8 quebrada | **Certa** (reproduzida) | Correção via SavedModel, em F0. |
 | `z` do MediaPipe Android diferente do Python | Média (hipótese não verificada) | Fixtures de F1 detectam logo. |
 | Perda de acurácia pela quantização int8 | Média | Comparar acurácia float vs int8 no `embedded-check`. |
+| Bug de memória no núcleo C++ | Média | ASan/UBSan no host (F1); testes antes do build Android. |
+| Build NDK/CMake mais trabalhoso que Kotlin puro | Alta | Núcleo testado no host antes; build do NDK isolado em F2. |
+| Otimizar a linguagem e não o gargalo | Média | Benchmark por etapa em F2 antes de otimizar (seção 4.3). |
 | Câmera frontal espelhada muda a mão dominante | Alta | Mirror augmentation já existe no treino; testar ambas as câmeras. |
 | Modelo embarcado com acurácia baixa, sem métrica registrada | Desconhecida | F0 exige métricas antes de F3. |
 | Dataset local ausente no seu ambiente | Desconhecida | Confirmar antes de começar. |
 | Latência alta em celulares antigos | Média | Medir em pelo menos 2 aparelhos. |
 
-## 7. Ambiente de build
+## 8. Ambiente de build
 
-- Container atual: Java e Gradle existem, mas **sem Android SDK**. Não compila APK aqui.
-- Opções: (a) Android Studio na sua máquina; (b) CI no GitHub Actions com `setup-android`. A opção (a) é mais rápida para iterar; a (b) garante que o build não depende de uma máquina específica.
+- Container atual: Java, Gradle e Python 3.11/3.12 existem, mas **sem Android SDK nem NDK**. Não compila APK aqui.
+- O núcleo C++ pode ser compilado e testado no host deste tipo de container, desde que haja um compilador C++ e CMake. Verificar antes de depender disso.
+- Build Android: (a) Android Studio na sua máquina, com NDK; ou (b) CI no GitHub Actions com `setup-android` e NDK. A opção (a) é mais rápida para iterar; a (b) garante que o build não depende de uma máquina específica.
 
-## 8. Critério de sucesso geral
+## 9. Critério de sucesso geral
 
 - Paridade com o host dentro da tolerância definida em F1 e F4.
+- Benchmark por etapa registrado em pelo menos 2 aparelhos, com decisão de otimização baseada nele.
 - Métricas por classe registradas em teste de campo com pelo menos 3 pessoas.
 - Build reproduzível por qualquer pessoa com o procedimento documentado.
 
-## 9. Próximos passos
+## 10. Próximos passos
 
-1. Confirmar que o dataset local existe e onde está (F0).
-2. Escolher a opção de build (seção 7).
-3. Gerar o bundle e rodar `embedded-check` (F0).
+1. Confirmar a escolha de C++ para o núcleo e de Kotlin ou Java para a UI (seção 5).
+2. Confirmar que o dataset local existe e onde está (F0).
+3. Aplicar a correção da exportação TFLite int8 e gerar o bundle (F0).
 4. Só então começar F1.
 
 Perguntas em aberto:
 - O dataset local tem `dataset/static` e `dataset/temporal` populados?
 - Você tem um Android físico para testes? Qual modelo e versão?
 - Prefere Android Studio na sua máquina ou CI?
+- UI em Kotlin ou Java?
