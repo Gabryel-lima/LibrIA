@@ -263,14 +263,27 @@ make calibrate-capture
 
 ## 7. Modelos e pesos adicionais já versionados
 
-Na pasta `model/` e em áreas legadas do projeto existem artefatos de experimentos anteriores, incluindo:
+Na pasta `model/` e em áreas legadas do projeto existem artefatos de experimentos anteriores:
 
-- `best_temporal_model.h5`
-- `temporal_cnn_model.h5`
-- `libras_lstm.keras`
-- `asl_vgg16_best_weights.keras`
+| Arquivo | Situação |
+|---|---|
+| `model/libras_lstm.keras` | **Em uso**: modelo temporal do fluxo principal (`LSTM_CONFIG['model_path']`), entrada 30 × 63. |
+| `model/best_temporal_model.h5`, `model/temporal_cnn_model.h5` | **Legados, sem uso no código.** LSTM do Keras 2.15 (ago/2025), entrada **16 × 42** (modo `bounding_box`), 26 classes. Incompatíveis com o pipeline atual (30 × 63, `wrist_relative`). |
+| `model/temporal_model_config.pickle` | Metadados dos dois `.h5` acima; inconsistentes (`num_classes` 26 e 24). |
+| `src/saved/asl_vgg16_best_weights.keras` | Experimento de classificação por imagem (ASL), fora do fluxo atual. |
 
-Esses arquivos não substituem automaticamente o fluxo principal documentado. Use-os apenas se o experimento correspondente estiver configurado no código.
+Os `.h5` legados não carregam direto no Keras 3, porque o LSTM do Keras 2 grava o argumento `time_major`, que não existe mais. Para inspecioná-los, sem mudar os pesos:
+
+```python
+import keras
+
+class LegacyLSTM(keras.layers.LSTM):
+    def __init__(self, *args, time_major=None, **kwargs):  # descarta o argumento do Keras 2
+        super().__init__(*args, **kwargs)
+
+model = keras.models.load_model('model/best_temporal_model.h5', compile=False,
+                                custom_objects={'LSTM': LegacyLSTM})
+```
 
 ## 8. Relação com MediaPipe e runtime embedded
 

@@ -96,6 +96,13 @@ e esse projeto adere ao [Semantic Versioning](https://semver.org/lang/pt_BR/).
 - Artefatos experimentais órfãos `src/interfaces/cam.cpp`, `main_test.cpp`, `setup.py` e documentação C++ demonstrativa sem integração com o pipeline atual
 
 ### Fixed
+- `requirements-gpu.txt` alinhado: fixava as bibliotecas CUDA 12.4 / cuDNN 9 do torch
+  2.5.1, que não servem ao torch 2.13 (ele traz o próprio CUDA 13) e conflitavam com o
+  cuDNN 8.9 exigido pelo TensorFlow 2.16.1. Agora instala `tensorflow[and-cuda]==2.16.1`.
+  Resolução verificada em Python 3.11 e 3.12; não testado em GPU.
+- `docs/DATASETS.md`: os modelos `best_temporal_model.h5` e `temporal_cnn_model.h5`
+  passam a constar como legados (sem uso no código, entrada 16 × 42 incompatível com o
+  pipeline atual), com instruções para inspecioná-los no Keras 3.
 - `requirements.txt` voltou a ser instalável: o bump do Dependabot para `numpy==2.5.4`
   (#22) era incompatível com `tensorflow==2.16.1`, que exige `numpy<2`, e deixava a
   árvore insolúvel em Python 3.11 e 3.12. Volta para `numpy==1.26.4`, e o Dependabot
