@@ -1,6 +1,6 @@
 # Plano — App Android para testar o modelo no celular
 
-Status: **planejado, não iniciado**. Este documento só define o plano. Nenhum código de app foi escrito.
+Status: **F1 concluída** (núcleo C++ testado no host, em `native/`). F0 depende do dataset local; F2 em diante não iniciadas. Ainda não há código de app Android.
 Criado em 2026-11-01. Atualizado em 2026-11-01: núcleo de processamento em C++ (seção 4).
 
 ## 1. Objetivo e escopo
@@ -131,7 +131,7 @@ Detecção de mão: MediaPipe Hand Landmarker. O núcleo do MediaPipe é C++, ma
 |---|---|---|---|
 | Qual modelo estático no celular | (a) CNN int8 embarcada; (b) portar o Random Forest; (c) converter o LSTM | **(a)** | Recomendado |
 | Detector de mão | (a) MediaPipe Hand Landmarker (Tasks); (b) detector próprio | **(a)**. O host usa a API legada `mp.solutions.hands` (mediapipe 0.10.14); o Android usa a API Tasks, com modelo e pipeline que podem diferir. **Semelhante, não idêntico**: a paridade é medida em F1. | Recomendado |
-| Linguagem do núcleo de processamento | C++; C; Rust; Go | **C++** (seção 4.2) | **Recomendada; aguarda confirmação do usuário e validação por benchmark em F2** |
+| Linguagem do núcleo de processamento | C++; C; Rust; Go | **C++** (seção 4.2) | **Adotada na F1** (núcleo em `native/libria_core`); a validar por benchmark em F2 |
 | Linguagem da UI | Kotlin; Java | Kotlin (ou Java, se preferido) | Em aberto |
 | Framework de UI | Compose; Views | Compose | Recomendado |
 | Onde mora a lógica de features e segmentação | Núcleo C++ | **Núcleo C++**, validado por fixtures | Depende da confirmação da linguagem |
@@ -156,6 +156,13 @@ Detecção de mão: MediaPipe Hand Landmarker. O núcleo do MediaPipe é C++, ma
 - Tolerância numérica definida antes (ex.: diferença máxima de 1e-4 nas features, e igualdade do token final).
 
 **Critério de saída:** testes do núcleo C++ passam no host contra os fixtures, sem sanitizer reclamando.
+
+**Status: concluída em 2026-11-01.** Detalhes em [`native/README.md`](../../native/README.md).
+- Entregue: `scripts/export_parity_fixtures.py` (roda o Python real e grava entradas, saídas e cada chamada aos preditores), `native/libria_core` (features, `MotionDetector`, `TemporalBuffer`, `SignSegmenter`, suavização, deduplicação, `TemporalPipeline`, regra híbrida e quantização int8) e testes com ASan/UBSan e `-Werror` (`make native-test`).
+- **Desvio 1, mais estrito que o planejado:** a paridade é **bit a bit**, não com tolerância de 1e-4. O núcleo reproduz as somas e o arredondamento do NumPy e compila com `-ffp-contract=off`; sem essa flag, 3 testes falham com FMA ligado (o padrão no ARM64).
+- **Desvio 2, adiado para a F3:** as "probabilidades esperadas dos dois modelos" dependem dos `.tflite` (F0). Por ora os preditores são roteirizados nos testes, e a quantização int8 é testada com o código Python real.
+- A suíte foi validada por mutação: cada detalhe sensível alterado de propósito faz algum teste falhar.
+- Linguagem: **C++ adotado ao implementar a F1** (a escolha da tarefa foi delegada). Ainda é reversível antes da F2, mas o núcleo e as fixtures já existem em C++.
 
 ### F2 — Esqueleto do app e benchmark
 - Projeto Android com CameraX, a ponte JNI, o núcleo C++ compilado via NDK, e overlay dos 21 pontos.
@@ -213,7 +220,7 @@ Detecção de mão: MediaPipe Hand Landmarker. O núcleo do MediaPipe é C++, ma
 
 ## 10. Próximos passos
 
-1. Confirmar a escolha de C++ para o núcleo e de Kotlin ou Java para a UI (seção 5).
+1. Escolher Kotlin ou Java para a UI (seção 5). O núcleo C++ já existe (F1 concluída).
 2. Confirmar que o dataset local existe e onde está (F0).
 3. Gerar o bundle com o dataset real (`make embedded-train`; a exportação int8 já foi corrigida) e rodar `embedded-check` (F0).
 4. Só então começar F1.

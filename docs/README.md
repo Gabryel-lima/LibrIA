@@ -14,6 +14,7 @@
 | CPUs sem AVX | [AVX_COMPATIBILITY.md](AVX_COMPATIBILITY.md) |
 | Processo de Pull Request | [PULL_REQUEST_GUIDE.md](PULL_REQUEST_GUIDE.md) |
 | Vulnerabilidades de dependências e riscos abertos | [SEGURANCA.md](SEGURANCA.md) |
+| Núcleo nativo C++ (base do app Android) | [../native/README.md](../native/README.md) |
 | Fórmulas da arquitetura (PDF) | [latex/model_architecture_equations.pdf](latex/model_architecture_equations.pdf) |
 
 O plano arquitetural que orienta as fases fica em
