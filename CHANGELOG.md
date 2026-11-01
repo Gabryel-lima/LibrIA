@@ -17,45 +17,12 @@ e esse projeto adere ao [Semantic Versioning](https://semver.org/lang/pt_BR/).
   `native/fixtures/parity_fixtures.json`). Alvos `make native-test` (ASan/UBSan,
   `-Werror`) e `make native-fixtures`. Testes Python acusam fixtures desatualizadas e
   compilam o núcleo quando há CMake.
-
 - **App Android, fase F2 (em andamento)**: ponte JNI (`native/libria_jni`) e módulo
   Kotlin `android/libria-bridge` com a API do núcleo (`LibriaPipeline`), benchmark por
   etapa, FPS e mapeamento do overlay, testados na JVM com `-Xcheck:jni` (os 14 cenários
   de paridade passam pelo JNI). Módulo `android/app` (CameraX, MediaPipe Tasks, Compose)
   escrito, mas **ainda não compilado**: o Android SDK não estava acessível no ambiente.
   Alvo `make native-bridge-test`.
-
-### Fixed
-- `requirements.txt` voltou a ser instalável: o bump do Dependabot para `numpy==2.5.4`
-  (#22) era incompatível com `tensorflow==2.16.1`, que exige `numpy<2`, e deixava a
-  árvore insolúvel em Python 3.11 e 3.12. Volta para `numpy==1.26.4`, e o Dependabot
-  passa a ignorar majors do numpy até o TensorFlow ser migrado. Passou sem ser notado
-  porque o CI está desativado.
-- Exportação TFLite int8 dos trainers embedded (estático e temporal): o
-  `TFLiteConverter.from_keras_model` abortava o processo com `LLVM ERROR: Failed to
-  infer result type(s)` (Keras 3 + TensorFlow 2.16), o que impedia gerar qualquer
-  `.tflite`. Agora a exportação passa por SavedModel (`src/model_training/tflite_export.py`).
-  Teste de regressão em `tests/test_tflite_export.py`. Verificado com dados sintéticos;
-  ainda não executado com o dataset real.
-
-### Changed
-- Workflows do GitHub Actions (`tests`, `release`, `label`, `stale`) desativados por
-  enquanto: o código original foi mantido comentado em `.github/workflows/*.yml` e
-  cada arquivo ficou com um stub que só roda por disparo manual. Com isso, não há
-  testes automáticos em push/PR nem criação automática de release ao criar tags `v*`.
-
-### Security
-- Dependências atualizadas para corrigir advisories de segurança: torch 2.13.0 e
-  torchvision 0.28.0 (par obrigatório; as faixas antigas travavam o torch 2.5.1),
-  keras 3.15.0, Pillow 13.0.0, python-dotenv 1.2.4, pytest 9.0.3, black 26.10.1,
-  pylint 4.0.9, notebook 7.6.3 e jupyterlab 4.6.4. Árvore completa resolvida:
-  de 106 advisories em 10 pacotes para 1 (protobuf, bloqueado por TensorFlow 2.16.1
-  e MediaPipe). O código que usa torch (transformer experimental) não foi testado
-  com a nova versão. Detalhes em `docs/SEGURANCA.md`.
-- `.github/dependabot.yml` corrigido: o ecossistema vazio impedia a abertura de PRs
-  de atualização. Agora cobre `pip` e `github-actions`.
-
-### Added
 - **Dados externos sem coleta manual**: catálogo de bases públicas de Libras em
   `config/data_sources.py` (`make sources`), download automatizável do MINDS-Libras
   via API do Zenodo (`make fetch SOURCE=...`) e ingestão de vídeos/imagens para o
@@ -88,6 +55,10 @@ e esse projeto adere ao [Semantic Versioning](https://semver.org/lang/pt_BR/).
 - Testes para exit code do `main.py`, espelhamento no dataset e utilitários de inferência híbrida
 
 ### Changed
+- Workflows do GitHub Actions (`tests`, `release`, `label`, `stale`) desativados por
+  enquanto: o código original foi mantido comentado em `.github/workflows/*.yml` e
+  cada arquivo ficou com um stub que só roda por disparo manual. Com isso, não há
+  testes automáticos em push/PR nem criação automática de release ao criar tags `v*`.
 - **Comandos renomeados para o mesmo nome no Makefile e no `main.py`**
   (`make train-temporal` == `python main.py train-temporal`):
   `train-lstm`→`train-temporal`, `infer-lstm`→`infer-temporal`,
@@ -125,10 +96,32 @@ e esse projeto adere ao [Semantic Versioning](https://semver.org/lang/pt_BR/).
 - Artefatos experimentais órfãos `src/interfaces/cam.cpp`, `main_test.cpp`, `setup.py` e documentação C++ demonstrativa sem integração com o pipeline atual
 
 ### Fixed
+- `requirements.txt` voltou a ser instalável: o bump do Dependabot para `numpy==2.5.4`
+  (#22) era incompatível com `tensorflow==2.16.1`, que exige `numpy<2`, e deixava a
+  árvore insolúvel em Python 3.11 e 3.12. Volta para `numpy==1.26.4`, e o Dependabot
+  passa a ignorar majors do numpy até o TensorFlow ser migrado. Passou sem ser notado
+  porque o CI está desativado.
+- Exportação TFLite int8 dos trainers embedded (estático e temporal): o
+  `TFLiteConverter.from_keras_model` abortava o processo com `LLVM ERROR: Failed to
+  infer result type(s)` (Keras 3 + TensorFlow 2.16), o que impedia gerar qualquer
+  `.tflite`. Agora a exportação passa por SavedModel (`src/model_training/tflite_export.py`).
+  Teste de regressão em `tests/test_tflite_export.py`. Verificado com dados sintéticos;
+  ainda não executado com o dataset real.
 - Fluxo de coleta temporal agora mantém a janela OpenCV responsiva durante espera e gravação
 - Inferência estática passou a respeitar dimensionalidade do modelo e calibração opcional
 - `main.py` agora retorna status não nulo quando comandos falham, permitindo automação confiável
 - Inferência híbrida agora compara hipóteses originais e espelhadas antes de escolher a predição final por trilha
+
+### Security
+- Dependências atualizadas para corrigir advisories de segurança: torch 2.13.0 e
+  torchvision 0.28.0 (par obrigatório; as faixas antigas travavam o torch 2.5.1),
+  keras 3.15.0, Pillow 13.0.0, python-dotenv 1.2.4, pytest 9.0.3, black 26.10.1,
+  pylint 4.0.9, notebook 7.6.3 e jupyterlab 4.6.4. Árvore completa resolvida:
+  de 106 advisories em 10 pacotes para 1 (protobuf, bloqueado por TensorFlow 2.16.1
+  e MediaPipe). O código que usa torch (transformer experimental) não foi testado
+  com a nova versão. Detalhes em `docs/SEGURANCA.md`.
+- `.github/dependabot.yml` corrigido: o ecossistema vazio impedia a abertura de PRs
+  de atualização. Agora cobre `pip` e `github-actions`.
 
 ---
 

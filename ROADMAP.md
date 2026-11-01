@@ -47,7 +47,8 @@ Legenda: ✅ concluído (com código no repositório) · 🟡 parcial · ⬜ nã
   - Resolvido: 106 → 1 advisory na árvore completa (ver `docs/SEGURANCA.md`)
   - Aberto: protobuf 4.25.9 (exige migrar TensorFlow e MediaPipe, que fixam `protobuf<5`)
   - Aberto: `requirements-gpu.txt` ainda fixa CUDA 12.4, desalinhado do `torch 2.13` (CUDA 13)
-  - Aberto: fechar o PR #18 do Dependabot (propõe uma combinação torch/torchvision insolúvel)
+  - Feito: PR #18 do Dependabot fechado sem merge (propunha uma combinação torch/torchvision insolúvel)
+  - Feito: numpy de volta a 1.26.4 (o bump para 2.5.4 no #22 era incompatível com o TensorFlow 2.16.1); o Dependabot ignora majors do numpy
   - Prioridade: Média
 
 - [ ] **Face Recognition** - Reconhecimento de expressões faciais ⬜
