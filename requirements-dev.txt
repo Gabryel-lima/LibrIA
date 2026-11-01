@@ -19,7 +19,7 @@ sphinx==7.2.6
 sphinx-rtd-theme==2.0.0
 
 # Development Tools
-ipython==8.18.1
+ipython==9.17.1
 jupyter==1.0.0
 notebook==7.6.3
 # jupyterlab é dependência do notebook; fixado para cobrir o advisory de segurança.
