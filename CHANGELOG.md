@@ -18,6 +18,13 @@ e esse projeto adere ao [Semantic Versioning](https://semver.org/lang/pt_BR/).
   `-Werror`) e `make native-fixtures`. Testes Python acusam fixtures desatualizadas e
   compilam o núcleo quando há CMake.
 
+- **App Android, fase F2 (em andamento)**: ponte JNI (`native/libria_jni`) e módulo
+  Kotlin `android/libria-bridge` com a API do núcleo (`LibriaPipeline`), benchmark por
+  etapa, FPS e mapeamento do overlay, testados na JVM com `-Xcheck:jni` (os 14 cenários
+  de paridade passam pelo JNI). Módulo `android/app` (CameraX, MediaPipe Tasks, Compose)
+  escrito, mas **ainda não compilado**: o Android SDK não estava acessível no ambiente.
+  Alvo `make native-bridge-test`.
+
 ### Fixed
 - Exportação TFLite int8 dos trainers embedded (estático e temporal): o
   `TFLiteConverter.from_keras_model` abortava o processo com `LLVM ERROR: Failed to
