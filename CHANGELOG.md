@@ -96,6 +96,11 @@ e esse projeto adere ao [Semantic Versioning](https://semver.org/lang/pt_BR/).
 - Artefatos experimentais órfãos `src/interfaces/cam.cpp`, `main_test.cpp`, `setup.py` e documentação C++ demonstrativa sem integração com o pipeline atual
 
 ### Fixed
+- Build do GitHub Pages (`pages build and deployment`) falhava a cada push no `main`: o
+  exemplo C++ de `native/README.md` tinha duas chaves de abertura seguidas, que o Liquid
+  do Jekyll lê como variável de template. Corrigido com um espaço entre as chaves e
+  protegido por `tests/test_docs_liquid.py`. O Pages é uma configuração do repositório
+  (Settings → Pages), não um workflow versionado.
 - `requirements-gpu.txt` alinhado: fixava as bibliotecas CUDA 12.4 / cuDNN 9 do torch
   2.5.1, que não servem ao torch 2.13 (ele traz o próprio CUDA 13) e conflitavam com o
   cuDNN 8.9 exigido pelo TensorFlow 2.16.1. Agora instala `tensorflow[and-cuda]==2.16.1`.
