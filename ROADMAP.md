@@ -32,8 +32,9 @@ Legenda: ✅ concluído (com código no repositório) · 🟡 parcial · ⬜ nã
   - Detalhes em `docs/FASE1_RECONHECIMENTO.md`, seção 6
   - Prioridade: Alta
 
-- [ ] **App Android para testar o modelo no celular** ⬜
-  - Plano em `.github/plans/android_plan.md` (fases F0–F5). Sem código ainda.
+- [ ] **App Android para testar o modelo no celular** 🟡
+  - Plano em `.github/plans/android_plan.md` (fases F0–F5).
+  - F1 concluída: núcleo C++ em `native/libria_core`, com paridade bit a bit contra o pipeline Python (`make native-test`). Ainda sem código de app Android.
   - Depende de gerar os `.tflite` localmente (`make embedded-train`), o que exige o dataset local e TensorFlow. A exportação int8, que abortava, foi corrigida e testada com dados sintéticos; falta rodar com o dataset real e registrar as métricas.
   - Prioridade: Alta
 

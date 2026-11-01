@@ -7,6 +7,17 @@ e esse projeto adere ao [Semantic Versioning](https://semver.org/lang/pt_BR/).
 
 ## [Não Lançado]
 
+### Added
+- **Núcleo nativo C++** (`native/libria_core`), base do app Android (fase F1 do plano):
+  features `wrist_relative`, detector de movimento, buffer e reamostragem, segmentação
+  com histerese, suavização, supressão de duplicatas, pipeline temporal, regra híbrida
+  e quantização int8. Sem dependências externas; os modelos entram por injeção de
+  dependência. Paridade **bit a bit** com o pipeline Python, verificada por fixtures
+  geradas do código Python real (`scripts/export_parity_fixtures.py`,
+  `native/fixtures/parity_fixtures.json`). Alvos `make native-test` (ASan/UBSan,
+  `-Werror`) e `make native-fixtures`. Testes Python acusam fixtures desatualizadas e
+  compilam o núcleo quando há CMake.
+
 ### Fixed
 - Exportação TFLite int8 dos trainers embedded (estático e temporal): o
   `TFLiteConverter.from_keras_model` abortava o processo com `LLVM ERROR: Failed to
