@@ -1,5 +1,5 @@
 # LibrIA - Reconhecimento de Libras
-# Core Dependencies - Python 3.11 ou 3.12 (tensorflow==2.21.0 não tem wheels para 3.13+)
+# Core Dependencies - Python 3.11 ou 3.12 (tensorflow==2.19.1 tem wheels só para 3.9-3.12)
 # Production-ready with GPU (CUDA) support
 
 # ⚠️  NOTE: TensorFlow and PyTorch require AVX CPU support
@@ -8,10 +8,11 @@
 # - Or use a machine with AVX support
 
 # Core ML/DL (COMMENTED OUT IF - requires AVX)
-# protobuf fica em 4.x porque tensorflow==2.21.0 e mediapipe==0.10.14 exigem
-# protobuf<5. O advisory PYSEC-2026-1805 (DoS em json_format) só será corrigido
+# protobuf fica em 4.x porque mediapipe==0.10.14 exige protobuf<5 (e usa a API
+# legada mp.solutions, removida nas versões >=0.10.31). TensorFlow >=2.20 exige
+# protobuf>=5.28, por isso fixamos tensorflow==2.19.1 (aceita protobuf<6). O advisory PYSEC-2026-1805 (DoS em json_format) só será corrigido
 # quando um desses dois pacotes for atualizado. Ver docs/SEGURANCA.md.
-tensorflow==2.21.0
+tensorflow==2.19.1
 keras==3.15.1  # >=3.14/3.15 corrigem advisories de segurança (ver docs/SEGURANCA.md)
 # PyTorch / TorchVision: use matching versions for your environment.
 # Use a compatible range to reduce strict resolver conflicts. For GPU/CUDA
@@ -32,7 +33,7 @@ opencv-contrib-python==4.11.0.86
 Pillow==13.0.0
 
 # Numerical & Scientific
-numpy==1.26.4  # tensorflow==2.21.0 exige numpy<2; não subir para 2.x antes de migrar o TensorFlow
+numpy==1.26.4  # tensorflow==2.19.1 e mediapipe 0.10.14 exigem numpy<2; não subir para 2.x antes de migrar o TensorFlow
 scipy==1.15.1
 pandas==2.2.3
 seaborn==0.13.2
