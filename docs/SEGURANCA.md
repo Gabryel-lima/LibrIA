@@ -62,6 +62,7 @@ Mudanças no repositório:
 - **O PR #18 do Dependabot não pode ser mergeado como está.** Ele propõe `torch>=2.13.0,<2.14` junto com `torchvision>=0.20.1,<0.21`, combinação **insolúvel** (confirmado com `uv pip compile`): o `pip install -r requirements-dev.txt` do CI falharia. Ele também propõe `Pillow==12.3.0`, que deixa de fora os advisories corrigidos só em 13.0.0, e `notebook==7.5.6`, que ainda tem um advisory. As mudanças deste branch cobrem o #18 e vão conflitar com ele nos mesmos arquivos. Decisão do mantenedor: fechar o #18 depois do merge.
 - **`requirements-gpu.txt`** fixa as bibliotecas NVIDIA do CUDA 12.4 (as do `torch 2.5.1`). O `torch 2.13.0` instalado pelo PyPI traz as próprias bibliotecas CUDA 13 (`nvidia-cudnn-cu13` etc.). O arquivo audita limpo, mas ficou **desalinhado** e provavelmente redundante. Decidir se atualiza ou remove. Não alterado neste branch.
 - **Requisitos de driver NVIDIA** do torch 2.13 (CUDA 13): não verificados.
+- **Sem CI por enquanto**: os workflows do GitHub Actions foram desativados (ver `CHANGELOG.md`). Nada valida automaticamente se uma atualização de dependência resolve ou se os testes passam, inclusive nos PRs do Dependabot. Até reativar, rodar à mão a resolução e a suíte (seção "Como reauditar" e `pytest tests -q`) antes de aceitar qualquer bump.
 
 ## Problemas encontrados que não são de dependências
 

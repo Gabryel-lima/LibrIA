@@ -7,6 +7,12 @@ e esse projeto adere ao [Semantic Versioning](https://semver.org/lang/pt_BR/).
 
 ## [Não Lançado]
 
+### Changed
+- Workflows do GitHub Actions (`tests`, `release`, `label`, `stale`) desativados por
+  enquanto: o código original foi mantido comentado em `.github/workflows/*.yml` e
+  cada arquivo ficou com um stub que só roda por disparo manual. Com isso, não há
+  testes automáticos em push/PR nem criação automática de release ao criar tags `v*`.
+
 ### Security
 - Dependências atualizadas para corrigir advisories de segurança: torch 2.13.0 e
   torchvision 0.28.0 (par obrigatório; as faixas antigas travavam o torch 2.5.1),
