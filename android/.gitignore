@@ -1,0 +1,7 @@
+.gradle/
+local.properties
+build/
+.cxx/
+.kotlin/
+# Baixado pelo build (tarefa downloadHandLandmarker); não versionar.
+app/src/main/assets/hand_landmarker.task

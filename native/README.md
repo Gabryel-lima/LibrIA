@@ -5,6 +5,7 @@ Base do app Android previsto em [`.github/plans/android_plan.md`](../.github/pla
 ```text
 native/
 ├── fixtures/parity_fixtures.json   gerado por scripts/export_parity_fixtures.py
+├── libria_jni/                     ponte JNI para o Kotlin (ver android/README.md)
 └── libria_core/                    biblioteca C++ (CMake)
     ├── include/libria/             API pública
     ├── src/
@@ -97,5 +98,5 @@ if (auto token = pipeline.process_frame(hand_detected ? features : nullptr, time
 ## Próximos passos (plano Android)
 
 - F0: gerar os `.tflite` com o dataset real (a exportação int8 já foi corrigida).
-- F2: projeto Android com CameraX, MediaPipe Hand Landmarker e a ponte JNI para este núcleo.
+- F2 (em andamento): a ponte JNI (`native/libria_jni`) e a API Kotlin já existem e passam na JVM; o app Android está escrito, falta compilar e medir no aparelho. Ver [`android/README.md`](../android/README.md).
 - F3/F4: ligar os preditores à inferência TFLite (usando `quantize_int8`/`dequantize_normalize_int8`) e validar contra os fixtures no aparelho.

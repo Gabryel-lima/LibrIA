@@ -34,7 +34,8 @@ Legenda: ✅ concluído (com código no repositório) · 🟡 parcial · ⬜ nã
 
 - [ ] **App Android para testar o modelo no celular** 🟡
   - Plano em `.github/plans/android_plan.md` (fases F0–F5).
-  - F1 concluída: núcleo C++ em `native/libria_core`, com paridade bit a bit contra o pipeline Python (`make native-test`). Ainda sem código de app Android.
+  - F1 concluída: núcleo C++ em `native/libria_core`, com paridade bit a bit contra o pipeline Python (`make native-test`).
+  - F2 em andamento: ponte JNI e API Kotlin verificadas na JVM (`make native-bridge-test`); app Android (Kotlin, CameraX, MediaPipe) escrito, mas ainda não compilado (o ambiente bloqueia o Android SDK).
   - Depende de gerar os `.tflite` localmente (`make embedded-train`), o que exige o dataset local e TensorFlow. A exportação int8, que abortava, foi corrigida e testada com dados sintéticos; falta rodar com o dataset real e registrar as métricas.
   - Prioridade: Alta
 

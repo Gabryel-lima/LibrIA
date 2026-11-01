@@ -1,6 +1,6 @@
 # Plano — App Android para testar o modelo no celular
 
-Status: **F1 concluída** (núcleo C++ testado no host, em `native/`). F0 depende do dataset local; F2 em diante não iniciadas. Ainda não há código de app Android.
+Status: **F1 concluída; F2 em andamento** (ponte JNI e API Kotlin verificadas no host; app Android escrito, ainda não compilado). F0 depende do dataset local.
 Criado em 2026-11-01. Atualizado em 2026-11-01: núcleo de processamento em C++ (seção 4).
 
 ## 1. Objetivo e escopo
@@ -132,7 +132,7 @@ Detecção de mão: MediaPipe Hand Landmarker. O núcleo do MediaPipe é C++, ma
 | Qual modelo estático no celular | (a) CNN int8 embarcada; (b) portar o Random Forest; (c) converter o LSTM | **(a)** | Recomendado |
 | Detector de mão | (a) MediaPipe Hand Landmarker (Tasks); (b) detector próprio | **(a)**. O host usa a API legada `mp.solutions.hands` (mediapipe 0.10.14); o Android usa a API Tasks, com modelo e pipeline que podem diferir. **Semelhante, não idêntico**: a paridade é medida em F1. | Recomendado |
 | Linguagem do núcleo de processamento | C++; C; Rust; Go | **C++** (seção 4.2) | **Adotada na F1** (núcleo em `native/libria_core`); a validar por benchmark em F2 |
-| Linguagem da UI | Kotlin; Java | Kotlin (ou Java, se preferido) | Em aberto |
+| Linguagem da UI | Kotlin; Java | Kotlin | **Decidido pelo usuário** (F2) |
 | Framework de UI | Compose; Views | Compose | Recomendado |
 | Onde mora a lógica de features e segmentação | Núcleo C++ | **Núcleo C++**, validado por fixtures | Depende da confirmação da linguagem |
 | Fonte de verdade dos parâmetros | Hardcoded no núcleo; ou lido do `embedded_bundle.json` | **Ler do manifesto** sempre que possível | Recomendado |
@@ -171,6 +171,12 @@ Detecção de mão: MediaPipe Hand Landmarker. O núcleo do MediaPipe é C++, ma
 - **Medir antes de otimizar**: tempo por quadro separado em captura, MediaPipe, features, inferência e cópias. Esse benchmark decide se a escolha de C++ se justifica para o gargalo real.
 
 **Critério de saída:** roda em um celular real, com o benchmark por etapa registrado. A meta de FPS (inicialmente 15) é uma hipótese, a ser confirmada pela medição.
+
+**Status: em andamento (2026-11-01).** Detalhes em [`android/README.md`](../../android/README.md).
+- **Feito e verificado no host:** ponte JNI (`native/libria_jni`, `RegisterNatives`, exceções Kotlin atravessando o C++) e módulo `android/libria-bridge` (API `LibriaPipeline`, `StageTimer`, `FpsMeter`, `OverlayMapper`). 14 testes na JVM com `-Xcheck:jni`, incluindo os 14 cenários de paridade com o Python passando pelo JNI.
+- **Escrito, não compilado:** o módulo `android/app` (CameraX, MediaPipe Tasks 0.10.14, Compose, overlay e painel de tempo por etapa). O ambiente bloqueia `dl.google.com`, de onde vêm o SDK, o NDK e o Google Maven. As versões das dependências não foram verificadas.
+- **Kotlin** escolhido para a UI (decisão do usuário).
+- **Pendente para fechar a F2:** compilar o app, rodar em 2 aparelhos, registrar o benchmark por etapa e confirmar a hipótese do espelhamento (a imagem enviada ao MediaPipe não é espelhada, como na coleta em Python).
 
 ### F3 — Inferência estática no celular
 - Carregar o `.tflite` estático no núcleo C++, aplicar a quantização e devolver a letra com confiança à UI.
@@ -220,7 +226,7 @@ Detecção de mão: MediaPipe Hand Landmarker. O núcleo do MediaPipe é C++, ma
 
 ## 10. Próximos passos
 
-1. Escolher Kotlin ou Java para a UI (seção 5). O núcleo C++ já existe (F1 concluída).
+1. Liberar `dl.google.com` no ambiente (ou compilar localmente) e fazer o app da F2 compilar.
 2. Confirmar que o dataset local existe e onde está (F0).
 3. Gerar o bundle com o dataset real (`make embedded-train`; a exportação int8 já foi corrigida) e rodar `embedded-check` (F0).
 4. Só então começar F1.

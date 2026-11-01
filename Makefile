@@ -19,7 +19,7 @@
 	train train-static train-temporal infer infer-static infer-temporal all \
 	embedded-train embedded-export embedded-check \
 	checkerboard checkerboard-show calibrate-capture calibrate \
-	native-test native-fixtures \
+	native-test native-fixtures native-bridge-test \
 	test lint format clean clean-all freeze
 
 # ============================================================================
@@ -340,6 +340,9 @@ native-test: ## 🧩 Compila o núcleo C++ (ASan/UBSan, -Werror) e roda a parida
 native-fixtures: ## 🧩 Regenera native/fixtures a partir do pipeline Python
 	$(require_venv)
 	@$(VENV_PYTHON) -m scripts.export_parity_fixtures
+
+native-bridge-test: ## 🧩 Testa a ponte JNI e a API Kotlin na JVM (Gradle; não precisa de Android SDK)
+	@cd android && ./gradlew :libria-bridge:test --console=plain
 
 ################################################################################
 # DESENVOLVIMENTO
