@@ -26,6 +26,11 @@ e esse projeto adere ao [Semantic Versioning](https://semver.org/lang/pt_BR/).
   Alvo `make native-bridge-test`.
 
 ### Fixed
+- `requirements.txt` voltou a ser instalável: o bump do Dependabot para `numpy==2.5.4`
+  (#22) era incompatível com `tensorflow==2.16.1`, que exige `numpy<2`, e deixava a
+  árvore insolúvel em Python 3.11 e 3.12. Volta para `numpy==1.26.4`, e o Dependabot
+  passa a ignorar majors do numpy até o TensorFlow ser migrado. Passou sem ser notado
+  porque o CI está desativado.
 - Exportação TFLite int8 dos trainers embedded (estático e temporal): o
   `TFLiteConverter.from_keras_model` abortava o processo com `LLVM ERROR: Failed to
   infer result type(s)` (Keras 3 + TensorFlow 2.16), o que impedia gerar qualquer
