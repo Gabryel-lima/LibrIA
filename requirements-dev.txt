@@ -24,7 +24,7 @@ jupyter==1.0.0
 notebook==7.6.3
 # jupyterlab é dependência do notebook; fixado para cobrir o advisory de segurança.
 jupyterlab==4.6.5
-ipykernel==6.28.0
+ipykernel==7.4.0
 
 # Pre-commit hooks
 pre-commit==3.6.0
