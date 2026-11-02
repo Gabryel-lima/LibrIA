@@ -44,7 +44,7 @@ sounddevice==0.5.2
 # Utilities
 joblib==1.6.0
 python-dotenv==1.2.4
-tqdm==4.67.1
+tqdm==4.70.1
 
 # Visualization & Logging
 matplotlib==3.10.0
