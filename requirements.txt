@@ -27,7 +27,7 @@ mediapipe==0.10.14  # ⚠️ Requires AVX support
 scikit-learn==1.6.1
 
 # Vision & Media
-opencv-python==4.11.0.86
+opencv-python==5.0.0.93
 opencv-contrib-python==4.11.0.86
 # mediapipe==0.10.14  # ⚠️ Requires AVX support - use on machine with AVX
 Pillow==13.0.0
