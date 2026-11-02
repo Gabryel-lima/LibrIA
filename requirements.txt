@@ -34,7 +34,7 @@ Pillow==13.0.0
 
 # Numerical & Scientific
 numpy==1.26.4  # tensorflow==2.19.1 e mediapipe 0.10.14 exigem numpy<2; não subir para 2.x antes de migrar o TensorFlow
-scipy==1.15.1
+scipy==1.18.1
 pandas==2.2.3
 seaborn==0.13.2
 
