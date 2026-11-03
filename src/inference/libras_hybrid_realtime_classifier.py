@@ -14,7 +14,14 @@ from typing import Deque, List, Optional, Tuple
 import cv2 as cv
 import numpy as np
 
-from config.settings import CAMERA_CONFIG, FEATURE_MODE, HYBRID_INFERENCE_CONFIG, INFERENCE_CONFIG, LSTM_CONFIG
+from config.settings import (
+    CAMERA_CONFIG,
+    FEATURE_MODE,
+    HAND_SELECTION_CONFIG,
+    HYBRID_INFERENCE_CONFIG,
+    INFERENCE_CONFIG,
+    LSTM_CONFIG,
+)
 from utils.helpers import (
     enrich_model_metadata,
     extract_landmarks_by_mode,
@@ -24,6 +31,7 @@ from utils.helpers import (
     patch_legacy_sklearn_model,
     preprocess_frame,
 )
+from utils.hand_selection import HandSelector
 
 from .sign_token import SignToken
 from .temporal_pipeline import TemporalPipeline
@@ -106,10 +114,11 @@ class LibrasHybridRealtimeClassifier:
         self.mp_drawing_styles = mp.solutions.drawing_styles
         self.hands = self.mp_hands.Hands(
             static_image_mode=False,
-            max_num_hands=1,
+            max_num_hands=HAND_SELECTION_CONFIG['max_num_hands'],
             min_detection_confidence=INFERENCE_CONFIG['min_detection_confidence'],
             min_tracking_confidence=0.5,
         )
+        self.hand_selector = HandSelector.from_config(HAND_SELECTION_CONFIG)
 
     def _load_static_model(self) -> Tuple[object, dict]:
         if not os.path.exists(self.static_model_path):
@@ -366,9 +375,10 @@ class LibrasHybridRealtimeClassifier:
                 timestamp = time.time()
                 results = self.hands.process(cv.cvtColor(frame, cv.COLOR_BGR2RGB))
 
-                hand_present = bool(results.multi_hand_landmarks)
+                selected_hand = self.hand_selector.select(results)
+                hand_present = selected_hand is not None
                 if hand_present:
-                    hand_landmarks = results.multi_hand_landmarks[0]
+                    hand_landmarks = selected_hand.hand_landmarks
                     self.mp_drawing.draw_landmarks(
                         frame,
                         hand_landmarks,

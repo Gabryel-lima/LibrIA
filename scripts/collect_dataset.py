@@ -16,6 +16,7 @@ from config.settings import (
     FEATURE_DIMENSION,
     FEATURE_MODE,
     FUNCTIONAL_LABELS,
+    HAND_SELECTION_CONFIG,
     LEXICAL_LABELS,
     LSTM_CONFIG,
     STATIC_DATASET_DIR,
@@ -33,6 +34,7 @@ from src.dataset.landmark_storage import (
     write_manifest,
 )
 from src.dataset.sample_metadata import UNSPECIFIED, SampleMetadata
+from utils.hand_selection import HandCandidate, HandSelector, choose_candidate, hand_candidates
 from utils.helpers import extract_landmarks_by_mode, load_camera_calibration, preprocess_frame
 
 try:
@@ -132,16 +134,26 @@ def _build_metadata(
     )
 
 
-def _handedness_score(results) -> Optional[float]:
-    if not getattr(results, 'multi_handedness', None):
-        return None
-    return float(results.multi_handedness[0].classification[0].score)
+def _hand_selector(context: Optional[CaptureContext] = None) -> HandSelector:
+    """Seletor de mão da sessão; a mão dominante informada só vale para 'dominant'."""
+    dominant_hand = context.dominant_hand if context is not None else None
+    return HandSelector.from_config(HAND_SELECTION_CONFIG, dominant_hand=dominant_hand)
 
 
-def _handedness_label(results) -> Optional[str]:
-    if not getattr(results, 'multi_handedness', None):
-        return None
-    return str(results.multi_handedness[0].classification[0].label)
+def _select_hand_from_image(results, context: Optional[CaptureContext] = None) -> Optional[HandCandidate]:
+    """Seleção sem rastreamento, para imagens soltas (backfill de frames)."""
+    dominant_hand = context.dominant_hand if context is not None else None
+    candidates = hand_candidates(results, image_is_mirrored=HAND_SELECTION_CONFIG['image_is_mirrored'])
+    return choose_candidate(candidates, HAND_SELECTION_CONFIG['strategy'], dominant_hand)
+
+
+def _handedness_score(candidate: Optional[HandCandidate]) -> Optional[float]:
+    return candidate.score if candidate is not None else None
+
+
+def _handedness_label(candidate: Optional[HandCandidate]) -> Optional[str]:
+    """Mão real da pessoa (o rótulo bruto do MediaPipe vem invertido sem espelhamento)."""
+    return candidate.person_hand if candidate is not None else None
 
 
 def _write_manifest(mode: str, labels: List[str], output_dir: str, sample_target: int, sequence_length: Optional[int]):
@@ -155,26 +167,24 @@ def _write_manifest(mode: str, labels: List[str], output_dir: str, sample_target
     )
 
 
-def _extract_valid_sample(results) -> Optional[np.ndarray]:
-    if not results.multi_hand_landmarks:
+def _extract_valid_sample(candidate: Optional[HandCandidate]) -> Optional[np.ndarray]:
+    if candidate is None:
         return None
 
-    if results.multi_handedness:
-        score = results.multi_handedness[0].classification[0].score
-        if score < COLLECTION_CONFIG['min_detection_confidence']:
-            return None
+    if candidate.score is not None and candidate.score < COLLECTION_CONFIG['min_detection_confidence']:
+        return None
 
-    features = extract_landmarks_by_mode(results.multi_hand_landmarks[0].landmark, FEATURE_MODE)
+    features = extract_landmarks_by_mode(candidate.landmarks, FEATURE_MODE)
     if features is None or np.asarray(features).size != FEATURE_DIMENSION:
         return None
 
     return _storage_shape(features)
 
 
-def _extract_valid_sample_from_frame(frame: np.ndarray, hands) -> Optional[np.ndarray]:
+def _extract_valid_sample_from_frame(frame: np.ndarray, hands, context: Optional[CaptureContext] = None) -> Optional[np.ndarray]:
     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     results = hands.process(rgb_frame)
-    return _extract_valid_sample(results)
+    return _extract_valid_sample(_select_hand_from_image(results, context))
 
 
 def _backfill_static_samples_from_frames(
@@ -238,7 +248,7 @@ def _build_hands():
 
     return mp.solutions.hands.Hands(
         static_image_mode=False,
-        max_num_hands=1,
+        max_num_hands=HAND_SELECTION_CONFIG['max_num_hands'],
         min_detection_confidence=COLLECTION_CONFIG['min_detection_confidence'],
         min_tracking_confidence=COLLECTION_CONFIG['min_tracking_confidence'],
     )
@@ -264,6 +274,7 @@ def collect_static(
 
     calibration = _load_optional_calibration()
     hands = _build_hands()
+    hand_selector = _hand_selector(context)
     draw_utils = mp.solutions.drawing_utils
     draw_styles = mp.solutions.drawing_styles
     os.makedirs(output_dir, exist_ok=True)
@@ -283,7 +294,7 @@ def collect_static(
             generated_samples = _backfill_static_samples_from_frames(
                 label_dir,
                 calibration,
-                lambda frame: _extract_valid_sample_from_frame(frame, hands),
+                lambda frame: _extract_valid_sample_from_frame(frame, hands, context),
                 save_mirrored=True,
                 context=context,
             )
@@ -305,13 +316,14 @@ def collect_static(
                 frame = preprocess_frame(frame, calibration)
                 rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 results = hands.process(rgb_frame)
-                sample = _extract_valid_sample(results)
+                selected_hand = hand_selector.select(results)
+                sample = _extract_valid_sample(selected_hand)
                 preview = frame.copy()
 
-                if results.multi_hand_landmarks:
+                if selected_hand is not None:
                     draw_utils.draw_landmarks(
                         preview,
-                        results.multi_hand_landmarks[0],
+                        selected_hand.hand_landmarks,
                         mp.solutions.hands.HAND_CONNECTIONS,
                         draw_styles.get_default_hand_landmarks_style(),
                         draw_styles.get_default_hand_connections_style(),
@@ -342,8 +354,8 @@ def collect_static(
                             label,
                             MODALITY_STATIC,
                             context,
-                            capture_hand=_handedness_label(results),
-                            quality=_handedness_score(results),
+                            capture_hand=_handedness_label(selected_hand),
+                            quality=_handedness_score(selected_hand),
                         )
 
                     _persist_sample(
@@ -364,7 +376,9 @@ def collect_static(
         hands.close()
 
 
-def _wait_for_sequence_start(cap, calibration, label: str, sequence_index: int, total_sequences: int, hands, draw_utils, draw_styles):
+def _wait_for_sequence_start(cap, calibration, label: str, sequence_index: int, total_sequences: int, hands, draw_utils, draw_styles, hand_selector: Optional[HandSelector] = None):
+    # O mesmo seletor da gravação: a mão mostrada aqui é a que será seguida.
+    hand_selector = hand_selector or _hand_selector()
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -373,12 +387,13 @@ def _wait_for_sequence_start(cap, calibration, label: str, sequence_index: int, 
         frame = preprocess_frame(frame, calibration)
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         results = hands.process(rgb_frame)
+        selected_hand = hand_selector.select(results)
         preview = frame.copy()
 
-        if results.multi_hand_landmarks:
+        if selected_hand is not None:
             draw_utils.draw_landmarks(
                 preview,
-                results.multi_hand_landmarks[0],
+                selected_hand.hand_landmarks,
                 mp.solutions.hands.HAND_CONNECTIONS,
                 draw_styles.get_default_hand_landmarks_style(),
                 draw_styles.get_default_hand_connections_style(),
@@ -422,6 +437,7 @@ def collect_temporal(
 
     calibration = _load_optional_calibration()
     hands = _build_hands()
+    hand_selector = _hand_selector(context)
     draw_utils = mp.solutions.drawing_utils
     draw_styles = mp.solutions.drawing_styles
     os.makedirs(output_dir, exist_ok=True)
@@ -449,6 +465,7 @@ def collect_temporal(
                     hands,
                     draw_utils,
                     draw_styles,
+                    hand_selector,
                 )
 
                 sequence_frames = []
@@ -463,13 +480,14 @@ def collect_temporal(
                     frame = preprocess_frame(frame, calibration)
                     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                     results = hands.process(rgb_frame)
-                    sample = _extract_valid_sample(results)
+                    selected_hand = hand_selector.select(results)
+                    sample = _extract_valid_sample(selected_hand)
                     preview = frame.copy()
 
-                    if results.multi_hand_landmarks:
+                    if selected_hand is not None:
                         draw_utils.draw_landmarks(
                             preview,
-                            results.multi_hand_landmarks[0],
+                            selected_hand.hand_landmarks,
                             mp.solutions.hands.HAND_CONNECTIONS,
                             draw_styles.get_default_hand_landmarks_style(),
                             draw_styles.get_default_hand_connections_style(),
@@ -477,10 +495,10 @@ def collect_temporal(
 
                     if sample is not None:
                         sequence_frames.append(sample)
-                        score = _handedness_score(results)
+                        score = _handedness_score(selected_hand)
                         if score is not None:
                             frame_scores.append(score)
-                        capture_hand = _handedness_label(results) or capture_hand
+                        capture_hand = _handedness_label(selected_hand) or capture_hand
 
                     _draw_status_overlay(
                         preview,

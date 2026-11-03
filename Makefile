@@ -20,13 +20,13 @@
 	embedded-train embedded-export embedded-check \
 	checkerboard checkerboard-show calibrate-capture calibrate \
 	native-test native-fixtures native-bridge-test \
-	test lint format clean clean-all freeze
+	test test-coverage lint format clean clean-all freeze
 
 # ============================================================================
 # VARIÁVEIS
 # ============================================================================
 
-# TensorFlow 2.16.1 e numpy 1.26.4 não têm wheels para Python 3.13+; use 3.11 ou 3.12.
+# TensorFlow 2.19.1 e numpy 1.26.4 não têm wheels para Python 3.13+; use 3.11 ou 3.12.
 PYTHON ?= python3.11
 VENV_DIR := .venv
 VENV_PYTHON := $(VENV_DIR)/bin/python
@@ -357,6 +357,11 @@ test: ## ✓ Roda a suíte de testes
 	$(require_venv)
 	@$(VENV_PYTHON) -m unittest discover -s tests -t . -v
 
+test-coverage: ## 📊 Roda os testes medindo a cobertura (requer make install-dev)
+	$(require_venv)
+	@if ! $(VENV_PYTHON) -c "import pytest_cov" >/dev/null 2>&1; then echo "$(RED)✗ pytest-cov ausente. Rode: make install-dev$(NC)"; exit 1; fi
+	@$(VENV_PYTHON) -m pytest tests -q --cov --cov-report=term --cov-report=html
+
 lint: ## 🔍 flake8 (requer make install-dev)
 	@if [ ! -x "$(VENV_DIR)/bin/flake8" ]; then echo "$(RED)✗ flake8 ausente. Rode: make install-dev$(NC)"; exit 1; fi
 	@$(VENV_DIR)/bin/flake8 src/ scripts/ config/ main.py --max-line-length=119 --exclude=__pycache__
@@ -376,7 +381,7 @@ freeze: ## 📌 Gera requirements.lock com as versões exatas
 clean: ## 🧹 Remove caches e saídas temporárias
 	@find . -path ./$(VENV_DIR) -prune -o -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null; true
 	@find . -path ./$(VENV_DIR) -prune -o -type f -name "*.py[co]" -delete 2>/dev/null; true
-	@rm -rf .pytest_cache .mypy_cache
+	@rm -rf .pytest_cache .mypy_cache htmlcov .coverage
 	@rm -f output/*.mp4 output/*.jpg
 	@echo "$(GREEN)✓ Limpeza concluída$(NC)"
 

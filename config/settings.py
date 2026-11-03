@@ -61,6 +61,21 @@ FEATURE_MODE = 'wrist_relative'
 FEATURE_DIMENSION = FEATURE_DIMENSIONS[FEATURE_MODE]
 FEATURE_SIZE = FEATURE_DIMENSION
 
+# Seleção de mão quando o MediaPipe detecta mais de uma (utils/hand_selection.py).
+# Os modelos continuam recebendo uma mão só; isto decide qual delas.
+HAND_SELECTION_CONFIG = {
+    'max_num_hands': 2,
+    # 'first' (comportamento antigo), 'largest', 'most_confident' ou 'dominant'.
+    'strategy': os.getenv('LIBRIA_HAND_STRATEGY', 'largest'),
+    # Mão dominante real da pessoa ('left'/'right'); só vale para 'dominant'.
+    'dominant_hand': os.getenv('LIBRIA_DOMINANT_HAND') or None,
+    # Os quadros do LibrIA não são espelhados; o rótulo do MediaPipe supõe que são.
+    'image_is_mirrored': False,
+    # Salto máximo do punho entre quadros (coordenadas normalizadas) para
+    # continuar seguindo a mesma mão.
+    'tracking_max_jump': 0.15,
+}
+
 # Configurações de calibração de câmera
 CAMERA_CONFIG = {
     'enabled': True,
