@@ -35,6 +35,7 @@ from config.settings import (
     COLLECTION_CONFIG,
     FEATURE_DIMENSION,
     FEATURE_MODE,
+    HAND_SELECTION_CONFIG,
     LSTM_CONFIG,
     STATIC_DATASET_DIR,
     TEMPORAL_DATASET_DIR,
@@ -53,6 +54,7 @@ from src.dataset.landmark_storage import (
     write_manifest,
 )
 from src.dataset.sample_metadata import UNSPECIFIED, SampleMetadata
+from utils.hand_selection import HandSelector, choose_candidate, hand_candidates
 from utils.helpers import extract_landmarks_by_mode, preprocess_frame
 
 try:
@@ -272,20 +274,34 @@ def build_hands(static_image_mode: bool):
 
     return mp.solutions.hands.Hands(
         static_image_mode=static_image_mode,
-        max_num_hands=1,
+        max_num_hands=HAND_SELECTION_CONFIG['max_num_hands'],
         min_detection_confidence=COLLECTION_CONFIG['min_detection_confidence'],
         min_tracking_confidence=COLLECTION_CONFIG['min_tracking_confidence'],
     )
 
 
-def extract_frame_sample(frame: np.ndarray, hands, calibration=None) -> Optional[np.ndarray]:
-    """Landmarks de um frame, no shape gravado em disco, ou ``None``."""
+def extract_frame_sample(
+    frame: np.ndarray,
+    hands,
+    calibration=None,
+    hand_selector: Optional[HandSelector] = None,
+) -> Optional[np.ndarray]:
+    """Landmarks de um frame, no shape gravado em disco, ou ``None``.
+
+    Com ``hand_selector`` (um por vídeo) a mesma mão é seguida entre quadros;
+    sem ele, cada imagem é decidida só pela estratégia configurada.
+    """
     frame = preprocess_frame(frame, calibration)
     results = hands.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-    if not results.multi_hand_landmarks:
+    if hand_selector is not None:
+        selected_hand = hand_selector.select(results)
+    else:
+        candidates = hand_candidates(results, image_is_mirrored=HAND_SELECTION_CONFIG['image_is_mirrored'])
+        selected_hand = choose_candidate(candidates, HAND_SELECTION_CONFIG['strategy'], HAND_SELECTION_CONFIG['dominant_hand'])
+    if selected_hand is None:
         return None
 
-    features = extract_landmarks_by_mode(results.multi_hand_landmarks[0].landmark, FEATURE_MODE)
+    features = extract_landmarks_by_mode(selected_hand.landmarks, FEATURE_MODE)
     if features is None or np.asarray(features).size != FEATURE_DIMENSION:
         return None
     return storage_shape(features)
@@ -318,6 +334,8 @@ def read_video_landmarks(
 
     landmarks: List[np.ndarray] = []
     total_frames = 0
+    # Um seletor por vídeo: segue a mesma mão do começo ao fim do sinal.
+    hand_selector = HandSelector.from_config(HAND_SELECTION_CONFIG)
     try:
         while True:
             ret, frame = capture.read()
@@ -328,7 +346,7 @@ def read_video_landmarks(
                 continue
             total_frames += 1
 
-            sample = extract_frame_sample(frame, hands, calibration)
+            sample = extract_frame_sample(frame, hands, calibration, hand_selector)
             if sample is not None:
                 landmarks.append(sample)
     finally:

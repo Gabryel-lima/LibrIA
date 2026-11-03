@@ -1,0 +1,18 @@
+# Configuração do coverage.py usada por `make test-coverage`.
+# Mede todo o código Python do projeto, inclusive o que ainda não tem teste:
+# esconder módulos sem teste do denominador inflaria o número.
+[run]
+source =
+    src
+    scripts
+    config
+    utils
+    main
+omit =
+    */__pycache__/*
+    tests/*
+
+[report]
+show_missing = False
+skip_empty = True
+precision = 1

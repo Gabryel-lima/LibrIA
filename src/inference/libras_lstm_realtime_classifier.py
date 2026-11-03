@@ -12,7 +12,8 @@ from typing import Dict, List, Optional, Tuple
 import cv2 as cv
 import numpy as np
 
-from config.settings import CAMERA_CONFIG, FEATURE_DIMENSION, FEATURE_MODE, LSTM_CONFIG
+from config.settings import CAMERA_CONFIG, FEATURE_DIMENSION, FEATURE_MODE, HAND_SELECTION_CONFIG, LSTM_CONFIG
+from utils.hand_selection import HandSelector
 from utils.helpers import extract_landmarks_by_mode, load_camera_calibration, preprocess_frame
 
 try:
@@ -69,10 +70,11 @@ class LibrasLSTMRealtimeClassifier:
         self.mp_drawing_styles = mp.solutions.drawing_styles
         self.hands = self.mp_hands.Hands(
             static_image_mode=False,
-            max_num_hands=1,
+            max_num_hands=HAND_SELECTION_CONFIG['max_num_hands'],
             min_detection_confidence=0.3,
             min_tracking_confidence=0.5,
         )
+        self.hand_selector = HandSelector.from_config(HAND_SELECTION_CONFIG)
 
         self.last_prediction: Optional[str] = None
         self.last_confidence = 0.0
@@ -185,8 +187,9 @@ class LibrasLSTMRealtimeClassifier:
                 frame = preprocess_frame(frame, self.camera_calibration)
                 results = self.hands.process(cv.cvtColor(frame, cv.COLOR_BGR2RGB))
 
-                if results.multi_hand_landmarks:
-                    hand_landmarks = results.multi_hand_landmarks[0]
+                selected_hand = self.hand_selector.select(results)
+                if selected_hand is not None:
+                    hand_landmarks = selected_hand.hand_landmarks
                     self.mp_drawing.draw_landmarks(
                         frame,
                         hand_landmarks,

@@ -9,6 +9,7 @@ Obrigado por considerar contribuir para o **LibrIA**! Este documento fornece dir
 - [Processo de Pull Request](#processo-de-pull-request)
 - [Padrões de Código](#padrões-de-código)
 - [Testes](#testes)
+- [Roadmap e histórico](#roadmap-e-histórico)
 - [Documentação](#documentação)
 - [Reportando Bugs](#reportando-bugs)
 - [Sugerindo Melhorias](#sugerindo-melhorias)
@@ -310,8 +311,8 @@ tests/
 # Todos os testes
 pytest tests/ -v
 
-# Testes com cobertura
-pytest tests/ --cov=src --cov-report=html
+# Testes com cobertura (configuração em .coveragerc; relatório em htmlcov/)
+make test-coverage
 
 # Teste específico
 pytest tests/test_data_processing.py::test_normalize_landmarks -v
@@ -357,6 +358,18 @@ class TestDataProcessor:
 
 - Código novo deve ter cobertura ≥ 80%
 - Funções críticas devem ter 100% de cobertura
+
+## Roadmap e histórico
+
+O [ROADMAP.md](ROADMAP.md) é o to-do do projeto e lista só o que **falta**. Ao
+concluir algo dele:
+
+1. Remova o item do `ROADMAP.md` (ou, se for parcial, deixe só o que falta e
+   adicione um link `→ H-NNN` para a entrada do histórico).
+2. Registre no [HISTORICO.md](HISTORICO.md) uma entrada nova no topo, seguindo o
+   modelo de lá: o que mudou, por quê, arquivos, verificação, limites, o que falta
+   e o commit ou PR.
+3. Se a mudança afeta quem usa o projeto, resuma também no `CHANGELOG.md`.
 
 ## 📚 Documentação
 

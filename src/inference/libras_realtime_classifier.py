@@ -22,7 +22,8 @@ import numpy as np
 from typing import Dict, List, Tuple, Optional
 import time
 
-from config.settings import CAMERA_CONFIG, FEATURE_MODE as DEFAULT_FEATURE_MODE
+from config.settings import CAMERA_CONFIG, FEATURE_MODE as DEFAULT_FEATURE_MODE, HAND_SELECTION_CONFIG
+from utils.hand_selection import HandSelector
 from utils.helpers import (
     extract_landmarks_by_mode,
     get_feature_dimension,
@@ -75,6 +76,7 @@ class LibrasRealtimeClassifier:
                 # Inicializar detector de mãos
                 self.hands = self.mp_hands.Hands(
                     static_image_mode=False,
+                    max_num_hands=HAND_SELECTION_CONFIG['max_num_hands'],
                     min_detection_confidence=min_detection_confidence,
                     min_tracking_confidence=0.5
                 )
@@ -84,6 +86,8 @@ class LibrasRealtimeClassifier:
         else:
             self.hands = None
         
+        self.hand_selector = HandSelector.from_config(HAND_SELECTION_CONFIG)
+
         # Dicionário do alfabeto
         self.alphabet_dict = {i: chr(65 + i) for i in range(26)}
         
@@ -310,8 +314,9 @@ class LibrasRealtimeClassifier:
             
             # Processar com MediaPipe
             results = self.hands.process(frame_rgb)
+            selected_hand = self.hand_selector.select(results)
             
-            if results.multi_hand_landmarks:
+            if selected_hand is not None:
                 # Desenhar landmarks
                 for hand_landmarks in results.multi_hand_landmarks:
                     try:
@@ -327,7 +332,7 @@ class LibrasRealtimeClassifier:
                 
                 try:
                     # Extrair landmarks para classificação
-                    landmarks = self._extract_landmarks(results.multi_hand_landmarks[0])
+                    landmarks = self._extract_landmarks(selected_hand.hand_landmarks)
                     
                     if landmarks is not None:
                         # Fazer predição periodicamente
@@ -338,7 +343,7 @@ class LibrasRealtimeClassifier:
                                 print(f"⚠️  Erro na predição: {e}")
                         
                         # Desenhar bounding box e predição
-                        frame = self._draw_prediction_overlay(frame, results.multi_hand_landmarks[0])
+                        frame = self._draw_prediction_overlay(frame, selected_hand.hand_landmarks)
                 except Exception as e:
                     print(f"⚠️  Erro ao extrair/processar landmarks: {e}")
             
