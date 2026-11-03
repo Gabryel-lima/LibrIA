@@ -8,6 +8,14 @@ e esse projeto adere ao [Semantic Versioning](https://semver.org/lang/pt_BR/).
 ## [Não Lançado]
 
 ### Added
+- **Seleção da mão certa com duas mãos no quadro** (`utils/hand_selection.py`,
+  `HAND_SELECTION_CONFIG`): o MediaPipe passa a detectar até 2 mãos e o sistema
+  escolhe qual classificar (`largest` por padrão; também `first`, `most_confident`
+  e `dominant`) e segue a mesma mão entre quadros. Vale para os classificadores,
+  a coleta e a ingestão. Sinais com as duas mãos continuam sem suporte. Ver
+  `HISTORICO.md`, H-001
+- `make test-coverage` e `.coveragerc` (cobertura medida: 44,4%; H-002)
+- `HISTORICO.md`: registro do que sai do `ROADMAP.md`, com motivo, verificação e commit
 - **Núcleo nativo C++** (`native/libria_core`), base do app Android (fase F1 do plano):
   features `wrist_relative`, detector de movimento, buffer e reamostragem, segmentação
   com histerese, suavização, supressão de duplicatas, pipeline temporal, regra híbrida
@@ -96,6 +104,9 @@ e esse projeto adere ao [Semantic Versioning](https://semver.org/lang/pt_BR/).
 - Artefatos experimentais órfãos `src/interfaces/cam.cpp`, `main_test.cpp`, `setup.py` e documentação C++ demonstrativa sem integração com o pipeline atual
 
 ### Fixed
+- A coleta gravava em `capture_hand` a mão **invertida**: o rótulo do MediaPipe
+  supõe imagem espelhada e os quadros do LibrIA não são. Agora grava a mão real
+  da pessoa (H-001)
 - Build do GitHub Pages (`pages build and deployment`) falhava a cada push no `main`: o
   exemplo C++ de `native/README.md` tinha duas chaves de abertura seguidas, que o Liquid
   do Jekyll lê como variável de template. Corrigido com um espaço entre as chaves e

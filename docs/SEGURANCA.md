@@ -53,9 +53,10 @@ Mudanças no repositório:
 
 ### protobuf 4.25.9 — PYSEC-2026-1805 (CVE-2026-0994, GHSA-7gcm-g887-7qv7)
 - **O quê**: DoS em `google.protobuf.json_format.ParseDict()` com `Any` aninhado, porque o limite de profundidade de recursão pode ser contornado.
-- **Por que não foi corrigido**: a correção está em protobuf 5.29.6 ou 6.33.5, mas `tensorflow==2.16.1` exige `protobuf<5` e `mediapipe==0.10.14` exige `protobuf<5`. Subir o protobuf exige subir TensorFlow e MediaPipe, o que é uma migração própria.
+- **Por que não foi corrigido**: a correção está em protobuf 5.29.6 ou 6.33.5, mas `mediapipe==0.10.14` exige `protobuf>=4.25.3,<5`. Quando esta seção foi escrita, `tensorflow==2.16.1` também exigia `protobuf<5`.
+- **Atualização (2026-11-03)**: o commit `01b08f4` fixou `tensorflow==2.19.1`, que aceita `protobuf>=3.20.3,<6` (conferido nos metadados do PyPI). **O único bloqueio agora é o MediaPipe**, que precisa da API legada `mp.solutions`, removida nas versões >=0.10.31. Ver `HISTORICO.md`, H-003.
 - **Exposição real**: baixa. O projeto não chama `json_format` e não parseia protobuf vindo de fonte não confiável. Ainda assim, é um risco aberto.
-- **Caminho**: avaliar a migração para uma versão do TensorFlow e do MediaPipe que aceite protobuf 5.x.
+- **Caminho**: migrar a captura de `mp.solutions.hands` para a API MediaPipe Tasks (o app Android já usa Tasks) e então subir o MediaPipe e o protobuf para 5.29.6+.
 
 ## Pontos de atenção da mudança do torch
 

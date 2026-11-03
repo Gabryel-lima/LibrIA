@@ -2,28 +2,18 @@
 
 Visão geral do desenvolvimento do LibrIA. Atualizado trimestralmente.
 
-Legenda: ✅ concluído (com código no repositório) · 🟡 parcial · ⬜ não iniciado
+Este é o to-do do projeto: lista só o que **falta**. O que foi concluído está no [HISTORICO.md](HISTORICO.md).
 
-## ✅ Concluído (v1.0.0)
+Legenda: 🟡 parcial · ⬜ não iniciado
 
-- [x] Coleta de dados de gestos de Libras
-- [x] Processamento e normalização de landmarks (`wrist_relative` e `bounding_box`)
-- [x] Modelo Random Forest (`src/model_training/libras_model_trainer.py`; a acurácia de 99% citada na versão anterior deste roadmap não foi reverificada)
-- [x] Inferência em tempo real via webcam
-- [x] Documentação básica
-- [x] Testes unitários
+## ✅ Concluído
 
-## ✅ Concluído desde a v1.0.0
+Itens concluídos saem deste arquivo e ficam registrados no [HISTORICO.md](HISTORICO.md),
+com o motivo, a verificação e o commit. Itens parciais permanecem aqui com o que
+falta e um link `→ H-NNN` para a parte já feita. A regra completa está no topo do
+histórico.
 
-- [x] Camada 1 de robustez: features `wrist_relative` (padrão) e `bounding_box` (legado)
-- [x] Camada 2 de robustez: calibração de câmera (`scripts/calibrate_camera.py`)
-- [x] Espelhamento esquerda/direita em datasets estáticos e temporais, com backfill de `frame_XXX.png` legados
-- [x] Pipeline temporal robusto sobre o modelo LSTM (`src/inference/temporal_pipeline.py`)
-- [x] Código de treino das CNNs embarcadas e do exportador de bundle (`src/model_training/libras_embedded_*`). A exportação TFLite int8 foi corrigida (via SavedModel, `src/model_training/tflite_export.py`) e coberta por teste; **ainda não foi rodada com o dataset real**, então não há `.tflite` nem métricas do modelo real
-- [x] Cobertura de dataset e relatório de lacunas (`src/dataset/coverage.py`, `make report`)
-- [x] Ingestão de datasets externos em vídeo (`src/dataset/video_ingest.py`, `make ingest`)
-- [x] Metadados de proveniência por amostra (`src/dataset/sample_metadata.py`)
-- [x] Divisão de dados por pessoa, para evitar vazamento entre treino/validação/teste (`src/evaluation/dataset_splits.py`)
+- Antes de 2026-11-03 (v1.0.0 e o que veio depois): [H-000](HISTORICO.md#h-000--itens-concluídos-antes-deste-histórico-migrados-do-roadmap)
 
 ## 🚧 Em Desenvolvimento (v1.1.0 — prazo original Q2 2026, atrasado)
 
@@ -44,12 +34,10 @@ Legenda: ✅ concluído (com código no repositório) · 🟡 parcial · ⬜ nã
   - Prioridade: Média, após o Android
 
 - [ ] **Segurança de dependências: itens abertos** 🟡
-  - Resolvido: 106 → 1 advisory na árvore completa (ver `docs/SEGURANCA.md`)
-  - Aberto: protobuf 4.25.9 (exige migrar TensorFlow e MediaPipe, que fixam `protobuf<5`)
-  - Feito: `requirements-gpu.txt` alinhado (`tensorflow[and-cuda]==2.16.1`; o torch 2.13 já traz o próprio CUDA). Não testado em GPU
+  - Já feito: 106 → 1 advisory, `requirements-gpu.txt`, PR #18 e numpy → [H-000](HISTORICO.md#h-000--itens-concluídos-antes-deste-histórico-migrados-do-roadmap)
+  - Aberto: protobuf 4.25.9. Com `tensorflow==2.19.1` (aceita `protobuf<6`), o único bloqueio é o `mediapipe==0.10.14` (`protobuf<5`, API legada `mp.solutions`) → [H-003](HISTORICO.md#h-003--correções-de-documentação-sobre-tensorflow-2191-e-protobuf)
   - Decisão pendente: remover os modelos legados `best_temporal_model.h5` e `temporal_cnn_model.h5` (sem uso, contrato 16 × 42 incompatível com o pipeline atual)
-  - Feito: PR #18 do Dependabot fechado sem merge (propunha uma combinação torch/torchvision insolúvel)
-  - Feito: numpy de volta a 1.26.4 (o bump para 2.5.4 no #22 era incompatível com o TensorFlow 2.16.1); o Dependabot ignora majors do numpy
+  - Não testado: `tensorflow[and-cuda]==2.19.1` em GPU
   - Prioridade: Média
 
 - [ ] **Face Recognition** - Reconhecimento de expressões faciais ⬜
@@ -57,13 +45,15 @@ Legenda: ✅ concluído (com código no repositório) · 🟡 parcial · ⬜ nã
   - Estimado: 4-6 semanas
   - Prioridade: Alta
 
-- [ ] **Multi-hand Support** - Melhorar detecção com múltiplas mãos ⬜
-  - Os classificadores usam `max_num_hands=1`; nenhum tratamento de múltiplas mãos
-  - Estimado: 2-3 semanas
+- [ ] **Multi-hand Support** - Melhorar detecção com múltiplas mãos 🟡
+  - Já feito: com duas mãos no quadro, o sistema escolhe e segue a mão certa (`utils/hand_selection.py`) → [H-001](HISTORICO.md#h-001--seleção-da-mão-certa-quando-há-mais-de-uma-mão-no-quadro)
+  - Falta: testar com webcam e MediaPipe real, e medir o custo de `max_num_hands=2`
+  - Falta: sinais feitos com as duas mãos (exige mudar o contrato de features para 2 × 63 e retreinar)
   - Prioridade: Média
 
 - [ ] **Tests Expansion** - Aumentar cobertura para 85%+ 🟡
-  - 176 testes passam (`pytest tests`; 2 deles exigem TensorFlow e são pulados sem ele); a cobertura ainda não é medida
+  - Cobertura medida: **44,4%** com `make test-coverage` (200 testes; 2 exigem TensorFlow e são pulados sem ele) → [H-002](HISTORICO.md#h-002--medição-de-cobertura-de-testes)
+  - Maiores buracos: Transformer experimental (0%), scripts de câmera e fetch (0%), `libras_realtime_classifier.py` (11%), `main.py` (28%)
   - Só a exportação TFLite int8 exercita o TensorFlow (`tests/test_tflite_export.py`). Treino e inferência com modelos reais, Pillow e torch continuam sem teste
   - Estimado: 2 semanas
   - Prioridade: Alta
@@ -126,6 +116,6 @@ Sua opinião importa! Como você gostaria que o LibrIA evoluísse?
 
 ---
 
-**Última atualização**: 2026-11-01
+**Última atualização**: 2026-11-03
 
 Para mais detalhes, veja [GitHub Projects](https://github.com/Gabryel-lima/LibrIA/projects)
